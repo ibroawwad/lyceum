@@ -2,8 +2,9 @@ const fs = require('fs'); const vm = require('vm');
 const store = {};
 const ctx = { console, crypto: globalThis.crypto, TextEncoder, setTimeout, clearTimeout, setInterval() {}, addEventListener() {}, localStorage: { getItem: (k) => store[k] ?? null, setItem: (k, v) => { store[k] = v; }, removeItem: (k) => { delete store[k]; } }, document: { readyState: 'complete', addEventListener() {}, querySelector: () => null, documentElement: { setAttribute() {}, removeAttribute() {} } }, location: { search: '?debug=1', hash: '' }, indexedDB: undefined, fetch: undefined, Date, URLSearchParams, AbortController, JSON, Math };
 ctx.window = ctx; vm.createContext(ctx);
-for (const f of ['core.js', 'sample.js', 'intake.js', 'faculty.js', 'registrar.js']) vm.runInContext(fs.readFileSync('src/' + f, 'utf8'), ctx, { filename: f });
+for (const f of ['core.js', 'sample.js', 'intake.js', 'faculty.js', 'registrar.js', 'papers.js']) vm.runInContext(fs.readFileSync('src/' + f, 'utf8'), ctx, { filename: f });
 const L = ctx.L;
+L.S.student = { id: 'LYC-26-0001', name: 'T', createdAt: new Date().toISOString() };
 (async () => {
   const text = L.intake.normalize(L.SAMPLE.text); const segs = L.intake.segment(text);
   const { analysis } = await L.faculty.offline.analyze({ text, segments: segs, hint: '' });
@@ -19,14 +20,14 @@ const L = ctx.L;
   console.log(' read chunks', readChunks.length, 'segments covered', [...uniq].sort().join(','), 'every day 2-5 chunks:', p.sessions.every(s => s.chunks.length >= 2 && s.chunks.length <= 5), 'max read min', Math.max(...readChunks.map(k => k.minutes)));
   p.assessments.forEach(a => console.log(' ', a.kind.padEnd(8), a.title.padEnd(20), a.opensAt, '→', a.dueAt, 'closes', a.closesAt, a.durationMin, 'covers', a.coversWeeks.join(',')));
   console.log(' weights', p.policy.weights, 'withdrawBefore', p.policy.withdrawBefore, 'sessions', p.sessions.length);
-  const c = await L.registrar.enrol(p);
+  const c = await L.registrar.enrol(p, { name: "T", signature: "data:image/png;base64,x" });
   // second course
   const text2 = Array.from({ length: 40 }, (_, i) => `## Topic ${i + 1}\n\n` + 'Kinematics describes motion using displacement, velocity and acceleration. Newton\'s second law relates net force to mass and acceleration. Energy is conserved in closed systems; work equals force times displacement along the direction of motion. Momentum is conserved when no external force acts. '.repeat(6)).join('\n\n');
   const n2 = L.intake.normalize(text2); const s2 = L.intake.segment(n2);
   const a2 = (await L.faculty.offline.analyze({ text: n2, segments: s2, hint: 'Classical Mechanics' })).analysis;
   const p2 = L.registrar.plans({ analysis: a2, segments: s2, text: n2, sources: [L.intake.fromText(n2, 'mech')], words: L.intake.words(n2) }).standard;
   console.log(p2.code, 'weeks', p2.term.weeks, 'hpw', p2.plan.hoursPerWeek, 'slot', JSON.stringify(p2.plan.slot), 'units', a2.units.length, 'assessments', p2.assessments.map(a => a.kind + '@' + a.opensAt.slice(0, 10)).join(' '));
-  const c2 = await L.registrar.enrol(p2);
+  const c2 = await L.registrar.enrol(p2, { name: "T", signature: "data:image/png;base64,x" });
   console.log('budget', L.registrar.budget());
   // exam clash check
   const ex = [...c.assessments, ...c2.assessments].filter(a => /midterm|final/.test(a.kind)).map(a => a.opensAt.slice(0, 10));

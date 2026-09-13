@@ -34,6 +34,18 @@ const local = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.
   }, isoLocal);
   const sweep = async () => { await page.evaluate(async () => { await L.registrar.sweep(); L.render(); }); await sleep(150); };
   const okModal = async () => { await page.waitForSelector('.modal [data-act=modal-ok]', { timeout: 5000 }); await page.click('.modal [data-act=modal-ok]'); };
+  // the registration contract: draw a signature with the mouse, type the name, sign
+  const signContract = async (pg, name) => {
+    await pg.waitForSelector('#signature-pad', { timeout: 10000 });
+    await pg.locator('#signature-pad').scrollIntoViewIfNeeded();
+    const box = await pg.locator('#signature-pad').boundingBox();
+    await pg.mouse.move(box.x + box.width * 0.2, box.y + box.height * 0.6);
+    await pg.mouse.down();
+    for (let i = 1; i <= 24; i++) await pg.mouse.move(box.x + box.width * (0.2 + i * 0.025), box.y + box.height * (0.6 + Math.sin(i / 2) * 0.25));
+    await pg.mouse.up();
+    await pg.fill('#contract-name', name);
+    await pg.click('[data-act=sign-enrol]');
+  };
 
   console.log('1. welcome / matriculation');
   await page.goto(file + '?debug=1#/welcome');
@@ -80,15 +92,23 @@ const local = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.
     assert(reads.every((k, i) => i === 0 || k.from >= reads[i - 1].to), 'reading chunks never overlap');
   }
   await page.click('[data-act=enrol-confirm]');
-  await okModal();
+  await page.waitForSelector('.sheet.contract', { timeout: 10000 });
+  await shot('02b-contract');
+  await page.fill('#contract-name', 'Somebody Else');
+  await page.click('[data-act=sign-enrol]');
+  await sleep(300);
+  assert((await page.evaluate(() => L.S.courses.length)) === 0, 'a wrong name does not sign the contract');
+  await signContract(page, 'ada lovelace');
   await page.waitForFunction(() => L.route().name === 'course' && document.querySelector('.plan'), null, { timeout: 15000 });
-  assert((await route()) === 'course', 'enrolment lands on the course page');
+  assert((await route()) === 'course', 'signing the contract enrols and lands on the course page');
   const course = await page.evaluate(() => L.S.courses[0]);
+  assert(course.contract && course.contract.signature.startsWith('data:image/png') && course.contract.no.startsWith('LYC-C-'), 'the signed contract (signature image + number) is stored on the course');
+  assert(course.color !== '#4ade80', `the first course is not the brand green (${course.color})`);
   assert(course && course.code && /\s\d{3}$/.test(course.code), `course code assigned (${course && course.code})`);
   assert(course.weeks.length === course.term.weeks, 'weeks array matches term length');
   assert(course.weeks.every((w) => w.kind === 'final' || w.segments.length > 0), 'every teaching week has reading segments');
   const ledger1 = await page.evaluate(() => L.S.ledger.map((e) => e.type));
-  assert(ledger1.includes('matriculated') && ledger1.includes('enrolled'), 'ledger has matriculated + enrolled');
+  assert(ledger1.includes('matriculated') && ledger1.includes('contract_signed') && ledger1.includes('enrolled'), 'ledger has matriculated + contract_signed + enrolled');
   await shot('03-course-plan');
 
   console.log('3. daily chunks: today, not yet, late');
@@ -195,7 +215,7 @@ const local = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.
     const segments = L.intake.segment(norm);
     const { analysis } = await L.faculty.offline.analyze({ text: norm, segments, hint: 'Classical Mechanics', words: L.intake.words(norm) });
     const p = L.registrar.plans({ analysis, segments, text: norm, sources: [src], words: L.intake.words(norm) }).standard;
-    const c = await L.registrar.enrol(p);
+    const c = await L.registrar.enrol(p, { name: L.S.student.name, signature: L.S.courses[0].contract.signature });
     return { id: c.id, code: c.code, slot: c.plan.slot, weeks: c.term.weeks, start: c.term.start };
   });
   assert(second && second.id, `second course enrolled (${second && second.code})`);
@@ -249,6 +269,52 @@ const local = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.
   const wState = await page.evaluate((id) => L.registrar.courseState(L.registrar.course(id)), second.id);
   assert(wState === 'withdrawn', 'withdrawn course reports withdrawn');
 
+  console.log('7b. a passed course earns a certificate; a failed one does not');
+  assert(!(await page.evaluate((id) => !!L.registrar.course(id).certificate, course.id)), 'the failed course has no certificate');
+  const passed = await page.evaluate(async () => {
+    L.S.settings.weeklyHours = 40; L.save();
+    const src = L.intake.fromText(L.SAMPLE.text, 'Probability again');
+    const norm = L.intake.normalize(src.text); const segments = L.intake.segment(norm);
+    const { analysis } = await L.faculty.offline.analyze({ text: norm, segments, hint: 'Probability for Certificates', words: L.intake.words(norm) });
+    const p = L.registrar.plans({ analysis, segments, text: norm, sources: [src], words: L.intake.words(norm) }).condensed;
+    const c = await L.registrar.enrol(p, { name: L.S.student.name, signature: L.S.courses[0].contract.signature });
+    for (const a of c.assessments.slice().sort((x, y) => (x.opensAt < y.opensAt ? -1 : 1))) {
+      await L.clock.setOffset(new Date(a.opensAt).getTime() + 60000 - Date.now());
+      await L.registrar.sweep();
+      await L.registrar.begin(c.id, a.id, {});
+      for (const q of a.paper.questions) L.registrar.answer(c.id, a.id, q.id, q.type === 'mcq' ? q.answer : (q.modelAnswer || q.prompt));
+      await L.registrar.submit(c.id, a.id, {});
+    }
+    await L.clock.setOffset(new Date(c.term.end + 'T12:00:00').getTime() + 86400000 - Date.now());
+    await L.registrar.sweep();
+    const cc = L.registrar.course(c.id);
+    return { id: cc.id, final: cc.final, cert: cc.certificate, grades: cc.assessments.map((a) => a.grade && a.grade.pct) };
+  });
+  assert(passed.final && passed.final.pct >= 70, `sitting every paper well completes the course above the pass mark (${passed.final && passed.final.pct})`);
+  assert(passed.cert && /^LYC-\d{4}-\d{5}$/.test(passed.cert.no) && /^[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}$/.test(passed.cert.code) && passed.cert.hash.length === 64, `a certificate is issued (${passed.cert && passed.cert.no} ${passed.cert && passed.cert.code})`);
+  const types7 = await page.evaluate(() => L.S.ledger.map((e) => e.type));
+  assert(types7.includes('certificate_issued'), 'ledger records the certificate');
+  await page.goto(file + `?debug=1#/certificate/${passed.id}`);
+  await page.waitForSelector('.sheet.certificate svg', { timeout: 10000 });
+  const certText = await page.evaluate(() => document.querySelector('.sheet.certificate').textContent);
+  assert(certText.includes('Ada Lovelace') && certText.includes('Certificate of Completion') && certText.includes(passed.cert.code), 'certificate shows the student, the title and the verification code');
+  assert(await page.evaluate(() => !!document.querySelector('.sheet.certificate image')), 'certificate carries the student\'s own signature');
+  await shot('07b-certificate');
+  const png = await page.evaluate(async (id) => { const b = await L.papers.certificatePng(L.registrar.course(id)); return b && b.size; }, passed.id);
+  assert(png > 20000, `certificate exports as a PNG (${png} bytes)`);
+  await page.goto(file + `?debug=1#/contract/${passed.id}`);
+  await page.waitForSelector('.sheet.contract', { timeout: 10000 });
+  assert(await page.evaluate(() => !!document.querySelector('.sheet.contract .pad-wrap.is-signed img')), 'the signed contract is viewable with its signature');
+  await page.goto(file + '?debug=1#/stats');
+  await page.waitForSelector('.tile', { timeout: 10000 });
+  const statsTxt = await page.evaluate(() => document.querySelector('#main').innerText);
+  assert(/Current streak/.test(statsTxt) && /Longest streak/.test(statsTxt), 'stats page shows streak tiles');
+  assert(await page.evaluate(() => !!document.querySelector('.chart rect')), 'stats page draws the weekly bar chart');
+  await shot('07c-stats');
+  await page.goto(file + '?debug=1#/record');
+  await page.waitForSelector('.transcript', { timeout: 5000 });
+  assert(await page.evaluate(() => /Certificates/.test(document.querySelector('#main').innerText) && !!document.querySelector('a[href^="#/certificate/"]')), 'grades page lists the certificate');
+
   console.log('8. ledger integrity');
   let v = await page.evaluate(() => L.ledger.verify());
   assert(v.ok === true, 'ledger chain verifies');
@@ -268,7 +334,7 @@ const local = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.
   assert(rt.same && rt.hasMaterial && rt.hasLedger, 'export/import preserves courses, materials and ledger');
 
   console.log('10. every route renders, light and dark, no overflow');
-  const routes = ['#/today', '#/courses', `#/course/${course.id}?tab=syllabus`, `#/course/${course.id}?tab=assessments`, `#/course/${course.id}?tab=grades`, `#/course/${course.id}?tab=materials`, `#/course/${course.id}?tab=plan`, `#/course/${course.id}/day/${course.sessions[0].date}`, '#/calendar', '#/record', '#/settings', '#/enrol'];
+  const routes = ['#/today', '#/courses', `#/course/${course.id}?tab=syllabus`, `#/course/${course.id}?tab=assessments`, `#/course/${course.id}?tab=grades`, `#/course/${course.id}?tab=materials`, `#/course/${course.id}?tab=plan`, `#/course/${course.id}/day/${course.sessions[0].date}`, '#/calendar', '#/record', '#/settings', '#/enrol', '#/stats', `#/contract/${course.id}`];
   let i = 8;
   for (const r of routes) {
     await page.goto(file + '?debug=1' + r);
@@ -304,9 +370,10 @@ const local = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.
   assert(pdfPro.sessions.some((s) => s.chunks.some((k) => k.kind === 'read' && k.pages && k.pages[0] >= 1)), 'reading chunks point at page ranges');
   assert(pdfPro.plan.pace === 'condensed' && pdfPro.plan.studyDays.length === 6, 'condensed pace studies six days a week');
   await page.click('[data-act=enrol-confirm]');
-  await okModal();
+  await signContract(page, 'Ada Lovelace');
   await page.waitForFunction(() => L.route().name === 'course', null, { timeout: 15000 });
   const pdfCourse = await page.evaluate(() => L.S.courses[L.S.courses.length - 1]);
+  assert(pdfCourse.color !== course.color, `the second course gets its own colour (${pdfCourse.color})`);
   const firstRead = pdfCourse.sessions.flatMap((s) => s.chunks.filter((k) => k.kind === 'read').map((k) => ({ s, k })))[0];
   await page.goto(file + `?debug=1#/course/${pdfCourse.id}/day/${firstRead.s.date}?chunk=${firstRead.k.id}`);
   await page.waitForSelector('#reading-body canvas', { timeout: 30000 });
@@ -321,7 +388,7 @@ const local = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.
 
   console.log('13. phone layout');
   await page.setViewportSize({ width: 390, height: 844 });
-  for (const r of ['#/today', `#/course/${pdfCourse.id}?tab=plan`, `#/course/${pdfCourse.id}?tab=assessments`, '#/calendar', `#/assess/${course.id}/${quiz1.id}`, '#/record']) {
+  for (const r of ['#/today', `#/course/${pdfCourse.id}?tab=plan`, `#/course/${pdfCourse.id}?tab=assessments`, '#/calendar', `#/assess/${course.id}/${quiz1.id}`, '#/record', '#/stats', `#/certificate/${passed.id}`, `#/contract/${passed.id}`]) {
     await page.goto(file + '?debug=1' + r); await sleep(350);
     const ov = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     assert(ov <= 0, `phone ${r} has no horizontal overflow (${ov}px)`);
@@ -363,8 +430,11 @@ const local = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.
   await m.tap('[data-act=choose-pace][data-pace=standard]');
   await m.waitForSelector('.prospectus', { timeout: 10000 });
   await m.tap('[data-act=enrol-confirm]');
-  await m.waitForSelector('.modal [data-act=modal-ok]', { timeout: 5000 });
-  await m.tap('.modal [data-act=modal-ok]');
+  await m.waitForSelector('.sheet.contract', { timeout: 10000 });
+  await m.screenshot({ path: path.join(shots, '31b-phone-contract.png') });
+  const ovc = await m.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  assert(ovc <= 0, `phone contract has no horizontal overflow (${ovc}px)`);
+  await signContract(m, 'Grace Hopper');
   await m.waitForFunction(() => L.route().name === 'course', null, { timeout: 30000 });
   const bookId = await m.evaluate(() => L.S.courses[0].id);
   await m.screenshot({ path: path.join(shots, '32-phone-course.png') });

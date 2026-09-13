@@ -249,7 +249,7 @@
     const fallback = () => L.intake.analyzeOffline({ text, segments, hint, sourceName });
     if (!available()) return { analysis: fallback(), source: 'offline', note: 'No faculty key set — the course was analysed offline.' };
     const excerpt = segments.length > 60 ? 220 : 500;
-    const list = segments.map((s) => `[${s.i}] "${s.title}" (${s.words} words) — ${text.slice(s.start, s.start + excerpt).replace(/\s+/g, ' ').trim()}`).join('\n');
+    const list = segments.map((s) => `[${s.i}] "${s.title}" (${s.words} words${(s.role || 'body') !== 'body' ? `, ${s.role} matter — not taught, use for structure only` : ''}) — ${text.slice(s.start, s.start + excerpt).replace(/\s+/g, ' ').trim()}`).join('\n');
     const user = `${hint ? `Working title from the student: ${hint}\n` : ''}Material: ${L.fmt.num(words)} words in ${segments.length} segments.\n\nSegments:\n${list}\n\nDesign the course. Return JSON:\n{"title": string, "subjectCode": 2-4 uppercase letters, "subject": string, "level": "introductory"|"intermediate"|"advanced", "difficulty": 1-5, "description": "two sentences", "prerequisites": [string], "units": [{"title": string, "segments": [from, to], "topics": [3-6 strings], "objectives": [2-4 measurable objectives with Bloom verbs], "relativeSize": 1-5}]}\nUnits must be contiguous, in order, and together cover every segment index from 0 to ${segments.length - 1}.`;
     try {
       const r = await call({ task: 'analyze', system: SYS_ANALYZE, user, maxTokens: 6000 });

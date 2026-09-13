@@ -46,7 +46,7 @@
     return `<div class="page-head" style="--ch:${L.cc(c)}"><div><div class="course-lockup"><span class="icon-sq">${esc(c.subjectCode.slice(0, 2))}</span><div><span class="code">${esc(c.code)}</span> ${courseChip(st)}<div class="small muted">${esc(c.subject)} · ${esc(c.level)} · ${c.credits} credit${c.credits === 1 ? '' : 's'}</div></div></div><h1 class="display mt-2">${esc(c.title)}</h1>
       <div class="mt-2">${L.tilesGrid(c)}</div>
       <div class="course-meta"><span class="mono">${L.fmt.date(c.term.start)} – ${L.fmt.date(c.term.end)}</span><span><b>${c.term.weeks}</b> weeks${st === 'running' ? ` · week <b>${wk}</b>` : ''}</span><span><b>${c.plan.hoursPerWeek}</b> h/week</span><span>${esc(c.plan.paceLabel || 'Standard')} pace · ${slot.days.length === 7 ? 'daily' : slot.days.map((d) => dayNames[d]).join('/')} ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')} · ${c.plan.minutesPerDay} min/day</span><span class="small muted">Faculty: ${c.analysis.source === 'llm' ? esc(c.analysis.model || 'model') : 'offline registrar'}</span></div></div>
-      <div class="actions">${canWithdraw ? `<button class="btn btn-quiet" data-act="withdraw" data-course="${c.id}">Withdraw</button>` : ''}${wk >= 1 && wk <= c.term.weeks ? `<a class="btn btn-primary" href="#/course/${c.id}/day/${nextBlockDate(c)}">${c.sessions.some((s) => s.date === L.date.iso(L.today())) ? "Today's block" : 'Next block'}</a>` : ''}</div></div>`;
+      <div class="actions">${c.certificate ? `<a class="btn" href="#/certificate/${c.id}">Certificate</a>` : ''}${c.contract ? `<a class="btn btn-quiet" href="#/contract/${c.id}">Contract</a>` : ''}${canWithdraw ? `<button class="btn btn-quiet" data-act="withdraw" data-course="${c.id}">Withdraw</button>` : ''}${wk >= 1 && wk <= c.term.weeks ? `<a class="btn btn-primary" href="#/course/${c.id}/day/${nextBlockDate(c)}">${c.sessions.some((s) => s.date === L.date.iso(L.today())) ? "Today's block" : 'Next block'}</a>` : ''}</div></div>`;
   }
   const nextBlockDate = (c) => { const t = L.date.iso(L.today()); const s = c.sessions.find((x) => x.date >= t) || c.sessions[c.sessions.length - 1]; return s ? s.date : c.term.start; };
   const tabs = (c, tab) => `<nav class="tabs">${['plan', 'syllabus', 'assessments', 'grades', 'materials'].map((t) => `<a href="#/course/${c.id}?tab=${t}"${t === tab ? ' aria-current="page"' : ''}>${t.charAt(0).toUpperCase() + t.slice(1)}</a>`).join('')}</nav>`;
@@ -92,7 +92,8 @@
   }
   function materials(c) {
     return `<div class="grid-2"><div class="card"><div class="card-head"><h3>Sources</h3><span class="small muted num">${L.fmt.num(c.material.words)} words</span></div><div class="card-body"><table class="table"><tbody>${c.material.sources.map((s) => `<tr><td><span class="pill">${esc(s.kind)}</span></td><td>${esc(s.name)}${s.url ? `<div class="small muted truncate">${esc(s.url)}</div>` : ''}</td><td class="num small">${L.fmt.num(s.words)} w${s.pages ? ` · ${s.pages} pp` : ''}</td></tr>`).join('')}</tbody></table>
-      <p class="small muted mt-2">Analysed by ${c.analysis.source === 'llm' ? `faculty (${esc(c.analysis.model || 'model')})` : 'the offline registrar'}.${c.analysis.note ? ' ' + esc(c.analysis.note) : ''}</p></div></div>
+      <p class="small muted mt-2">Analysed by ${c.analysis.source === 'llm' ? `faculty (${esc(c.analysis.model || 'model')})` : 'the offline registrar'}.${c.analysis.note ? ' ' + esc(c.analysis.note) : ''}</p>
+      ${(() => { const skipped = c.material.segments.filter((g) => g.role && g.role !== 'body'); if (!skipped.length) return ''; return `<p class="small muted mt-1"><b>Not scheduled</b> (front and back matter): ${skipped.map((g) => { const loc = R().locate(c, g.start, g.end); return esc(g.title) + (loc.pages ? ` (pp. ${loc.pages[0]}–${loc.pages[1]})` : ''); }).join(', ')}.</p>`; })()}</div></div>
       <div class="card"><div class="card-head"><h3>Units</h3><span class="small muted">${c.analysis.units.length}</span></div><div class="card-body stack gap-2">${c.analysis.units.map((u, i) => `<div><div style="font-weight:500">${i + 1}. ${esc(u.title)}</div><div class="small muted">${u.topics.map(esc).join(' · ')}</div></div>`).join('')}</div></div></div>
       <div class="section"><div class="section-head"><h2>About this course</h2></div><p style="max-width:70ch">${esc(c.description)}</p>${c.prerequisites.length ? `<p class="small muted">Assumed: ${c.prerequisites.map(esc).join('; ')}.</p>` : ''}</div>`;
   }
@@ -138,7 +139,7 @@
             ${notes ? `<div class="section"><div class="section-head"><h2>Lecture notes · week ${s.week}</h2><span class="small muted">${notes.source === 'llm' ? esc(notes.model || '') : 'offline'}</span></div><div class="notes" id="notes-body"></div></div>` : ''}
           </div>
           <aside class="reading-side">
-            ${L.studyBlock(c, s)}
+            ${L.studyBlock(c, s, { hints: true })}
             ${w && w.objectives.length ? `<div class="card"><div class="card-head"><h3>This week's objectives</h3></div><div class="card-body"><ol style="margin:0;padding-left:18px" class="small">${w.objectives.map((o) => `<li>${esc(o)}</li>`).join('')}</ol></div></div>` : ''}
             <div class="card"><div class="card-body"><button class="btn w-full" data-act="notes" data-course="${c.id}" data-week="${s.week}">${notes ? 'Regenerate lecture notes' : 'Lecture notes for this week'}</button><p class="small muted mt-1">${L.faculty.available() ? 'Written by faculty from this week’s material.' : 'Compiled offline. Add a faculty key in Settings for written notes.'}</p></div></div>
           </aside></div></div>`;
@@ -196,6 +197,39 @@
       await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
     }
   }
+  // ---------- papers ----------
+  L.views.contract = {
+    title: 'Contract',
+    render(p) {
+      const c = R().course(p.id); if (!c || !c.contract) return notFound('Contract');
+      return `<div class="page"><div class="page-head"><div><span class="eyebrow"><a href="#/course/${c.id}" class="code" style="--ch:${L.cc(c)}">${esc(c.code)}</a></span><h1 class="display">Registration contract</h1><p class="lede">Signed ${L.fmt.dt(c.contract.signedAt)} · ${esc(c.contract.no)}</p></div><div class="actions"><button class="btn" data-act="print">Print / Save PDF</button></div></div>
+        <div class="sheet-viewport">${L.papers.contractSheet(c, L.S.student, { no: c.contract.no, signedAt: c.contract.signedAt, signature: c.contract.signature, name: c.contract.name })}</div>
+        <p class="small muted mt-2 mono">Text hash ${esc(c.contract.textHash.slice(0, 16))}… · recorded in the ledger as contract_signed.</p></div>`;
+    },
+  };
+  L.views.certificate = {
+    title: 'Certificate',
+    render(p) {
+      const c = R().course(p.id); if (!c) return notFound('Course');
+      if (!c.certificate) return `<div class="page"><div class="empty"><h2>No certificate for ${esc(c.code)}.</h2><p>${c.final ? (c.final.letter === 'W' ? 'The course was withdrawn.' : `The final grade (${L.fmt.pct(c.final.pct)}) is below the ${L.papers.PASS}% required.`) : 'The course has not ended yet.'}</p><p><a class="btn mt-2" href="#/course/${c.id}">Back to the course</a></p></div></div>`;
+      const cert = c.certificate;
+      return `<div class="page"><div class="page-head"><div><span class="eyebrow"><a href="#/course/${c.id}" class="code" style="--ch:${L.cc(c)}">${esc(c.code)}</a></span><h1 class="display">Certificate of Completion</h1><p class="lede">${esc(cert.no)} · issued ${L.fmt.date(cert.issuedAt)} · verification ${esc(cert.code)}</p></div><div class="actions"><button class="btn btn-primary" data-act="share-certificate" data-course="${c.id}">Share image</button><button class="btn" data-act="print">Print / Save PDF</button></div></div>
+        <div class="sheet-viewport is-landscape"><div class="sheet certificate" id="sheet">${L.papers.certificateSvg(c)}</div></div>
+        <p class="small muted mt-2">Verify on the device that issued it: More → Grades → Verify record. Hash ${esc(cert.hash.slice(0, 16))}…</p></div>`;
+    },
+  };
+  L.actions['share-certificate'] = async (el) => {
+    const c = R().course(el.dataset.course); if (!c || !c.certificate) return;
+    const blob = await L.papers.certificatePng(c);
+    const file = new File([blob], `${c.certificate.no}.png`, { type: 'image/png' });
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file], title: `Certificate ${c.certificate.no}` }); return; } catch (e) { if (e.name === 'AbortError') return; }
+    }
+    const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = file.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000);
+    L.ui.toast('Certificate image saved.', 'good');
+  };
+  L.actions.print = () => window.print();
+
   L.actions.notes = async (el) => {
     const c = R().course(el.dataset.course); const w = R().week(c, Number(el.dataset.week));
     el.disabled = true; el.textContent = 'Writing notes…';

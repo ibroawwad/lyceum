@@ -54,8 +54,27 @@
     },
   };
 
+  // ---------- stats ----------
+  L.views.stats = {
+    title: 'Stats',
+    render() {
+      const st = R().stats();
+      const pct = (x) => (x == null ? '—' : `${Math.round(x * 100)}%`);
+      const max = Math.max(60, ...st.weekMinutes.map((w) => w.minutes));
+      const W = 560, H = 160, pad = 28, bw = (W - pad * 2) / 8;
+      const bars = st.weekMinutes.map((w, i) => { const h = Math.round((w.minutes / max) * (H - 40)); return `<g transform="translate(${pad + i * bw} 0)"><rect x="${bw * 0.18}" y="${H - 24 - h}" width="${bw * 0.64}" height="${h}" rx="4" fill="${i === 7 ? 'var(--accent)' : 'var(--card-3)'}"/><text x="${bw / 2}" y="${H - 8}" text-anchor="middle" font-size="10" fill="var(--muted)">${L.fmt.date(w.from).slice(4)}</text>${w.minutes ? `<text x="${bw / 2}" y="${H - 30 - h}" text-anchor="middle" font-size="10" fill="var(--text-2)">${w.minutes >= 60 ? (w.minutes / 60).toFixed(1) + 'h' : w.minutes + 'm'}</text>` : ''}</g>`; }).join('');
+      const courses = st.perCourse.filter((x) => x.due > 0 || R().courseState(x.course) === 'running');
+      return `<div class="page"><div class="page-head"><div><h1 class="display">Stats</h1><p class="lede">${st.minutes ? `${L.fmt.dur(st.minutes)} studied in all.` : 'Nothing studied yet.'}</p></div><div class="actions"><a class="btn" href="#/record">Grades & certificates</a></div></div>
+        ${!courses.length ? `<div class="empty"><h2>No study days yet.</h2><p>Streaks and rates appear once a course is running.</p></div>` : `
+        <div class="grid-2" style="grid-template-columns:repeat(2,minmax(0,1fr))"><div class="tile"><div class="tile-n">${st.streak}<span class="small muted" style="font-size:14px;font-weight:500"> day${st.streak === 1 ? '' : 's'}</span></div><div class="tile-l">Current streak</div></div><div class="tile"><div class="tile-n">${st.longest}</div><div class="tile-l">Longest streak</div></div><div class="tile"><div class="tile-n">${pct(st.completionRate)}</div><div class="tile-l">Chunks done</div></div><div class="tile"><div class="tile-n">${pct(st.onTimeRate)}</div><div class="tile-l">Done on the day</div></div></div>
+        <div class="section"><div class="section-head"><h2>Minutes studied · last 8 weeks</h2><span class="small muted">${st.days.perfect} perfect · ${st.days.partial} partial · ${st.days.missed} missed days</span></div><div class="card"><div class="card-body"><svg viewBox="0 0 ${W} ${H}" width="100%" class="chart" role="img" aria-label="Minutes studied per week">${bars}</svg></div></div></div>
+        <div class="section"><div class="section-head"><h2>By course</h2></div><div class="stack gap-2">${courses.map(({ course: c, rate, onTime, streak }) => `<div class="card"><div class="card-body"><div class="cols" style="justify-content:space-between"><div style="min-width:0"><a class="code" style="--ch:${L.cc(c)}" href="#/course/${c.id}">${esc(c.code)}</a> <span class="small muted">· ${esc(c.title)}</span></div><div class="small num muted">${pct(rate)} done · ${pct(onTime)} on the day · streak ${streak}</div></div><div class="mt-2">${L.tilesRow(c, 28)}</div></div></div>`).join('')}</div></div>`}
+      </div>`;
+    },
+  };
+
   // ---------- record ----------
-  const LEDGER_LABEL = { matriculated: 'Matriculated', enrolled: 'Enrolled', withdrawn: 'Withdrew', session_attended: 'Attended session', chunk_completed: 'Chunk done', assessment_started: 'Began paper', assessment_submitted: 'Submitted paper', assessment_graded: 'Graded', assessment_missed: 'Missed', course_completed: 'Course completed', clock_override: 'Clock moved', clock_reset: 'Clock reset', settings_changed: 'Settings changed', data_imported: 'Record imported' };
+  const LEDGER_LABEL = { matriculated: 'Matriculated', enrolled: 'Enrolled', withdrawn: 'Withdrew', session_attended: 'Attended session', chunk_completed: 'Chunk done', contract_signed: 'Contract signed', certificate_issued: 'Certificate issued', assessment_started: 'Began paper', assessment_submitted: 'Submitted paper', assessment_graded: 'Graded', assessment_missed: 'Missed', course_completed: 'Course completed', clock_override: 'Clock moved', clock_reset: 'Clock reset', settings_changed: 'Settings changed', data_imported: 'Record imported' };
   function ledgerDetail(e) {
     const c = e.courseId && R().course(e.courseId);
     const code = c ? c.code : (e.detail.code || '');
@@ -67,6 +86,8 @@
       case 'withdrawn': return `${code} in week ${d.week}`;
       case 'session_attended': return `${code} · week ${d.week} ${d.kind}`;
       case 'chunk_completed': return `${code} · ${d.title}${d.onTime ? '' : ' · late'}`;
+      case 'contract_signed': return `${code} · ${d.no} · signed by ${d.name}`;
+      case 'certificate_issued': return `${code} · ${d.no} · ${d.letter} (${L.fmt.pct(d.pct)}) · ${d.code}`;
       case 'assessment_started': return `${code} · ${a ? a.title : d.kind} · seal ${String(d.seal || '').slice(0, 8)}`;
       case 'assessment_submitted': return `${code} · ${a ? a.title : ''} · ${d.answered}/${d.of} answered${d.auto ? ' · auto' : ''}`;
       case 'assessment_graded': return `${code} · ${a ? a.title : ''} · ${L.fmt.pct(d.pct)}${d.penaltyPct ? ` (−${d.penaltyPct}% late)` : ''} · ${d.source}`;
@@ -92,6 +113,7 @@
           </tbody></table></div>
           <div class="cols mt-3" style="justify-content:space-between"><div class="small muted">IP = in progress (*standing to date) · W = withdrawn · GPA counts completed courses only</div><div class="cols gap-3"><span><span class="label">Credits</span> <b class="num">${g.credits}</b></span><span><span class="label">GPA</span> <b class="num">${g.gpa == null ? '—' : g.gpa.toFixed(2)}</b></span></div></div>
         </div>
+        ${(() => { const certs = L.S.courses.filter((c) => c.certificate); const failed = L.S.courses.filter((c) => c.final && !c.certificate && c.final.letter !== 'W'); return `<div class="section"><div class="section-head"><h2>Certificates</h2><span class="small muted">${certs.length} issued · pass mark ${L.papers.PASS}%</span></div>${certs.length ? `<div class="stack gap-2">${certs.map((c) => `<div class="card"><div class="card-body cols" style="justify-content:space-between"><div><div style="font-weight:600">${esc(c.title)}</div><div class="small muted">${esc(c.code)} · ${esc(c.certificate.letter)} ${L.fmt.pct(c.certificate.pct)} · ${esc(c.certificate.no)} · issued ${L.fmt.date(c.certificate.issuedAt)}</div></div><a class="btn btn-sm" href="#/certificate/${c.id}">View</a></div></div>`).join('')}</div>` : `<p class="muted small">A certificate is issued when a course ends with ${L.papers.PASS}% or more.${failed.length ? ` ${failed.map((c) => `${esc(c.code)} ended at ${L.fmt.pct(c.final.pct)} — no certificate.`).join(' ')}` : ''}</p>`}</div>`; })()}
         <div class="section ledger-list"><div class="section-head"><h2>Ledger</h2><span class="small muted">${L.S.ledger.length} entries · hash-chained, append-only</span></div>
           <div class="table-wrap"><table class="table"><thead><tr><th>#</th><th>Event</th><th>Detail</th><th>When</th><th>Hash</th></tr></thead><tbody>
             ${L.S.ledger.slice(-60).reverse().map((e) => `<tr><td class="mono small muted">${e.i}</td><td>${LEDGER_LABEL[e.type] || e.type}</td><td class="small">${esc(ledgerDetail(e))}</td><td class="mono small nowrap">${L.fmt.dt(e.t)}</td><td class="hash">${e.hash.slice(0, 8)}</td></tr>`).join('')}
@@ -110,7 +132,7 @@
       const off = L.S.clock.offsetMs || 0;
       const models = L.faculty.MODELS.includes(s.model) ? L.faculty.MODELS : [s.model, ...L.faculty.MODELS];
       return `<div class="page">
-        <div class="page-head"><div><h1 class="display">More</h1></div><div class="actions"><a class="btn btn-primary" href="#/enrol">Add a course</a></div></div>
+        <div class="page-head"><div><h1 class="display">More</h1></div><div class="actions"><a class="btn" href="#/record">Grades & certificates</a><a class="btn btn-primary" href="#/enrol">Add a course</a></div></div>
         <div class="grid-2">
           <div class="stack gap-3">
             <div class="card"><div class="card-head"><h2>Faculty</h2><span class="small muted">${L.faculty.available() ? 'key set' : 'offline examiner'}</span></div><div class="card-body stack gap-2">

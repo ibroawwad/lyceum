@@ -18,6 +18,7 @@
     let name = seg[0] || 'today';
     if (name === 'course' && seg[1]) { params.id = seg[1]; if (seg[2] === 'day' && seg[3]) { name = 'day'; params.date = seg[3]; } else if (seg[2] === 'week' && seg[3]) { name = 'week'; params.n = Number(seg[3]); } }
     if (name === 'assess') { params.id = seg[1]; params.aid = seg[2]; }
+    if (name === 'contract' || name === 'certificate') params.id = seg[1];
     return { name, params, query };
   };
 
@@ -28,12 +29,13 @@
     calendar: '<svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="1"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>',
     record: '<svg viewBox="0 0 24 24"><path d="M6 3.5h9l4 4v13H6z"/><path d="M15 3.5v4h4M9 12h6M9 16h6"/></svg>',
     enrol: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 8v8M8 12h8"/></svg>',
+    stats: '<svg viewBox="0 0 24 24"><path d="M4 19.5h16M6 16V10M11 16V5M16 16v-4M21 16V8"/></svg>',
     settings: '<svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>',
   };
 
-  L.LOGO = '<svg viewBox="0 0 512 512" aria-hidden="true"><rect width="512" height="512" rx="132" fill="#4ade80"/><path d="M168 128h64v192h112v64H168z" fill="#0f1012"/></svg>';
+  L.LOGO = '<svg viewBox="0 0 64 64" aria-hidden="true" class="mark"><g fill="currentColor"><g><path d="M23,55 C6,46 4,26 17,10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><ellipse cx="15" cy="52" rx="1.9" ry="4.2" transform="rotate(-89.7 15 52)"/><ellipse cx="14.1" cy="44.4" rx="1.9" ry="4.2" transform="rotate(-1 14.1 44.4)"/><ellipse cx="8" cy="41.5" rx="1.9" ry="4.2" transform="rotate(-63.9 8 41.5)"/><ellipse cx="10.7" cy="34.7" rx="1.9" ry="4.2" transform="rotate(25 10.7 34.7)"/><ellipse cx="6.4" cy="29.5" rx="1.9" ry="4.2" transform="rotate(-38.7 6.4 29.5)"/><ellipse cx="11.6" cy="24.1" rx="1.9" ry="4.2" transform="rotate(48.8 11.6 24.1)"/><ellipse cx="9.8" cy="17.2" rx="1.9" ry="4.2" transform="rotate(-16.5 9.8 17.2)"/><ellipse cx="16.9" cy="13.5" rx="1.9" ry="4.2" transform="rotate(69.4 16.9 13.5)"/></g><g transform="matrix(-1 0 0 1 64 0)"><g><path d="M23,55 C6,46 4,26 17,10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><ellipse cx="15" cy="52" rx="1.9" ry="4.2" transform="rotate(-89.7 15 52)"/><ellipse cx="14.1" cy="44.4" rx="1.9" ry="4.2" transform="rotate(-1 14.1 44.4)"/><ellipse cx="8" cy="41.5" rx="1.9" ry="4.2" transform="rotate(-63.9 8 41.5)"/><ellipse cx="10.7" cy="34.7" rx="1.9" ry="4.2" transform="rotate(25 10.7 34.7)"/><ellipse cx="6.4" cy="29.5" rx="1.9" ry="4.2" transform="rotate(-38.7 6.4 29.5)"/><ellipse cx="11.6" cy="24.1" rx="1.9" ry="4.2" transform="rotate(48.8 11.6 24.1)"/><ellipse cx="9.8" cy="17.2" rx="1.9" ry="4.2" transform="rotate(-16.5 9.8 17.2)"/><ellipse cx="16.9" cy="13.5" rx="1.9" ry="4.2" transform="rotate(69.4 16.9 13.5)"/></g></g><rect x="23" y="11" width="18" height="3" rx="0.8"/><rect x="25" y="14.5" width="14" height="2"/><rect x="27" y="17.5" width="1.6" height="28"/><rect x="29.1" y="17.5" width="1.6" height="28"/><rect x="31.2" y="17.5" width="1.6" height="28"/><rect x="33.3" y="17.5" width="1.6" height="28"/><rect x="35.4" y="17.5" width="1.6" height="28"/><rect x="25" y="46" width="14" height="2.2"/><rect x="22" y="48.8" width="20" height="3" rx="0.8"/></g></svg>';
+  L.MARK_INNER = '<g fill="currentColor"><g><path d="M23,55 C6,46 4,26 17,10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><ellipse cx="15" cy="52" rx="1.9" ry="4.2" transform="rotate(-89.7 15 52)"/><ellipse cx="14.1" cy="44.4" rx="1.9" ry="4.2" transform="rotate(-1 14.1 44.4)"/><ellipse cx="8" cy="41.5" rx="1.9" ry="4.2" transform="rotate(-63.9 8 41.5)"/><ellipse cx="10.7" cy="34.7" rx="1.9" ry="4.2" transform="rotate(25 10.7 34.7)"/><ellipse cx="6.4" cy="29.5" rx="1.9" ry="4.2" transform="rotate(-38.7 6.4 29.5)"/><ellipse cx="11.6" cy="24.1" rx="1.9" ry="4.2" transform="rotate(48.8 11.6 24.1)"/><ellipse cx="9.8" cy="17.2" rx="1.9" ry="4.2" transform="rotate(-16.5 9.8 17.2)"/><ellipse cx="16.9" cy="13.5" rx="1.9" ry="4.2" transform="rotate(69.4 16.9 13.5)"/></g><g transform="matrix(-1 0 0 1 64 0)"><g><path d="M23,55 C6,46 4,26 17,10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><ellipse cx="15" cy="52" rx="1.9" ry="4.2" transform="rotate(-89.7 15 52)"/><ellipse cx="14.1" cy="44.4" rx="1.9" ry="4.2" transform="rotate(-1 14.1 44.4)"/><ellipse cx="8" cy="41.5" rx="1.9" ry="4.2" transform="rotate(-63.9 8 41.5)"/><ellipse cx="10.7" cy="34.7" rx="1.9" ry="4.2" transform="rotate(25 10.7 34.7)"/><ellipse cx="6.4" cy="29.5" rx="1.9" ry="4.2" transform="rotate(-38.7 6.4 29.5)"/><ellipse cx="11.6" cy="24.1" rx="1.9" ry="4.2" transform="rotate(48.8 11.6 24.1)"/><ellipse cx="9.8" cy="17.2" rx="1.9" ry="4.2" transform="rotate(-16.5 9.8 17.2)"/><ellipse cx="16.9" cy="13.5" rx="1.9" ry="4.2" transform="rotate(69.4 16.9 13.5)"/></g></g><rect x="23" y="11" width="18" height="3" rx="0.8"/><rect x="25" y="14.5" width="14" height="2"/><rect x="27" y="17.5" width="1.6" height="28"/><rect x="29.1" y="17.5" width="1.6" height="28"/><rect x="31.2" y="17.5" width="1.6" height="28"/><rect x="33.3" y="17.5" width="1.6" height="28"/><rect x="35.4" y="17.5" width="1.6" height="28"/><rect x="25" y="46" width="14" height="2.2"/><rect x="22" y="48.8" width="20" height="3" rx="0.8"/></g>';
   L.logo = (big = false) => `<span class="logo${big ? ' is-big' : ''}">${L.LOGO}<span>Lyceum</span></span>`;
-
   // one tile per calendar day of the term: full / part / none / future / off (no study block that day)
   L.tileState = (c, iso) => {
     const s = c.sessions.find((x) => x.date === iso);
@@ -65,7 +67,7 @@
     if (!s) { rail.innerHTML = ''; rail.hidden = true; return; }
     rail.hidden = false;
     const { name } = L.route();
-    const cur = (n) => (n === name || (n === 'courses' && ['course', 'day', 'week', 'assess'].includes(name)) ? ' aria-current="page"' : '');
+    const cur = (n) => (n === name || (n === 'courses' && ['course', 'day', 'week', 'assess', 'contract', 'certificate'].includes(name)) || (n === 'settings' && ['enrol', 'record'].includes(name)) ? ' aria-current="page"' : '');
     const openNow = L.S.courses.filter((c) => c.state === 'enrolled').flatMap((c) => c.assessments.filter((a) => ['open', 'late', 'in_progress'].includes(R().assessmentState(c, a)))).length;
     const active = R().courses('active').length;
     const nd = R().nextDeadline();
@@ -75,8 +77,8 @@
         <a href="#/today"${cur('today')}>${I.today}<span>Today</span>${openNow ? `<span class="badge">${openNow}</span>` : ''}</a>
         <a href="#/courses"${cur('courses')}>${I.courses}<span>Courses</span>${active ? `<span class="badge is-quiet">${active}</span>` : ''}</a>
         <a href="#/calendar"${cur('calendar')}>${I.calendar}<span>Calendar</span></a>
-        <a href="#/record"${cur('record')}>${I.record}<span>Grades</span></a>
-        <a href="#/settings"${cur('settings') || (name === 'enrol' ? ' aria-current="page"' : '')}>${I.settings}<span>More</span></a>
+        <a href="#/stats"${cur('stats')}>${I.stats}<span>Stats</span></a>
+        <a href="#/settings"${cur('settings')}>${I.settings}<span>More</span></a>
       </nav>
       <div class="rail-foot">
         <div class="rail-clock"><div class="big" data-clock>${L.fmt.time(L.now())}</div><div class="sub" data-clock-date>${L.fmt.date(L.now())} ${new Date(L.now()).getFullYear()}${L.S.clock.offsetMs ? ' · clock offset' : ''}</div></div>
@@ -253,20 +255,20 @@
 
   // one day's study block: heading + numbered bite-sized chunks
   const KIND_LABEL = { read: 'Read', practise: 'Practise', review: 'Review' };
-  L.chunkRow = (c, s, k, { number } = {}) => {
+  L.chunkRow = (c, s, k, { number, hint = false } = {}) => {
     const todayIso = L.date.iso(L.today());
     const state = k.done ? (L.date.iso(k.done) <= s.date ? 'done' : 'late') : s.date < todayIso ? 'overdue' : s.date > todayIso ? 'future' : 'due';
     const where = k.kind === 'read' ? (k.pages ? (k.pages[0] === k.pages[1] ? `p. ${k.pages[0]}` : `pp. ${k.pages[0]}–${k.pages[1]}`) : 'text') : '';
     const href = k.kind === 'read' ? `#/course/${c.id}/day/${s.date}?chunk=${k.id}` : `#/course/${c.id}/day/${s.date}`;
-    return `<div class="chunk" data-state="${state}"><label class="chunk-check"><input type="checkbox" data-in="chunk-done" data-course="${c.id}" data-session="${s.id}" data-chunk="${k.id}"${k.done ? ' checked disabled' : state === 'future' ? ' disabled' : ''}><span class="sr-only">Done</span></label>
-      <div class="chunk-body"><a class="chunk-title" href="${href}">${number ? `<span class="chunk-n">${number}</span>` : ''}${esc(k.title)}</a><div class="chunk-meta"><span class="pill">${KIND_LABEL[k.kind] || k.kind}</span>${where ? ` <span class="mono">${where}</span>` : ''} <span class="num">${k.minutes} min</span>${state === 'late' ? ' <span class="chip" data-state="warn">Done late</span>' : state === 'overdue' ? ` <span class="chip" data-state="bad">Due ${L.fmt.date(s.date)}</span>` : ''}</div></div></div>`;
+    return `<div class="chunk" data-state="${state}" data-kind="${k.kind}"><label class="chunk-check"><input type="checkbox" data-in="chunk-done" data-course="${c.id}" data-session="${s.id}" data-chunk="${k.id}"${k.done ? ' checked disabled' : state === 'future' ? ' disabled' : ''}><span class="sr-only">Done</span></label>
+      <div class="chunk-body"><a class="chunk-title" href="${href}">${number ? `<span class="chunk-n">${number}</span>` : ''}${esc(k.title)}</a>${hint && k.hint ? `<div class="chunk-hint">${esc(k.hint)}</div>` : ''}<div class="chunk-meta"><span class="pill" data-kind="${k.kind}">${KIND_LABEL[k.kind] || k.kind}</span>${where ? ` <span>${where}</span>` : ''} <span class="num">${k.minutes} min</span>${state === 'late' ? ' <span class="chip" data-state="warn">Done late</span>' : state === 'overdue' ? ` <span class="chip" data-state="bad">Due ${L.fmt.date(s.date)}</span>` : ''}</div></div></div>`;
   };
-  L.studyBlock = (c, s, { today = false } = {}) => {
+  L.studyBlock = (c, s, { today = false, hints = false } = {}) => {
     const done = s.chunks.filter((k) => k.done).length;
     const h = Math.floor(s.start / 60), m = s.start % 60;
     return `<div class="study-block" style="--ch:${L.cc(c)}"><div class="study-head"><div><span class="code" style="--ch:${L.cc(c)}">${esc(c.code)}</span> <span class="small muted">· week ${s.week} · ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')} · ${L.fmt.dur(s.minutes)}</span><div class="study-topic">${esc(s.topic)}</div></div><div class="num small muted">${done}/${s.chunks.length}</div></div>
       <div class="progress mb-2"><i style="width:${s.chunks.length ? (done / s.chunks.length) * 100 : 0}%"></i></div>
-      <div class="chunks">${s.chunks.map((k, i) => L.chunkRow(c, s, k, { number: i + 1 })).join('')}</div></div>`;
+      <div class="chunks">${s.chunks.map((k, i) => L.chunkRow(c, s, k, { number: i + 1, hint: hints })).join('')}</div></div>`;
   };
   L.inputs['chunk-done'] = async (el) => {
     if (!el.checked) return;

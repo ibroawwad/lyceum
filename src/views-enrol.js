@@ -11,7 +11,7 @@
   const totalWords = () => L.sum(W.sources.map((s) => s.words));
 
   function steps() {
-    const st = [['Material', 1], ['Pace', 2], ['Prospectus', 3]];
+    const st = [['Material', 1], ['Pace', 2], ['Prospectus', 3], ['Contract', 4]];
     return `<div class="wizard-steps">${st.map(([n, i]) => `<div class="wizard-step${W.step === i ? ' is-active' : W.step > i ? ' is-done' : ''}"><span class="n">${i}</span>${n}</div>`).join('')}</div>`;
   }
   function materialStep() {
@@ -64,12 +64,17 @@
     render(p, q) {
       const body = W.step === 1 ? materialStep()
         : W.step === 2 ? (W.plans ? paceCards() : `<div class="card"><div class="card-body"><div class="log" id="registrar-log">${W.log.map((l) => `<div>${esc(l)}</div>`).join('')}</div>${W.error ? `<div class="notice mt-2" data-kind="bad"><span>${esc(W.error)}</span></div><div class="cols mt-2"><button class="btn" data-act="enrol-back">Back to material</button></div>` : ''}</div></div>`)
-        : W.step === 3 && W.prospectus ? prospectus(W.prospectus) : '';
-      const h1 = W.step === 3 ? 'Prospectus' : W.step === 2 && W.plans ? 'Choose a pace' : 'Add a course';
-      const lede = W.step === 1 ? 'Add the material. It comes back as a course with a fixed term and a daily block.' : W.step === 3 ? 'Enrolling makes these terms binding.' : W.plans ? 'Three pacings. Pick one.' : 'Reading your material…';
+        : W.step === 3 && W.prospectus ? prospectus(W.prospectus)
+        : W.step === 4 && W.prospectus ? `<div class="sheet-viewport">${L.papers.contractSheet(W.prospectus, L.S.student, { no: W.contractNo, forSigning: true })}</div>
+            ${W.error ? `<div class="notice mt-2" data-kind="bad"><span>${esc(W.error)}</span></div>` : ''}
+            <div class="cols mt-3"><button class="btn btn-primary" data-act="sign-enrol">Sign and enrol</button><button class="btn btn-quiet" data-act="enrol-prospectus">Back</button></div>
+            <p class="small muted mt-2">Draw your signature in the box and type your full name as it appears on your record. Signing enrols you; the schedule is then fixed.</p>` : '';
+      const h1 = W.step === 4 ? 'Registration contract' : W.step === 3 ? 'Prospectus' : W.step === 2 && W.plans ? 'Choose a pace' : 'Add a course';
+      const lede = W.step === 1 ? 'Add the material. It comes back as a course with a fixed term and a daily block.' : W.step === 4 ? 'Read it, sign it, and the term begins.' : W.step === 3 ? 'Enrolling makes these terms binding.' : W.plans ? 'Three pacings. Pick one.' : 'Reading your material…';
       return `<div class="page"><div class="page-head"><div><h1 class="display">${h1}</h1><p class="lede">${lede}</p></div></div>${steps()}${body}</div>`;
     },
     async mount(root, p, q) {
+      if (W.step === 4) L.papers.mountPad(root);
       window.__prospectus = W.prospectus || null;
       if (q.sample === '1' && !W.sampleLoaded && !W.busy) {
         W.sampleLoaded = true;
@@ -150,13 +155,28 @@
       W.error = e.message || 'The registrar could not schedule this material.';
     } finally { W.busy = false; L.render(); }
   };
-  L.actions['enrol-confirm'] = async () => {
+  L.actions['enrol-confirm'] = () => {
+    if (!W.prospectus) return;
+    W.contractNo = L.papers.contractNo(); W.error = null; W.step = 4; L.render();
+  };
+  L.actions['enrol-prospectus'] = () => { W.step = 3; W.error = null; L.render(); };
+  L.actions['sign-enrol'] = async () => {
     const p = W.prospectus; if (!p) return;
-    const ok = await L.ui.confirm({ title: `Enrol in ${p.code}?`, body: `<p><b>${esc(p.title)}</b> — ${p.term.weeks} weeks from ${L.fmt.dateLong(p.term.start)}, ${p.plan.hoursPerWeek} hours a week, ${p.assessments.length} assessments.</p><p>From this moment the schedule is binding: no date, weight or examination can be changed. Withdrawal is possible until ${L.fmt.date(L.date.addDays(L.date.parse(p.policy.withdrawBefore), -1))}.</p>`, ok: 'Enrol' });
-    if (!ok) return;
-    const c = await R().enrol(p);
-    W.step = 1; W.sources = []; W.hint = ''; W.plans = null; W.prospectus = null; W.log = []; W.sampleLoaded = false;
-    L.ui.toast(`Enrolled in ${c.code}. Term begins ${L.fmt.date(c.term.start)}.`, 'good', 5000);
-    L.go(`/course/${c.id}`);
+    const nameEl = document.getElementById('contract-name');
+    const typed = (nameEl ? nameEl.value : '').trim();
+    const pad = L.papers.pad;
+    const norm = (x) => x.trim().toLowerCase().replace(/\s+/g, ' ');
+    if (norm(typed) !== norm(L.S.student.name)) { W.error = `Type your name exactly as it appears on your record: ${L.S.student.name}.`; L.render(); return; }
+    if (!pad || pad.points < 20) { W.error = 'Draw your signature in the box.'; L.render(); return; }
+    const signature = pad.dataUrl();
+    if (!signature) { W.error = 'Draw your signature in the box.'; L.render(); return; }
+    W.busy = true;
+    try {
+      const c = await R().enrol(p, { no: W.contractNo, name: typed, signature });
+      W.step = 1; W.sources = []; W.hint = ''; W.plans = null; W.prospectus = null; W.log = []; W.sampleLoaded = false; W.error = null;
+      L.ui.toast(`Enrolled in ${c.code}. Term begins ${L.fmt.date(c.term.start)}.`, 'good', 5000);
+      L.go(`/course/${c.id}`);
+    } catch (e) { W.error = e.message; L.render(); }
+    finally { W.busy = false; }
   };
 })(window.L);

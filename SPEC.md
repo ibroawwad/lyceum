@@ -268,14 +268,16 @@ Course = {
   policy: { weights:{ quiz, pset, midterm, final, project, participation },   // integers summing to 100; absent kinds = 0
             late:{ perDayPct:10, maxDays:3 }, scale: 'standard', withdrawBefore:'YYYY-MM-DD' },
   notes: { [weekN]: { markdown, source, model?, at } },
-  final?: { pct, letter, at }                // written by sweep when the term ends (or on withdraw: letter 'W')
+  final?: { pct, letter, at },               // written by sweep when the term ends (or on withdraw: letter 'W')
+  contract: { no:'LYC-C-<year>-<seq>', signedAt, name, signature: 'data:image/png;base64,…', textHash },   // signed at enrolment (papers.js)
+  certificate?: { no:'LYC-<year>-<5 digits>', issuedAt, letter, pct, credits, breakdown:[{kind,weight,avg}], hash, code }  // issued by sweep at ≥ 70%
 }
 Unit = { title, segments:[from,to], topics:[], objectives:[], relativeSize }
-Segment = { i, title, start, end, words, subheads:[{ title, at }] }   // char offsets into the material text; subheads name chunks
+Segment = { i, title, start, end, words, role:'front'|'body'|'back', subheads:[{ title, at }] }   // subheads name chunks; only body segments are scheduled
 Week = { n, start:'YYYY-MM-DD', title, parts:[{ unit:idx, fraction:0..1, label:'Unit 3 · Cont.' }],
          segments:[i…], objectives:[], kind:'teaching'|'midterm'|'final' }
 Session = { id, week, day:0..6, date:'YYYY-MM-DD', start:540, minutes, kind:'Study block', topic, chunks: Chunk[] }  // one per study day
-Chunk = { id, kind:'read'|'practise'|'review', title, minutes:5..25 (practise ≤ 25, review 10), done: null|iso,
+Chunk = { id, kind:'read'|'practise'|'review', title (≤ 64 chars), hint?, minutes:5..25 (practise ≤ 30, review 10), done: null|iso,
           segment?, from?, to? (char offsets, read only), pages?:[a,b]|null, source?: sourceId }
 Assessment = { id, kind:'quiz'|'pset'|'midterm'|'final'|'project', title, week, coversWeeks:[…],
                opensAt: iso, dueAt: iso, closesAt: iso, durationMin: number|null, lateAllowed: boolean,
@@ -293,7 +295,7 @@ Standing = { current: pct|null, projected: pct|null, letter, categories:[{ kind,
              participation:{ attended, held } }
 ```
 
-Ledger types: `matriculated, enrolled, withdrawn, chunk_completed, assessment_started, assessment_submitted,
+Ledger types: `matriculated, contract_signed, enrolled, withdrawn, chunk_completed, certificate_issued, assessment_started, assessment_submitted,
 assessment_graded, assessment_missed, course_completed, clock_override, clock_reset, settings_changed, data_imported`.
 
 ---
@@ -424,6 +426,12 @@ The direction (fonts, palette values, radii, the one bold move) comes from `DESI
 4. Otherwise: chunk by paragraphs into ~1,200-word segments titled `Part n`.
 Result: `{ i, title, start, end, words }` with `start/end` char offsets into the normalised text.
 
+### 7.2b Front and back matter (`classify`)
+Titles matching contents / preface / foreword / acknowledgements / copyright / dedication / about the author, or a
+TOC-shaped body (≥ 8 lines, ≥ 50 % ending in a page number), are `front`; index / glossary / bibliography /
+references / answers are `back`; a short untitled opening before the first real section is `front`. Only `body`
+segments are analysed into units and scheduled into chunks; the Materials tab lists what was not scheduled.
+
 ### 7.3 Key terms
 Tokens `[A-Za-z][A-Za-z\-]{3,}`; lowercase for counting; ignore a 200-word stopword list;
 score = freq × (1.6 if the term appears Capitalised mid-sentence) × (1.3 if length ≥ 8);
@@ -547,13 +555,21 @@ the registrar clock → begin/answer/submit a quiz → miss a quiz → withdraw 
 transcript + ledger verify → export/import round trip → dark theme render). It writes screenshots
 to `shots/`. Extend it with more assertions whenever you find a bug; never delete an assertion.
 
+### 9.1 Official papers (`src/papers.js`)
+`L.papers.contractSheet(prospectus, student, { forSigning })` renders the registration contract; `mountPad(root)`
+wires `#signature-pad`; `L.registrar.enrol(prospectus, { no, name, signature })` requires a typed name equal to the
+record name and a drawn signature, stores `course.contract`, ledger `contract_signed` then `enrolled`.
+`issueCertificate(course)` runs from `sweep()` on completion at ≥ `PASS` (70 %); `certificateSvg(course)` is the one
+source for display, print and `certificatePng()` export. Routes `#/contract/:id`, `#/certificate/:id`, `#/stats`.
+
 ### 10.1 Test hooks (binding — the smoke test uses exactly these)
 - welcome: `<input id="student-name">`, button `[data-act=matriculate]`.
 - today: `.empty` when there are no courses (with `[data-act=load-sample]`), `.today-grid` otherwise.
   `load-sample` navigates to `#/enrol?sample=1`; the wizard preloads `L.SAMPLE` as a source and
   submits to the registrar automatically, landing on the prospectus.
 - enrol: while a prospectus is displayed, `window.__prospectus` holds the Prospectus object
-  (debug aid, harmless); `[data-act=enrol-confirm]` → `L.ui.confirm` → `[data-act=enrol-discard]`.
+  (debug aid, harmless); `[data-act=enrol-confirm]` opens the contract step: `.sheet.contract`, `<canvas id="signature-pad">`,
+  `<input id="contract-name">`, `[data-act=sign-enrol]`; `[data-act=enrol-discard]` abandons.
 - modals: `L.ui.confirm` renders `.modal` with `[data-act=modal-ok]` and `[data-act=modal-cancel]`.
 - course page: `.syllabus` present on the syllabus tab.
 - assess: before-state has `<input type="checkbox" id="pledge">` and `[data-act=begin]` (disabled

@@ -3,7 +3,7 @@
 
   const D = L.date;
   const DAY = 86400000;
-  const COLORS = ['#4ade80', '#22d3ee', '#f5b12b', '#fb7185', '#a78bfa', '#60a5fa', '#a3e635', '#fb923c'];
+  const COLORS = ['#22d3ee', '#f5b12b', '#fb7185', '#a78bfa', '#60a5fa', '#f472b6', '#fb923c', '#a3e635']; // never the brand green
   const SCALE = [[93, 'A', 4.0], [90, 'A−', 3.7], [87, 'B+', 3.3], [83, 'B', 3.0], [80, 'B−', 2.7], [77, 'C+', 2.3], [73, 'C', 2.0], [70, 'C−', 1.7], [67, 'D+', 1.3], [63, 'D', 1.0], [60, 'D−', 0.7], [-Infinity, 'F', 0]];
   const KIND_TITLE = { quiz: 'Quiz', pset: 'Problem set', midterm: 'Midterm examination', final: 'Final examination', project: 'Term project' };
   // the registrar's three pacings, defined by daily effort; the term length follows from the material
@@ -99,6 +99,12 @@
     return kept.map((p) => Object.assign(p, { minutes: minutesFor(p.from, p.to) }));
   }
 
+  // a chunk title fits on two phone lines: drop markdown hashes and long numbering, cap the length
+  function shortTitle(t) {
+    t = String(t || '').replace(/^#+\s*/, '').replace(/\s+/g, ' ').trim();
+    if (t.length > 64) t = t.slice(0, 61).replace(/\s+\S*$/, '') + '…';
+    return t;
+  }
   function buildPlan({ analysis, segments, text, sources, words, paceKey }) {
     const pace = PACES[paceKey];
     const b = budget();
@@ -163,9 +169,9 @@
         parts.push({ unit: p.unit, fraction: Math.max(0, p.to - p.from), label: partCount[p.unit] > 1 ? `${u.title} · Part ${partSeen[p.unit]} of ${partCount[p.unit]}` : u.title });
       }
       const segs = [];
-      for (let i = nextSeg; i <= wantEnd && i < segments.length; i++) segs.push(i);
-      if (!segs.length && w.n < weeks) { if (nextSeg < segments.length) segs.push(nextSeg); else segs.push(segments.length - 1); }
-      if (segs.length) nextSeg = Math.max(nextSeg, segs[segs.length - 1] + 1);
+      for (let i = nextSeg; i <= wantEnd && i < segments.length; i++) if ((segments[i].role || 'body') === 'body') segs.push(i);
+      if (!segs.length && w.n < weeks) { let j = nextSeg; while (j < segments.length && (segments[j].role || 'body') !== 'body') j++; if (j < segments.length) { segs.push(j); wantEnd = Math.max(wantEnd, j); } }
+      if (segs.length) nextSeg = Math.max(nextSeg, segs[segs.length - 1] + 1); else nextSeg = Math.max(nextSeg, wantEnd + 1);
       const titles = parts.map((p) => units[p.unit].title).filter((t, i, arr) => arr.indexOf(t) === i);
       let title = titles.length <= 2 ? titles.join(' · ') : `${titles.slice(0, 2).join(' · ')} … and ${titles.length - 2} more`;
       if (w.kind === 'final') title = 'Review and final examination';
@@ -174,7 +180,7 @@
       delete w.rawParts;
     }
     // anything left over (rounding) goes to the last teaching week
-    if (nextSeg < segments.length) { const w = weeksOut[Math.max(0, weeks - 2)]; for (let i = nextSeg; i < segments.length; i++) w.segments.push(i); }
+    if (nextSeg < segments.length) { const w = weeksOut[Math.max(0, weeks - 2)]; for (let i = nextSeg; i < segments.length; i++) if ((segments[i].role || 'body') === 'body') w.segments.push(i); }
 
     // assessments
     const examDays = new Set();
@@ -218,7 +224,7 @@
     let dayIndex = 0;
     let prevTitles = [];
     for (const w of weeksOut) {
-      const reading = w.segments.flatMap((i) => chunkSegment(text, segments[i], maxMin).map((p) => Object.assign(p, { segment: i })));
+      const reading = w.segments.filter((i) => (segments[i].role || 'body') === 'body').flatMap((i) => chunkSegment(text, segments[i], maxMin).map((p) => Object.assign(p, { segment: i })));
       let days = studyDays.map((day) => ({ day, date: D.iso(D.addDays(D.parse(w.start), day)) }));
       if (w.kind === 'final') days = days.filter((d) => d.date < finalDate);
       if (w.kind === 'midterm' && midDate) days = days.filter((d) => d.date !== midDate);
@@ -233,21 +239,21 @@
         while (ri < reading.length && chunks.length < share && (acc === 0 || acc + reading[ri].minutes <= readBudget * 1.25)) {
           const r = reading[ri++];
           const loc = locateIn(r.from, r.to);
-          chunks.push({ id: L.uid('k'), kind: 'read', title: r.title, segment: r.segment, from: r.from, to: r.to, pages: loc.pages, source: loc.source ? loc.source.id : null, minutes: r.minutes, done: null });
+          chunks.push({ id: L.uid('k'), kind: 'read', title: shortTitle(r.title), segment: r.segment, from: r.from, to: r.to, pages: loc.pages, source: loc.source ? loc.source.id : null, minutes: r.minutes, done: null });
           acc += r.minutes;
         }
-        const clean = (t) => t.replace(/ · part \d+$/, '');
-        if (dayIndex > 0 && prevTitles.length) chunks.push({ id: L.uid('k'), kind: 'review', title: `Review: ${prevTitles.map(clean).filter((t, i, a) => a.indexOf(t) === i).slice(0, 2).join('; ')}`, minutes: 10, done: null });
+        const clean = (t) => shortTitle(t.replace(/ · part \d+$/, '').replace(/ …$/, ''));
+        if (dayIndex > 0 && prevTitles.length) chunks.push({ id: L.uid('k'), kind: 'review', title: `Review · ${clean(prevTitles[0])}`, hint: 'Recall yesterday\'s key ideas without looking, then check them against the pages.', minutes: 10, done: null });
         const focus = chunks.filter((k) => k.kind === 'read').map((k) => k.title);
-        if (w.kind === 'final' || w.kind === 'midterm') chunks.push({ id: L.uid('k'), kind: 'practise', title: `Practise for the ${w.kind === 'final' ? 'final' : 'midterm'}: work problems across ${w.kind === 'final' ? 'the whole course' : 'weeks 1–' + midWeek}`, minutes: practiseMin, done: null });
-        else chunks.push({ id: L.uid('k'), kind: 'practise', title: `Practise: ${clean(focus[0] || prevTitles[0] || w.title)} — rework the examples, then write two problems of your own`, minutes: practiseMin, done: null });
+        if (w.kind === 'final' || w.kind === 'midterm') chunks.push({ id: L.uid('k'), kind: 'practise', title: `Practise · ${w.kind === 'final' ? 'final exam' : 'midterm'}`, hint: `Work problems across ${w.kind === 'final' ? 'the whole course' : 'weeks 1–' + midWeek}; time yourself.`, minutes: practiseMin, done: null });
+        else chunks.push({ id: L.uid('k'), kind: 'practise', title: `Practise · ${clean(focus[0] || prevTitles[0] || w.title)}`, hint: 'Rework the examples, then write two problems of your own and solve them.', minutes: practiseMin, done: null });
         const minutes = L.sum(chunks.map((k) => k.minutes));
         sessions.push({ id: L.uid('s'), week: w.n, day: d.day, date: d.date, start: slot.start, minutes, kind: 'Study block', topic: focus.length ? focus[0].replace(/ · part \d+$/, '') : (w.kind === 'final' ? 'Review' : w.title), chunks });
         prevTitles = focus.length ? focus : prevTitles;
         dayIndex++;
       });
       // leftover reading (rare rounding) lands on the week's last day
-      while (ri < reading.length) { const r = reading[ri++]; const loc = locateIn(r.from, r.to); const last = sessions[sessions.length - 1]; last.chunks.splice(last.chunks.findIndex((k) => k.kind !== 'read'), 0, { id: L.uid('k'), kind: 'read', title: r.title, segment: r.segment, from: r.from, to: r.to, pages: loc.pages, source: loc.source ? loc.source.id : null, minutes: r.minutes, done: null }); last.minutes += r.minutes; }
+      while (ri < reading.length) { const r = reading[ri++]; const loc = locateIn(r.from, r.to); const last = sessions[sessions.length - 1]; last.chunks.splice(last.chunks.findIndex((k) => k.kind !== 'read'), 0, { id: L.uid('k'), kind: 'read', title: shortTitle(r.title), segment: r.segment, from: r.from, to: r.to, pages: loc.pages, source: loc.source ? loc.source.id : null, minutes: r.minutes, done: null }); last.minutes += r.minutes; }
     }
 
     // weights
@@ -262,12 +268,12 @@
     const seq = 1 + L.S.courses.filter((c) => c.subjectCode === analysis.subjectCode).length;
     const code = `${analysis.subjectCode} ${levelNo}${String(seq).padStart(2, '0')}`;
     const colorUse = COLORS.map((h) => L.S.courses.filter((c) => c.color === h).length);
-    const color = COLORS[colorUse.indexOf(Math.min(...colorUse))];
+    const color = COLORS[colorUse.indexOf(Math.min(...colorUse))]; // least used; ties go to the first free, so course 1 is cyan, 2 amber…
 
     return {
       code, title: analysis.title, subject: analysis.subject, subjectCode: analysis.subjectCode, level: analysis.level, difficulty: analysis.difficulty,
       description: analysis.description, prerequisites: analysis.prerequisites || [], credits, color,
-      material: { sources: sources.map((s) => ({ id: s.id, name: s.name, kind: s.kind, words: s.words, chars: s.chars, pages: s.pages, url: s.url, offset: s.offset || 0, pageStarts: s.pageStarts, hasFile: !!s.file })), words, chars: text.length, segments: segments.map((g) => ({ i: g.i, title: g.title, start: g.start, end: g.end, words: g.words })) },
+      material: { sources: sources.map((s) => ({ id: s.id, name: s.name, kind: s.kind, words: s.words, chars: s.chars, pages: s.pages, url: s.url, offset: s.offset || 0, pageStarts: s.pageStarts, hasFile: !!s.file })), words, chars: text.length, segments: segments.map((g) => ({ i: g.i, title: g.title, start: g.start, end: g.end, words: g.words, role: g.role || 'body' })) },
       analysis: { source: analysis.source || 'offline', model: analysis.model, note: analysis.note, units },
       term, plan: { pace: paceKey, paceLabel: pace.label, hoursPerWeek, totalHours: Math.round(totalHours * 10) / 10, slot, studyDays, minutesPerDay, sessionsPerWeek: studyDays.length, reduced },
       weeks: weeksOut, sessions, assessments, policy, notes: {},
@@ -295,9 +301,12 @@
   }
   const plan = (input) => plans(input).standard; // kept for tools that want one prospectus
 
-  async function enrol(prospectus) {
+  async function enrol(prospectus, contract) {
     if (prospectus.unavailable) throw new Error(prospectus.unavailable);
-    const c = Object.assign({}, prospectus, { id: L.uid('c'), createdAt: new Date(L.now()).toISOString(), state: 'enrolled' });
+    if (!contract || !contract.signature || !contract.name) throw new Error('Enrolment needs a signed registration contract.');
+    const no = contract.no || L.papers.contractNo();
+    const textHash = await L.sha256(L.papers.contractText(prospectus, L.S.student, no));
+    const c = Object.assign({}, prospectus, { id: L.uid('c'), createdAt: new Date(L.now()).toISOString(), state: 'enrolled', contract: { no, signedAt: new Date(L.now()).toISOString(), name: contract.name, signature: contract.signature, textHash } });
     const text = c.sourcesText; delete c.sourcesText;
     const files = c.sourceFiles || []; delete c.sourceFiles;
     // the record comes first; a storage failure for the material must never lose the enrolment
@@ -309,6 +318,7 @@
       try { await L.db.putFile(f.id, f.file); }
       catch (e) { console.error(e); const src = c.material.sources.find((x) => x.id === f.id); if (src) src.hasFile = false; problems.push(`the original of ${f.file.name || 'a file'}`); }
     }
+    await L.ledger.append('contract_signed', { courseId: c.id, no, textHash, name: contract.name });
     await L.ledger.append('enrolled', { courseId: c.id, code: c.code, title: c.title, weeks: c.term.weeks, start: c.term.start, end: c.term.end, hoursPerWeek: c.plan.hoursPerWeek, pace: c.plan.pace });
     L.saveNow();
     if (problems.length && L.ui) L.ui.toast(`Enrolled, but this device could not store ${problems.join(' and ')}. Reading will use what is available.`, 'warn', 8000);
@@ -550,6 +560,7 @@
           const pct = Math.round((s.current || 0) * 10) / 10;
           c.final = { pct, letter: letter(pct), at: new Date(L.now()).toISOString() };
           await L.ledger.append('course_completed', { courseId: c.id, code: c.code, pct, letter: c.final.letter });
+          if (L.papers) { try { await L.papers.issueCertificate(c); } catch (e) { console.error(e); } }
           changed = true;
         }
       }
@@ -558,5 +569,57 @@
     return sweeping;
   }
 
-  L.registrar = { RegistrarError, KIND_TITLE, SCALE, PACES, budget, plan, plans, enrol, withdraw, course, courses, courseState, currentWeek, week, sessionsOn, deadlines, nextDeadline, load, assessmentState, deadline, standing, letter, points, gpa, complete, locate, begin, answer, submit, sweep, materialFor };
+  // ---------- streaks and stats (over every enrolled course) ----------
+  function stats() {
+    const today = D.iso(L.today());
+    const byDay = {}; // date → { due, done, onTime, minutes }
+    const perCourse = [];
+    for (const c of L.S.courses) {
+      if (c.state !== 'enrolled') continue;
+      let cDue = 0, cDone = 0, cOn = 0;
+      for (const s of c.sessions) {
+        if (s.date > today) continue;
+        const d = byDay[s.date] || (byDay[s.date] = { due: 0, done: 0, onTime: 0, minutes: 0 });
+        for (const k of s.chunks) {
+          d.due++; cDue++;
+          if (k.done) { d.done++; cDone++; d.minutes += k.minutes; if (D.iso(k.done) <= s.date) { d.onTime++; cOn++; } }
+        }
+      }
+      // course streak: consecutive study days, ending today or yesterday, fully done on the day
+      let streak = 0;
+      const days = c.sessions.filter((s) => s.date <= today).sort((a, b) => (a.date < b.date ? 1 : -1));
+      for (const s of days) {
+        const full = s.chunks.length && s.chunks.every((k) => k.done && D.iso(k.done) <= s.date);
+        if (s.date === today && !full) continue; // today is still open
+        if (full) streak++; else break;
+      }
+      perCourse.push({ course: c, due: cDue, done: cDone, rate: cDue ? cDone / cDue : null, onTime: cDone ? cOn / cDone : null, streak });
+    }
+    const dates = Object.keys(byDay).sort();
+    let streak = 0, longest = 0, run = 0, perfect = 0, partial = 0, missed = 0;
+    for (const d of dates) {
+      const x = byDay[d];
+      const full = x.due && x.done === x.due && x.onTime === x.due;
+      if (full) { run++; longest = Math.max(longest, run); perfect++; } else { run = 0; if (x.done) partial++; else missed++; }
+    }
+    // current streak: walk back from today (today counts only when complete)
+    for (let i = dates.length - 1; i >= 0; i--) {
+      const x = byDay[dates[i]];
+      const full = x.due && x.done === x.due && x.onTime === x.due;
+      if (dates[i] === today && !full) continue;
+      if (full) streak++; else break;
+    }
+    // minutes studied per week for the last 8 weeks (Mon–Sun)
+    const weekStart = D.addDays(L.today(), -D.dow(L.today()));
+    const weekMinutes = [];
+    for (let w = 7; w >= 0; w--) {
+      const from = D.iso(D.addDays(weekStart, -7 * w)), to = D.iso(D.addDays(weekStart, -7 * w + 6));
+      let m = 0; for (const d of dates) if (d >= from && d <= to) m += byDay[d].minutes;
+      weekMinutes.push({ from, minutes: m });
+    }
+    const dueAll = L.sum(dates.map((d) => byDay[d].due)), doneAll = L.sum(dates.map((d) => byDay[d].done)), onAll = L.sum(dates.map((d) => byDay[d].onTime));
+    return { streak, longest, days: { perfect, partial, missed }, weekMinutes, completionRate: dueAll ? doneAll / dueAll : null, onTimeRate: doneAll ? onAll / doneAll : null, minutes: L.sum(dates.map((d) => byDay[d].minutes)), perCourse };
+  }
+
+  L.registrar = { RegistrarError, KIND_TITLE, SCALE, PACES, stats, budget, plan, plans, enrol, withdraw, course, courses, courseState, currentWeek, week, sessionsOn, deadlines, nextDeadline, load, assessmentState, deadline, standing, letter, points, gpa, complete, locate, begin, answer, submit, sweep, materialFor };
 })(window.L);

@@ -116,7 +116,7 @@
     // sub-headings inside a segment name the bite-sized chunks; any detected heading that is not a segment boundary counts
     const bounds = new Set(out.map((s) => s.start));
     for (const s of out) s.subheads = heads.filter((h) => h.start > s.start && h.start < s.end && !bounds.has(h.start)).map((h) => ({ title: h.title, at: h.start }));
-    return out;
+    return classify(out, text);
   }
 
   // ---------- key terms ----------
@@ -157,7 +157,31 @@
       .slice(0, n)
       .map(([t]) => t);
   }
-  L.intake = { words, normalize, segment, keyTerms, STOP };
+  // ---------- front / back matter ----------
+  // Contents, prefaces, indexes and the like classify the book but are never studied.
+  const FRONT = /^(?:\d+[.)]?\s*)?(table of contents|contents|preface|foreword|acknowledg\w*|copyright|dedication|about the authors?|how to use this book|list of (figures|tables)|title page|frontispiece)\b/i;
+  const BACK = /^(?:\d+[.)]?\s*)?(index|glossary|bibliography|references|works cited|answers( to (selected )?exercises)?|solutions( to (selected )?exercises)?|credits|colophon)\b/i;
+  function looksLikeToc(body) {
+    const lines = body.split('\n').map((l) => l.trim()).filter(Boolean);
+    if (lines.length < 8) return false;
+    const numbered = lines.filter((l) => /(\.{3,}|…)\s*\d{1,4}$/.test(l) || (/\s\d{1,4}$/.test(l) && l.length < 90)).length;
+    return numbered / lines.length >= 0.5;
+  }
+  function classify(segments, text) {
+    for (const g of segments) {
+      const body = text.slice(g.start, g.end);
+      const title = (g.title || '').trim();
+      if (FRONT.test(title) || looksLikeToc(body)) g.role = 'front';
+      else if (BACK.test(title)) g.role = 'back';
+      else g.role = 'body';
+    }
+    const firstBody = segments.findIndex((g) => g.role === 'body');
+    // a short untitled opening before the first real section is front matter (title page, epigraph)
+    for (const g of segments) if (g.i < firstBody && g.role === 'body' && g.words < 150) g.role = 'front';
+    if (!segments.some((g) => g.role === 'body')) segments.forEach((g) => { g.role = 'body'; }); // never schedule nothing
+    return segments;
+  }
+  L.intake = { words, normalize, segment, classify, keyTerms, STOP };
 
   // ---------- offline analysis ----------
   const SUBJECTS = [
@@ -229,6 +253,9 @@
   }
   function analyzeOffline({ text, segments, hint, sourceName }) {
     text = String(text || '');
+    const allSegments = segments;
+    const bodySegs = segments.filter((g) => (g.role || 'body') === 'body');
+    if (bodySegs.length) segments = bodySegs;
     const firstHead = segments.find((s) => s.title && !/^Part \d+$/.test(s.title) && s.title !== 'Front matter');
     const docTitle = (/^#\s+(.+)$/m.exec(text.slice(0, 4000)) || [])[1];
     let title = (hint || '').trim() || (docTitle || '').trim() || (firstHead ? firstHead.title : '') || (sourceName || 'Untitled course').replace(/\.[a-z0-9]+$/i, '');
@@ -256,15 +283,16 @@
     }
     const maxW = Math.max(...groups.map((g) => g.words));
     const units = groups.map((g, k) => {
-      const utext = text.slice(segments[g.from].start, segments[g.to].end);
+      const utext = text.slice(allSegments[g.from].start, allSegments[g.to].end);
       const topics = keyTerms(utext, 5);
-      const first = segments[g.from];
+      const first = allSegments[g.from];
       const t = first.title && !/^Part \d+$/.test(first.title) ? first.title : `Unit ${k + 1}: ${topics.slice(0, 2).map(cap).join(' and ') || 'Reading'}`;
       return { title: t, segments: [g.from, g.to], topics, objectives: objectivesFor(topics, t), relativeSize: L.clamp(Math.round((g.words / maxW) * 5), 1, 5) };
     });
     const names = units.slice(0, 3).map((u) => u.title);
     const description = `${title} works through ${names.slice(0, -1).join(', ')}${names.length > 1 ? ' and ' : ''}${names[names.length - 1]}, with weekly quizzes and problem sets drawn directly from the material. The course is set at ${level} level and ends with a written final examination.`;
-    return { title, subjectCode, subject, level, difficulty, description, prerequisites: [], units: repairUnits(units, segments.length) };
+    // unit ranges use original indices; non-body segments inside a range are skipped when scheduling
+    return { title, subjectCode, subject, level, difficulty, description, prerequisites: [], units: repairUnits(units, allSegments.length) };
   }
   L.intake.analyzeOffline = analyzeOffline;
   L.intake.repairUnits = repairUnits;
