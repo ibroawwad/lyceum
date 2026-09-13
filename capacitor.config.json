@@ -1,0 +1,7 @@
+{
+  "appId": "com.lyceum.app",
+  "appName": "Lyceum",
+  "webDir": "dist",
+  "server": { "androidScheme": "https" },
+  "ios": { "contentInset": "automatic" }
+}

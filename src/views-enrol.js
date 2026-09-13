@@ -7,11 +7,11 @@
   const hm = (min) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
 
   // wizard state lives only for the session; nothing is written until Enrol
-  const W = { sources: [], hint: '', step: 1, prospectus: null, error: null, log: [], busy: false, sampleLoaded: false };
+  const W = { sources: [], hint: '', step: 1, plans: null, prospectus: null, error: null, log: [], busy: false, sampleLoaded: false };
   const totalWords = () => L.sum(W.sources.map((s) => s.words));
 
   function steps() {
-    const st = [['Material', 1], ['Registrar', 2], ['Enrolled', 3]];
+    const st = [['Material', 1], ['Pace', 2], ['Prospectus', 3]];
     return `<div class="wizard-steps">${st.map(([n, i]) => `<div class="wizard-step${W.step === i ? ' is-active' : W.step > i ? ' is-done' : ''}"><span class="n">${i}</span>${n}</div>`).join('')}</div>`;
   }
   function materialStep() {
@@ -39,21 +39,34 @@
       <div class="prospectus-head"><div><span class="eyebrow">Prospectus · ${esc(p.subject)} · ${esc(p.level)}</span><span class="code" style="--ch:${p.hue};font-size:15px">${esc(p.code)}</span><h2>${esc(p.title)}</h2><p class="lede mt-2">${esc(p.description)}</p></div>
         <div class="right nowrap"><div class="tile"><div class="tile-n">${p.credits}</div><div class="tile-l">credit${p.credits === 1 ? '' : 's'}</div></div></div></div>
       <div class="prospectus-body">
-        <div class="grid-2"><dl class="kv"><dt>Term</dt><dd class="mono">${L.fmt.date(p.term.start)} – ${L.fmt.date(p.term.end)} · ${p.term.weeks} weeks</dd><dt>Load</dt><dd>${p.plan.hoursPerWeek} h/week · ${p.plan.totalHours} h in all</dd><dt>Lectures</dt><dd>${slot.days.map((d) => DAYS[d]).join(', ')} at ${hm(slot.start)} · ${slot.minutes} min${slot.days.length === 3 ? ' · third session is a problem class' : ''}</dd><dt>Material</dt><dd>${p.material.sources.length} source${p.material.sources.length === 1 ? '' : 's'} · ${L.fmt.num(p.material.words)} words · ${p.material.segments.length} segments</dd><dt>Faculty</dt><dd>${p.analysis.source === 'llm' ? esc(p.analysis.model) : 'offline registrar'}${p.analysis.note ? `<div class="small muted">${esc(p.analysis.note)}</div>` : ''}</dd><dt>Withdrawal</dt><dd>until ${L.fmt.date(L.date.addDays(L.date.parse(p.policy.withdrawBefore), -1))}</dd></dl>
+        <div class="grid-2"><dl class="kv"><dt>Term</dt><dd class="mono">${L.fmt.date(p.term.start)} – ${L.fmt.date(p.term.end)} · ${p.term.weeks} weeks</dd><dt>Load</dt><dd>${p.plan.hoursPerWeek} h/week · ${p.plan.totalHours} h in all</dd><dt>Pace</dt><dd>${esc(p.plan.paceLabel)} · ${p.plan.studyDays.length === 7 ? 'every day' : 'Mon–Fri'}</dd><dt>Study block</dt><dd>${hm(slot.start)} daily · about ${p.plan.minutesPerDay} min · ${p.sessions.length} blocks in all</dd><dt>Material</dt><dd>${p.material.sources.length} source${p.material.sources.length === 1 ? '' : 's'} · ${L.fmt.num(p.material.words)} words · ${p.material.segments.length} segments</dd><dt>Faculty</dt><dd>${p.analysis.source === 'llm' ? esc(p.analysis.model) : 'offline registrar'}${p.analysis.note ? `<div class="small muted">${esc(p.analysis.note)}</div>` : ''}</dd><dt>Withdrawal</dt><dd>until ${L.fmt.date(L.date.addDays(L.date.parse(p.policy.withdrawBefore), -1))}</dd></dl>
           <div><span class="label">Grade weights</span><div class="weights mt-1">${weightRows}</div><p class="small muted mt-1">Late work: −${p.policy.late.perDayPct}% per day, up to ${p.policy.late.maxDays} days. Examinations: no late window.</p></div></div>
         <div><span class="label">Week by week</span><div class="syllabus mt-1">${p.weeks.map((w) => `<div class="week-row" style="grid-template-columns:56px 118px minmax(0,1fr)"><div class="wk">Week<b>${w.n}</b></div><div class="dates">${L.fmt.date(w.start)}</div><div><div class="topic">${esc(w.title)}</div><div class="parts">${w.parts.map((x) => esc(x.label)).join(' · ')}</div></div></div>`).join('')}</div></div>
         <div><span class="label">Assessments</span><div class="table-wrap mt-1"><table class="table"><thead><tr><th>Assessment</th><th>Opens</th><th>Due</th><th class="num">Length</th><th class="num">Weight</th></tr></thead><tbody>${p.assessments.map((a) => { const n = p.assessments.filter((x) => x.kind === a.kind).length; return `<tr><td>${esc(a.title)}<div class="small muted">${esc(R().KIND_TITLE[a.kind])} · weeks ${a.coversWeeks.length > 3 ? `${a.coversWeeks[0]}–${a.coversWeeks[a.coversWeeks.length - 1]}` : a.coversWeeks.join(', ')}</div></td><td class="mono small nowrap">${L.fmt.dt(a.opensAt)}</td><td class="mono small nowrap">${L.fmt.dt(a.dueAt)}${a.lateAllowed ? `<div class="muted">late until ${L.fmt.date(a.closesAt)}</div>` : ''}</td><td class="num small">${a.durationMin ? L.fmt.dur(a.durationMin) : 'untimed'}</td><td class="num">${((p.policy.weights[a.kind] || 0) / n).toFixed(1)}%</td></tr>`; }).join('')}</tbody></table></div></div>
         <div class="registrar-note"><span class="label">Registrar's note</span>This schedule is binding. Dates, weights and examinations cannot be changed after enrolment. Papers open and close on the calendar above; a paper not submitted by its close is recorded as 0. Withdrawal is possible until the date shown, after which the grade stands on the transcript.</div>
-        <div class="cols"><button class="btn btn-primary" data-act="enrol-confirm">Enrol</button><button class="btn btn-quiet" data-act="enrol-discard">Discard</button><span class="small muted">Term begins ${L.fmt.dateLong(p.term.start)}.</span></div>
+        <div class="cols"><button class="btn btn-primary" data-act="enrol-confirm">Enrol</button><button class="btn btn-quiet" data-act="enrol-paces">Back to paces</button><button class="btn btn-quiet" data-act="enrol-discard">Discard</button><span class="small muted">Term begins ${L.fmt.dateLong(p.term.start)}.</span></div>
       </div></div>`;
+  }
+  function paceCards() {
+    const keys = ['condensed', 'standard', 'extended'];
+    return `<div class="paces">${keys.map((k) => { const p = W.plans[k]; const meta = R().PACES[k];
+      if (p.unavailable) return `<div class="pace-card is-unavailable"><span class="label">${esc(meta.label)}</span><div class="pace-n">—</div><p class="small muted">${esc(p.unavailable)}</p></div>`;
+      const exams = p.assessments.filter((a) => a.kind === 'midterm' || a.kind === 'final').length;
+      return `<div class="pace-card${k === 'standard' ? ' is-default' : ''}"><span class="label">${esc(meta.label)}${k === 'standard' ? ' · recommended' : ''}</span><div class="pace-n">${p.term.weeks} <span>weeks</span></div><p class="small muted">${esc(meta.blurb)}</p>
+        <dl class="kv small"><dt>Ends</dt><dd class="mono">${L.fmt.date(p.term.end)}</dd><dt>Load</dt><dd>${p.plan.hoursPerWeek} h/week · ${p.plan.minutesPerDay} min/day</dd><dt>Days</dt><dd>${p.plan.studyDays.length === 7 ? 'every day' : 'Mon–Fri'}</dd><dt>Assessments</dt><dd>${p.assessments.length} · ${exams} exam${exams === 1 ? '' : 's'}${p.assessments.some((a) => a.kind === 'project') ? ' · project' : ''}</dd><dt>Credits</dt><dd>${p.credits}</dd><dt>Withdraw by</dt><dd class="mono">${L.fmt.date(L.date.addDays(L.date.parse(p.policy.withdrawBefore), -1))}</dd></dl>
+        <button class="btn ${k === 'standard' ? 'btn-primary' : ''} w-full mt-2" data-act="choose-pace" data-pace="${k}">Choose ${esc(meta.label.toLowerCase())}</button></div>`; }).join('')}</div>
+      <p class="small muted mt-2">The registrar sets these three; there is no custom pace. Whichever you choose becomes binding at enrolment.</p>
+      <div class="cols mt-2"><button class="btn btn-quiet" data-act="enrol-back">Back to material</button></div>`;
   }
   L.views.enrol = {
     title: 'Enrol',
     render(p, q) {
       const body = W.step === 1 ? materialStep()
-        : W.step === 2 ? (W.prospectus ? prospectus(W.prospectus) : `<div class="card"><div class="card-body"><div class="log">${W.log.map((l) => `<div>${esc(l)}</div>`).join('')}</div>${W.error ? `<div class="notice mt-2" data-kind="bad"><span>${esc(W.error)}</span></div><div class="cols mt-2"><button class="btn" data-act="enrol-back">Back to material</button></div>` : ''}</div></div>`)
-        : '';
-      return `<div class="page"><div class="page-head"><div><span class="eyebrow">Office of the Registrar · Enrolment</span><h1 class="display">${W.step === 2 && W.prospectus ? 'Prospectus' : 'Enrol in a course'}</h1><p class="lede">${W.step === 1 ? 'Give the registrar the material. It comes back as a course with a fixed term, a timetable and every assessment dated.' : W.prospectus ? 'Read the terms below. Enrolling makes them binding.' : 'The registrar is reading your material.'}</p></div></div>${steps()}${body}</div>`;
+        : W.step === 2 ? (W.plans ? paceCards() : `<div class="card"><div class="card-body"><div class="log" id="registrar-log">${W.log.map((l) => `<div>${esc(l)}</div>`).join('')}</div>${W.error ? `<div class="notice mt-2" data-kind="bad"><span>${esc(W.error)}</span></div><div class="cols mt-2"><button class="btn" data-act="enrol-back">Back to material</button></div>` : ''}</div></div>`)
+        : W.step === 3 && W.prospectus ? prospectus(W.prospectus) : '';
+      const h1 = W.step === 3 ? 'Prospectus' : W.step === 2 && W.plans ? 'Choose a pace' : 'Enrol in a course';
+      const lede = W.step === 1 ? 'Give the registrar the material. It comes back as a course with a fixed term, a daily study block and every assessment dated.' : W.step === 3 ? 'Read the terms below. Enrolling makes them binding.' : W.plans ? `The registrar proposes three pacings for ${esc(W.plans.standard.title || W.plans.condensed.title || 'this material')}. Pick one; there is no fourth.` : 'The registrar is reading your material.';
+      return `<div class="page"><div class="page-head"><div><span class="eyebrow">Office of the Registrar · Enrolment</span><h1 class="display">${h1}</h1><p class="lede">${lede}</p></div></div>${steps()}${body}</div>`;
     },
     async mount(root, p, q) {
       window.__prospectus = W.prospectus || null;
@@ -102,16 +115,21 @@
   L.actions['remove-source'] = (el) => { W.sources = W.sources.filter((s) => s.id !== el.dataset.id); L.render(); };
   L.actions['clear-sources'] = () => { W.sources = []; W.error = null; L.render(); };
   L.inputs.hint = (el) => { W.hint = el.value; };
-  L.actions['enrol-back'] = () => { W.step = 1; W.prospectus = null; W.error = null; W.log = []; L.render(); };
-  L.actions['enrol-discard'] = () => { W.step = 1; W.prospectus = null; W.log = []; W.error = null; L.render(); L.ui.toast('Prospectus discarded. Nothing was recorded.'); };
+  L.actions['enrol-back'] = () => { W.step = 1; W.plans = null; W.prospectus = null; W.error = null; W.log = []; L.render(); };
+  L.actions['enrol-discard'] = () => { W.step = 1; W.plans = null; W.prospectus = null; W.log = []; W.error = null; L.render(); L.ui.toast('Prospectus discarded. Nothing was recorded.'); };
+  L.actions['choose-pace'] = (el) => { const p = W.plans && W.plans[el.dataset.pace]; if (!p || p.unavailable) return; W.prospectus = p; W.step = 3; L.render(); };
+  L.actions['enrol-paces'] = () => { W.prospectus = null; W.step = 2; L.render(); };
 
   L.actions['submit-registrar'] = async () => {
     if (!W.sources.length || W.busy) return;
-    W.busy = true; W.step = 2; W.prospectus = null; W.error = null; W.log = [];
-    const log = (m) => { W.log.push(m); const el = document.querySelector('.log'); if (el) { const d = document.createElement('div'); d.textContent = m; el.appendChild(d); } };
+    W.busy = true; W.step = 2; W.plans = null; W.prospectus = null; W.error = null; W.log = [];
+    const log = (m) => { W.log.push(m); const el = document.getElementById('registrar-log'); if (el) { const d = document.createElement('div'); d.textContent = m; el.appendChild(d); } };
     L.render();
     try {
-      const text = L.intake.normalize(W.sources.map((s) => s.text).join('\n\n'));
+      // sources are already normalised; join them as-is so each one's page offsets stay valid
+      let pos = 0;
+      for (const s of W.sources) { s.offset = pos; pos += s.text.length + 2; }
+      const text = W.sources.map((s) => s.text).join('\n\n');
       const words = L.intake.words(text);
       log(`Reading ${W.sources.length} source${W.sources.length === 1 ? '' : 's'} · ${L.fmt.num(words)} words`);
       const segments = L.intake.segment(text);
@@ -123,9 +141,9 @@
       else log(r.note || 'Analysed by the offline registrar');
       const analysis = Object.assign({}, r.analysis, { source: r.source, model: r.model, note: r.note });
       log(`${analysis.units.length} units · ${analysis.level} · difficulty ${analysis.difficulty}/5`);
-      log('Fixing the term calendar and timetable…');
-      W.prospectus = R().plan({ analysis, segments, text, sources: W.sources, words });
-      log(`${W.prospectus.term.weeks} weeks from ${L.fmt.date(W.prospectus.term.start)} · ${W.prospectus.assessments.length} assessments`);
+      log('Drawing up three pacings…');
+      W.plans = R().plans({ analysis, segments, text, sources: W.sources, words });
+      log(['condensed', 'standard', 'extended'].map((k) => `${k}: ${W.plans[k].unavailable ? 'unavailable' : W.plans[k].term.weeks + ' weeks'}`).join(' · '));
     } catch (e) {
       console.error(e);
       W.error = e.message || 'The registrar could not schedule this material.';
@@ -136,7 +154,7 @@
     const ok = await L.ui.confirm({ title: `Enrol in ${p.code}?`, body: `<p><b>${esc(p.title)}</b> — ${p.term.weeks} weeks from ${L.fmt.dateLong(p.term.start)}, ${p.plan.hoursPerWeek} hours a week, ${p.assessments.length} assessments.</p><p>From this moment the schedule is binding: no date, weight or examination can be changed. Withdrawal is possible until ${L.fmt.date(L.date.addDays(L.date.parse(p.policy.withdrawBefore), -1))}.</p>`, ok: 'Enrol' });
     if (!ok) return;
     const c = await R().enrol(p);
-    W.step = 1; W.sources = []; W.hint = ''; W.prospectus = null; W.log = []; W.sampleLoaded = false;
+    W.step = 1; W.sources = []; W.hint = ''; W.plans = null; W.prospectus = null; W.log = []; W.sampleLoaded = false;
     L.ui.toast(`Enrolled in ${c.code}. Term begins ${L.fmt.date(c.term.start)}.`, 'good', 5000);
     L.go(`/course/${c.id}`);
   };

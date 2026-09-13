@@ -44,10 +44,11 @@
     const canWithdraw = c.state === 'enrolled' && st !== 'completed' && L.date.iso(L.today()) < c.policy.withdrawBefore;
     return `<div class="page-head"><div><span class="eyebrow">${esc(c.subject)} · ${esc(c.level)} · ${c.credits} credit${c.credits === 1 ? '' : 's'}</span>
       <div class="course-lockup"><span class="code" style="--ch:${c.hue}">${esc(c.code)}</span>${courseChip(st)}</div><h1 class="display mt-1">${esc(c.title)}</h1>
-      <div class="course-meta"><span class="mono">${L.fmt.date(c.term.start)} – ${L.fmt.date(c.term.end)}</span><span><b>${c.term.weeks}</b> weeks${st === 'running' ? ` · week <b>${wk}</b>` : ''}</span><span><b>${c.plan.hoursPerWeek}</b> h/week</span><span>${slot.days.map((d) => dayNames[d]).join('/')} ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')} · ${slot.minutes} min</span><span class="small muted">Faculty: ${c.analysis.source === 'llm' ? esc(c.analysis.model || 'model') : 'offline registrar'}</span></div></div>
-      <div class="actions">${canWithdraw ? `<button class="btn btn-quiet" data-act="withdraw" data-course="${c.id}">Withdraw</button>` : ''}${wk >= 1 && wk <= c.term.weeks ? `<a class="btn btn-primary" href="#/course/${c.id}/week/${wk}">This week's reading</a>` : ''}</div></div>`;
+      <div class="course-meta"><span class="mono">${L.fmt.date(c.term.start)} – ${L.fmt.date(c.term.end)}</span><span><b>${c.term.weeks}</b> weeks${st === 'running' ? ` · week <b>${wk}</b>` : ''}</span><span><b>${c.plan.hoursPerWeek}</b> h/week</span><span>${esc(c.plan.paceLabel || 'Standard')} pace · ${slot.days.length === 7 ? 'daily' : slot.days.map((d) => dayNames[d]).join('/')} ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')} · ${c.plan.minutesPerDay} min/day</span><span class="small muted">Faculty: ${c.analysis.source === 'llm' ? esc(c.analysis.model || 'model') : 'offline registrar'}</span></div></div>
+      <div class="actions">${canWithdraw ? `<button class="btn btn-quiet" data-act="withdraw" data-course="${c.id}">Withdraw</button>` : ''}${wk >= 1 && wk <= c.term.weeks ? `<a class="btn btn-primary" href="#/course/${c.id}/day/${nextBlockDate(c)}">${c.sessions.some((s) => s.date === L.date.iso(L.today())) ? "Today's block" : 'Next block'}</a>` : ''}</div></div>`;
   }
-  const tabs = (c, tab) => `<nav class="tabs">${['syllabus', 'assessments', 'grades', 'materials'].map((t) => `<a href="#/course/${c.id}?tab=${t}"${t === tab ? ' aria-current="page"' : ''}>${t.charAt(0).toUpperCase() + t.slice(1)}</a>`).join('')}</nav>`;
+  const nextBlockDate = (c) => { const t = L.date.iso(L.today()); const s = c.sessions.find((x) => x.date >= t) || c.sessions[c.sessions.length - 1]; return s ? s.date : c.term.start; };
+  const tabs = (c, tab) => `<nav class="tabs">${['plan', 'syllabus', 'assessments', 'grades', 'materials'].map((t) => `<a href="#/course/${c.id}?tab=${t}"${t === tab ? ' aria-current="page"' : ''}>${t.charAt(0).toUpperCase() + t.slice(1)}</a>`).join('')}</nav>`;
 
   function syllabus(c) {
     const wk = R().currentWeek(c);
@@ -61,7 +62,7 @@
         <div class="dates">${L.fmt.date(w.start)}<br>– ${L.fmt.date(L.date.addDays(L.date.parse(w.start), 6))}</div>
         <div><div class="topic"><a href="#/course/${c.id}/week/${w.n}" style="color:inherit">${esc(w.title)}</a></div><div class="parts">${w.parts.map((p) => esc(p.label)).join(' · ')}</div>
           <details><summary>${w.objectives.length} objective${w.objectives.length === 1 ? '' : 's'}</summary><ul class="objectives">${w.objectives.map((o) => `<li>${esc(o)}</li>`).join('')}</ul></details></div>
-        <div class="sessions">${sess.map((s) => `<div>${L.fmt.date(s.date)} ${String(Math.floor(s.start / 60)).padStart(2, '0')}:${String(s.start % 60).padStart(2, '0')} · ${esc(s.kind)} ${s.attended ? '<span class="att">✓</span>' : ''}</div>`).join('')}</div>
+        <div class="sessions">${sess.map((s) => { const d = s.chunks.filter((k) => k.done).length; return `<div><a href="#/course/${c.id}/day/${s.date}" style="color:inherit">${L.fmt.date(s.date)}</a> · ${s.chunks.length} chunks ${d === s.chunks.length && s.chunks.length ? '<span class="att">✓</span>' : d ? `<span class="muted">${d}/${s.chunks.length}</span>` : ''}</div>`; }).join('')}</div>
         <div class="due">${opens.map((a) => `<div><span class="muted">opens</span> <a href="#/assess/${c.id}/${a.id}">${esc(a.title)}</a> <span class="mono muted">${L.fmt.date(a.opensAt)}</span></div>`).join('')}${dueA.map((a) => `<div><span class="muted">due</span> <a href="#/assess/${c.id}/${a.id}">${esc(a.title)}</a> <span class="mono muted">${L.fmt.date(a.dueAt)} ${L.fmt.time(a.dueAt)}</span> ${L.stateChip(R().assessmentState(c, a))}</div>`).join('')}</div>
       </div>`;
     }).join('')}</div>`;
@@ -94,51 +95,106 @@
       <div class="card"><div class="card-head"><h3>Units</h3><span class="small muted">${c.analysis.units.length}</span></div><div class="card-body stack gap-2">${c.analysis.units.map((u, i) => `<div><div style="font-weight:500">${i + 1}. ${esc(u.title)}</div><div class="small muted">${u.topics.map(esc).join(' · ')}</div></div>`).join('')}</div></div></div>
       <div class="section"><div class="section-head"><h2>About this course</h2></div><p style="max-width:70ch">${esc(c.description)}</p>${c.prerequisites.length ? `<p class="small muted">Assumed: ${c.prerequisites.map(esc).join('; ')}.</p>` : ''}</div>`;
   }
+  function planTab(c) {
+    const today = L.date.iso(L.today());
+    const byWeek = L.groupBy(c.sessions, 'week');
+    return `<div class="plan">${c.weeks.map((w) => `<div class="plan-week"><div class="section-head"><h2>Week ${w.n} · ${esc(w.title)}</h2><span class="small muted mono">${L.fmt.date(w.start)} – ${L.fmt.date(L.date.addDays(L.date.parse(w.start), 6))}</span></div>
+      <div class="plan-days">${(byWeek[w.n] || []).map((s) => `<div class="plan-day${s.date === today ? ' is-today' : s.date < today ? ' is-past' : ''}"><div class="plan-date"><b>${L.date.dayName(s.date).slice(0, 3)}</b> ${L.fmt.date(s.date).slice(4)}</div>${L.studyBlock(c, s)}</div>`).join('') || '<p class="muted small">No study blocks this week.</p>'}</div></div>`).join('')}</div>`;
+  }
   L.views.course = {
     title: (p) => R().course(p.id)?.code || 'Course',
     render(p, q) {
       const c = R().course(p.id); if (!c) return notFound('Course');
-      const tab = ['syllabus', 'assessments', 'grades', 'materials'].includes(q.tab) ? q.tab : 'syllabus';
-      const body = tab === 'syllabus' ? syllabus(c) : tab === 'assessments' ? assessments(c) : tab === 'grades' ? grades(c) : materials(c);
+      const tab = ['plan', 'syllabus', 'assessments', 'grades', 'materials'].includes(q.tab) ? q.tab : 'plan';
+      const body = tab === 'plan' ? planTab(c) : tab === 'syllabus' ? syllabus(c) : tab === 'assessments' ? assessments(c) : tab === 'grades' ? grades(c) : materials(c);
       return `<div class="page">${header(c)}${tabs(c, tab)}${body}</div>`;
     },
   };
 
-  // ---------- reading ----------
-  L.views.reading = {
-    title: (p) => R().course(p.id)?.code || 'Reading',
-    render(p) {
+  // ---------- day view: the study block, and the original pages for its reading chunks ----------
+  L.views.week = { title: 'Week', render(p) { const c = R().course(p.id); if (!c) return notFound('Course'); const s = c.sessions.find((x) => x.week === p.n) || c.sessions[0]; setTimeout(() => L.go(s ? `/course/${c.id}/day/${s.date}` : `/course/${c.id}`), 0); return '<div class="page"></div>'; } };
+  let pageRenderToken = 0;
+  L.views.day = {
+    title: (p) => R().course(p.id)?.code || 'Study',
+    render(p, q) {
       const c = R().course(p.id); if (!c) return notFound('Course');
-      const w = R().week(c, p.n); if (!w) return notFound('Week');
-      const sess = c.sessions.filter((s) => s.week === w.n);
-      const notes = c.notes && c.notes[w.n];
-      return `<div class="page"><div class="page-head"><div><span class="eyebrow"><a href="#/course/${c.id}">${esc(c.code)}</a> · Week ${w.n} of ${c.term.weeks} · ${L.fmt.date(w.start)} – ${L.fmt.date(L.date.addDays(L.date.parse(w.start), 6))}</span><h1 class="display">${esc(w.title)}</h1></div>
-        <div class="actions">${w.n > 1 ? `<a class="btn btn-quiet" href="#/course/${c.id}/week/${w.n - 1}">← Week ${w.n - 1}</a>` : ''}${w.n < c.term.weeks ? `<a class="btn btn-quiet" href="#/course/${c.id}/week/${w.n + 1}">Week ${w.n + 1} →</a>` : ''}</div></div>
-        <div class="reading-layout"><div>
-          <div class="reading" id="reading-body"><p class="muted" style="font-family:var(--font-body);font-size:14px">Loading the material…</p></div>
-          ${notes ? `<div class="section"><div class="section-head"><h2>Lecture notes</h2><span class="small muted">${notes.source === 'llm' ? esc(notes.model || '') : 'offline'}</span></div><div class="notes" id="notes-body"></div></div>` : ''}
-        </div>
-        <aside class="reading-side">
-          <div class="card"><div class="card-head"><h3>Objectives</h3></div><div class="card-body"><ol style="margin:0;padding-left:18px" class="small">${w.objectives.map((o) => `<li>${esc(o)}</li>`).join('')}</ol></div></div>
-          <div class="card"><div class="card-head"><h3>Sessions</h3></div><div class="card-body small stack gap-1">${sess.map((s) => `<div class="cols" style="justify-content:space-between"><span>${L.fmt.date(s.date)} · ${esc(s.kind)}</span>${s.attended ? '<span class="chip" data-state="good">Attended</span>' : s.date === L.date.iso(L.today()) ? `<button class="btn btn-sm btn-primary" data-act="attend" data-course="${c.id}" data-session="${s.id}">Attend</button>` : '<span class="muted mono">' + (s.date < L.date.iso(L.today()) ? 'missed' : 'upcoming') + '</span>'}</div>`).join('')}</div></div>
-          <div class="card"><div class="card-body"><button class="btn w-full" data-act="notes" data-course="${c.id}" data-week="${w.n}">${notes ? 'Regenerate lecture notes' : 'Lecture notes'}</button><p class="small muted mt-1">${L.faculty.available() ? 'Written by faculty from this week’s material.' : 'Compiled offline. Add a faculty key in Settings for written notes.'}</p></div></div>
-        </aside></div></div>`;
+      const s = c.sessions.find((x) => x.date === p.date); if (!s) return notFound('Study block');
+      const idx = c.sessions.indexOf(s);
+      const prev = c.sessions[idx - 1], next = c.sessions[idx + 1];
+      const reads = s.chunks.filter((k) => k.kind === 'read');
+      const active = reads.find((k) => k.id === q.chunk) || reads[0];
+      const w = R().week(c, s.week);
+      const notes = c.notes && c.notes[s.week];
+      const mode = q.view === 'text' ? 'text' : 'pages';
+      const src = active && c.material.sources.find((x) => x.id === active.source);
+      const canPages = !!(src && src.hasFile);
+      return `<div class="page"><div class="page-head"><div><span class="eyebrow"><a href="#/course/${c.id}">${esc(c.code)}</a> · Week ${s.week} · ${L.fmt.dateLong(s.date)}</span><h1 class="display">${esc(s.topic)}</h1><p class="lede">${L.fmt.dur(s.minutes)} of study · ${s.chunks.length} chunks${w ? ` · ${esc(w.title)}` : ''}</p></div>
+        <div class="actions">${prev ? `<a class="btn btn-quiet" href="#/course/${c.id}/day/${prev.date}">← ${L.fmt.date(prev.date)}</a>` : ''}${next ? `<a class="btn btn-quiet" href="#/course/${c.id}/day/${next.date}">${L.fmt.date(next.date)} →</a>` : ''}</div></div>
+        <div class="reading-layout">
+          <div>
+            ${active ? `<div class="reading-src"><span>${esc(active.title)}${active.pages ? ` · ${active.pages[0] === active.pages[1] ? `page ${active.pages[0]}` : `pages ${active.pages[0]}–${active.pages[1]}`}` : ''}${src ? ` · ${esc(src.name)}` : ''}</span>${canPages ? `<span class="switch"><a class="${mode === 'pages' ? 'is-on' : ''}" href="#/course/${c.id}/day/${s.date}?chunk=${active.id}">Pages</a><a class="${mode === 'text' ? 'is-on' : ''}" href="#/course/${c.id}/day/${s.date}?chunk=${active.id}&view=text">Text</a></span>` : ''}</div>
+              <div id="reading-body" class="${canPages && mode === 'pages' ? 'pages' : 'reading'}"><p class="muted" style="font-family:var(--font-body);font-size:14px">Loading…</p></div>` : `<div class="panel">No reading today — this block is review and practice. ${w && w.segments.length === 0 ? 'Use the plan tab to reopen earlier days’ pages.' : ''}</div>`}
+            ${notes ? `<div class="section"><div class="section-head"><h2>Lecture notes · week ${s.week}</h2><span class="small muted">${notes.source === 'llm' ? esc(notes.model || '') : 'offline'}</span></div><div class="notes" id="notes-body"></div></div>` : ''}
+          </div>
+          <aside class="reading-side">
+            ${L.studyBlock(c, s)}
+            ${w && w.objectives.length ? `<div class="card"><div class="card-head"><h3>This week's objectives</h3></div><div class="card-body"><ol style="margin:0;padding-left:18px" class="small">${w.objectives.map((o) => `<li>${esc(o)}</li>`).join('')}</ol></div></div>` : ''}
+            <div class="card"><div class="card-body"><button class="btn w-full" data-act="notes" data-course="${c.id}" data-week="${s.week}">${notes ? 'Regenerate lecture notes' : 'Lecture notes for this week'}</button><p class="small muted mt-1">${L.faculty.available() ? 'Written by faculty from this week’s material.' : 'Compiled offline. Add a faculty key in Settings for written notes.'}</p></div></div>
+          </aside></div></div>`;
     },
-    async mount(root, p) {
-      const c = R().course(p.id); const w = c && R().week(c, p.n); if (!w) return;
-      const text = (await L.db.getMaterial(c.id)) || '';
-      const body = root.querySelector('#reading-body'); if (!body) return;
-      const segs = c.material.segments.filter((s) => w.segments.includes(s.i));
-      body.innerHTML = segs.map((s) => {
-        const raw = text.slice(s.start, s.end).replace(/^\s*#{1,6}\s*[^\n]*\n/, '');
-        const paras = raw.split(/\n\s*\n/).map((x) => x.trim()).filter(Boolean).map((x) => x.replace(/^#{1,6}\s*/, ''));
-        return `<div class="reading-src">${esc(c.code)} · segment ${s.i + 1} · ${L.fmt.num(s.words)} words</div><h2>${esc(s.title)}</h2>${paras.map((x) => `<p>${esc(x).replace(/\n/g, '<br>')}</p>`).join('')}`;
-      }).join('') || '<p class="muted">The material for this week is not on this device.</p>';
-      const notes = c.notes && c.notes[w.n];
+    async mount(root, p, q) {
+      const c = R().course(p.id); const s = c && c.sessions.find((x) => x.date === p.date); if (!s) return;
+      const reads = s.chunks.filter((k) => k.kind === 'read');
+      const active = reads.find((k) => k.id === q.chunk) || reads[0];
+      const body = root.querySelector('#reading-body');
+      const notes = c.notes && c.notes[s.week];
       const nb = root.querySelector('#notes-body');
       if (notes && nb) nb.innerHTML = window.marked && window.DOMPurify ? window.DOMPurify.sanitize(window.marked.parse(notes.markdown)) : `<pre style="white-space:pre-wrap">${esc(notes.markdown)}</pre>`;
+      if (!active || !body) return;
+      const token = ++pageRenderToken;
+      const src = c.material.sources.find((x) => x.id === active.source);
+      const wantPages = src && src.hasFile && q.view !== 'text';
+      const file = wantPages ? await L.db.getFile(src.id) : null;
+      if (token !== pageRenderToken) return;
+      if (file && file.kind === 'pdf' && active.pages && window.pdfjsLib) {
+        try { await renderPdfPages(body, file.bytes, active.pages, token); return; }
+        catch (e) { console.warn('page render failed, falling back to text', e); }
+      } else if (file && file.kind === 'html') {
+        body.className = 'reading html-page';
+        body.innerHTML = window.DOMPurify ? window.DOMPurify.sanitize(file.html, { FORBID_TAGS: ['style', 'script', 'iframe', 'form'] }) : esc(file.html);
+        return;
+      }
+      // extracted text for this chunk
+      const text = (await L.db.getMaterial(c.id)) || '';
+      if (token !== pageRenderToken) return;
+      body.className = 'reading';
+      const raw = text.slice(active.from, active.to);
+      const paras = raw.split(/\n\s*\n/).map((x) => x.trim()).filter(Boolean);
+      body.innerHTML = paras.map((x) => (/^#{1,6}\s/.test(x) ? `<h2>${esc(x.replace(/^#{1,6}\s*/, ''))}</h2>` : `<p>${esc(x).replace(/\n/g, '<br>')}</p>`)).join('') || '<p class="muted">The material for this chunk is not on this device.</p>';
     },
+    unmount() { pageRenderToken++; },
   };
+  async function renderPdfPages(body, bytes, [from, to], token) {
+    const pdf = await window.pdfjsLib.getDocument({ data: bytes.slice(0) }).promise;
+    if (token !== pageRenderToken) return;
+    body.className = 'pages';
+    body.innerHTML = '';
+    const width = Math.min(body.clientWidth || 720, 900);
+    for (let n = from; n <= Math.min(to, pdf.numPages); n++) {
+      const page = await pdf.getPage(n);
+      if (token !== pageRenderToken) return;
+      const base = page.getViewport({ scale: 1 });
+      const scale = width / base.width;
+      const dpr = window.devicePixelRatio || 1;
+      const vp = page.getViewport({ scale: scale * dpr });
+      const wrap = document.createElement('figure'); wrap.className = 'pdf-page';
+      const canvas = document.createElement('canvas');
+      canvas.width = vp.width; canvas.height = vp.height; canvas.style.width = `${vp.width / dpr}px`; canvas.style.height = `${vp.height / dpr}px`;
+      const cap = document.createElement('figcaption'); cap.className = 'mono small muted'; cap.textContent = `Page ${n} of ${pdf.numPages}`;
+      wrap.append(canvas, cap); body.appendChild(wrap);
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+    }
+  }
   L.actions.notes = async (el) => {
     const c = R().course(el.dataset.course); const w = R().week(c, Number(el.dataset.week));
     el.disabled = true; el.textContent = 'Writing notes…';
@@ -230,10 +286,8 @@
       timerHandler();
       L.on('tick-views', timerHandler);
     },
-    unmount() { timerHandler = null; },
+    unmount() { if (timerHandler) L.off('tick-views', timerHandler); timerHandler = null; },
   };
-  // the tick bus has no off(); handlers check they are still current
-  L.on('tick-views', () => {});
   L.inputs.pledge = (el) => { const b = document.getElementById('begin-btn'); if (b) b.disabled = !el.checked; };
   L.actions.begin = async (el) => {
     const c = R().course(el.dataset.course); const a = c.assessments.find((x) => x.id === el.dataset.assess);

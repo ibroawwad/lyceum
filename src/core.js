@@ -27,6 +27,7 @@ window.L = window.L || {};
   // ---------- event bus ----------
   const handlers = {};
   L.on = (ev, fn) => { (handlers[ev] = handlers[ev] || []).push(fn); };
+  L.off = (ev, fn) => { handlers[ev] = (handlers[ev] || []).filter((f) => f !== fn); };
   L.emit = (ev, payload) => { (handlers[ev] || []).forEach((fn) => { try { fn(payload); } catch (e) { console.error(e); } }); };
 
   // ---------- state ----------
@@ -148,34 +149,44 @@ window.L = window.L || {};
     if (dbPromise) return dbPromise;
     dbPromise = new Promise((resolve) => {
       if (typeof indexedDB === 'undefined') return resolve(null);
-      const req = indexedDB.open('lyceum', 1);
-      req.onupgradeneeded = () => { req.result.createObjectStore('materials'); };
+      const req = indexedDB.open('lyceum', 2);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains('materials')) db.createObjectStore('materials');
+        if (!db.objectStoreNames.contains('files')) db.createObjectStore('files'); // original documents (PDF bytes, HTML)
+      };
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => { console.warn('Lyceum: IndexedDB unavailable', req.error); resolve(null); };
     });
     return dbPromise;
   }
-  function tx(mode, fn) {
+  function tx(mode, fn, storeName = 'materials') {
     return openDb().then((db) => new Promise((resolve, reject) => {
       if (!db) return resolve(null);
-      const t = db.transaction('materials', mode);
-      const store = t.objectStore('materials');
+      const t = db.transaction(storeName, mode);
+      const store = t.objectStore(storeName);
       const req = fn(store);
       t.oncomplete = () => resolve(req && 'result' in req ? req.result : null);
       t.onerror = () => reject(t.error);
     }));
   }
+  const all = (storeName) => openDb().then((db) => new Promise((resolve, reject) => {
+    if (!db) return resolve({});
+    const out = {};
+    const req = db.transaction(storeName, 'readonly').objectStore(storeName).openCursor();
+    req.onsuccess = () => { const c = req.result; if (!c) return resolve(out); out[c.key] = c.value; c.continue(); };
+    req.onerror = () => reject(req.error);
+  }));
   L.db = {
     putMaterial: (id, text) => tx('readwrite', (s) => s.put(text, id)),
     getMaterial: (id) => tx('readonly', (s) => s.get(id)).then((r) => (r == null ? null : r)),
     deleteMaterial: (id) => tx('readwrite', (s) => s.delete(id)),
-    allMaterials: () => openDb().then((db) => new Promise((resolve, reject) => {
-      if (!db) return resolve({});
-      const out = {};
-      const req = db.transaction('materials', 'readonly').objectStore('materials').openCursor();
-      req.onsuccess = () => { const c = req.result; if (!c) return resolve(out); out[c.key] = c.value; c.continue(); };
-      req.onerror = () => reject(req.error);
-    })),
+    allMaterials: () => all('materials'),
+    // originals: { kind:'pdf', name, bytes: ArrayBuffer } | { kind:'html', name, html }
+    putFile: (id, file) => tx('readwrite', (s) => s.put(file, id), 'files'),
+    getFile: (id) => tx('readonly', (s) => s.get(id), 'files').then((r) => (r == null ? null : r)),
+    deleteFile: (id) => tx('readwrite', (s) => s.delete(id), 'files'),
+    allFiles: () => all('files'),
   };
 
   // ---------- ledger (hash chain) ----------
@@ -216,12 +227,22 @@ window.L = window.L || {};
   };
 
   // ---------- export / import ----------
-  L.exportRecord = async () => ({
-    version: L.VERSION,
-    exportedAt: new Date().toISOString(),
-    state: JSON.parse(JSON.stringify(L.S)),
-    materials: await L.db.allMaterials(),
-  });
+  const b64 = (buf) => { const u = new Uint8Array(buf); let s = ''; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); };
+  const unb64 = (str) => { const bin = atob(str); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u.buffer; };
+  const FILE_EXPORT_LIMIT = 40 * 1024 * 1024;
+  L.exportRecord = async () => {
+    const state = JSON.parse(JSON.stringify(L.S));
+    state.settings.apiKey = ''; // a record export is meant to travel; the key is not
+    const files = await L.db.allFiles();
+    let bytes = 0;
+    for (const f of Object.values(files)) bytes += f.bytes ? f.bytes.byteLength : (f.html || '').length;
+    const out = { version: L.VERSION, exportedAt: new Date().toISOString(), state, materials: await L.db.allMaterials() };
+    if (bytes <= FILE_EXPORT_LIMIT) {
+      out.files = {};
+      for (const [id, f] of Object.entries(files)) out.files[id] = f.bytes ? { kind: f.kind, name: f.name, bytes64: b64(f.bytes) } : f;
+    } else out.filesOmitted = bytes;
+    return out;
+  };
   L.importRecord = async (obj) => {
     if (!obj || typeof obj !== 'object' || !obj.state || !Array.isArray(obj.state.courses)) {
       throw new Error('That file is not a Lyceum record export.');
@@ -230,6 +251,7 @@ window.L = window.L || {};
     Object.keys(L.S).forEach((k) => delete L.S[k]);
     Object.assign(L.S, next);
     for (const [id, text] of Object.entries(obj.materials || {})) await L.db.putMaterial(id, text);
+    for (const [id, f] of Object.entries(obj.files || {})) await L.db.putFile(id, f.bytes64 ? { kind: f.kind, name: f.name, bytes: unb64(f.bytes64) } : f);
     await L.ledger.append('data_imported', { courses: L.S.courses.length, exportedAt: obj.exportedAt || null });
     L.saveNow();
     if (L.render) L.render();

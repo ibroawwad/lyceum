@@ -1,16 +1,26 @@
 {
   "name": "lyceum",
-  "version": "1.0.0",
-  "description": "",
+  "version": "2.0.0",
+  "description": "Any study material becomes a real university course with a binding calendar.",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "node tools/build.js",
+    "test": "node tools/build.js && node tools/smoke.js",
+    "check": "node tools/check-intake.js && node tools/check-registrar.js",
+    "mobile:sync": "node tools/build.js && npx cap sync",
+    "mobile:ios": "node tools/build.js && npx cap sync ios && npx cap open ios",
+    "mobile:android": "node tools/build.js && npx cap sync android && npx cap open android"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "devDependencies": {
+    "@capacitor/android": "^6.2.2",
+    "@capacitor/cli": "^6.2.2",
+    "@capacitor/core": "^6.2.2",
+    "@capacitor/ios": "^6.2.2",
     "playwright-core": "^1.47.2"
-  }
+  },
+  "private": true
 }

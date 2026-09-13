@@ -6,6 +6,7 @@
   const words = (text) => (String(text || '').match(/[A-Za-z0-9][A-Za-z0-9'’\-]*/g) || []).length;
 
   // ---------- normalisation ----------
+  const PAGE = '\u241E'; // page separator the PDF reader inserts; survives normalisation so page offsets can be recovered
   function normalize(text) {
     let t = String(text || '').replace(/\r\n?/g, '\n').replace(/ /g, ' ').replace(/[ \t]+\n/g, '\n');
     // words broken across a line with a hyphen ("proba-\nbility")
@@ -14,7 +15,7 @@
     const lines = t.split('\n');
     const counts = {};
     for (const ln of lines) { const k = ln.trim(); if (k && k.length < 90) counts[k] = (counts[k] || 0) + 1; }
-    const kept = lines.filter((ln) => { const k = ln.trim(); return !(k && k.length < 90 && counts[k] >= 4); });
+    const kept = lines.filter((ln) => { const k = ln.trim(); return k === PAGE || !(k && k.length < 90 && counts[k] >= 4); });
     t = kept.map((l) => l.replace(/\s+$/, '')).join('\n');
     t = t.replace(/\n{3,}/g, '\n\n');
     return t.trim();
@@ -110,7 +111,11 @@
       if (cur) { if (segs.length && words(text.slice(cur.start, cur.end)) < 300) segs[segs.length - 1].end = cur.end; else segs.push(cur); }
       if (!segs.length) segs.push({ title: 'Part 1', start: 0, end: text.length });
     }
-    return segs.map((s, i) => ({ i, title: s.title, start: s.start, end: s.end, words: words(text.slice(s.start, s.end)) }));
+    const out = segs.map((s, i) => ({ i, title: s.title, start: s.start, end: s.end, words: words(text.slice(s.start, s.end)) }));
+    // sub-headings inside a segment name the bite-sized chunks; any detected heading that is not a segment boundary counts
+    const bounds = new Set(out.map((s) => s.start));
+    for (const s of out) s.subheads = heads.filter((h) => h.start > s.start && h.start < s.end && !bounds.has(h.start)).map((h) => ({ title: h.title, at: h.start }));
+    return out;
   }
 
   // ---------- key terms ----------
@@ -285,8 +290,8 @@
     walk(doc.body || doc);
     return { title: title || base || 'Web page', text: out.join('').replace(/[ \t]+/g, ' ').replace(/\n[ \t]+/g, '\n') };
   }
-  function make(name, kind, text, extra = {}) {
-    text = normalize(text);
+  function make(name, kind, text, extra = {}, alreadyNormalized = false) {
+    if (!alreadyNormalized) text = normalize(text);
     return Object.assign({ id: L.uid('src'), name, kind, text, words: words(text), chars: text.length }, extra);
   }
   async function fromFile(file) {
@@ -294,8 +299,8 @@
     const ext = (name.split('.').pop() || '').toLowerCase();
     if (ext === 'pdf' || file.type === 'application/pdf') {
       if (!window.pdfjsLib) throw new Error('PDF reading needs the pdf.js library, which did not load. Check your connection or paste the text.');
-      const data = await file.arrayBuffer();
-      const pdf = await window.pdfjsLib.getDocument({ data }).promise;
+      const bytes = await file.arrayBuffer();
+      const pdf = await window.pdfjsLib.getDocument({ data: bytes.slice(0) }).promise;
       const pages = [];
       for (let p = 1; p <= pdf.numPages; p++) {
         const page = await pdf.getPage(p);
@@ -311,17 +316,26 @@
         buf.push(line.trim());
         pages.push(buf.join('\n'));
       }
-      const text = pages.join('\n\n');
-      if (text.replace(/\s+/g, '').length < 200) throw new Error('That PDF has no extractable text (it may be scanned). Try a text export.');
-      return make(name, 'pdf', text, { pages: pdf.numPages });
+      if (pages.join('').replace(/\s+/g, '').length < 200) throw new Error('That PDF has no extractable text (it may be scanned). Try a text export.');
+      // normalise the whole document once (running headers repeat across pages), then recover page offsets from the separators
+      const norm = normalize(pages.join('\n\n' + PAGE + '\n\n'));
+      const pieces = norm.split(PAGE);
+      const pageStarts = []; const parts = []; let pos = 0;
+      for (const piece of pieces) { const t = piece.replace(/^\n+/, '').replace(/\n+$/, ''); pageStarts.push(pos); parts.push(t); pos += t.length + 2; }
+      const src = make(name, 'pdf', parts.join('\n\n'), { pages: pdf.numPages, pageStarts }, true);
+      src.file = { kind: 'pdf', name, bytes };
+      return src;
     }
     if (ext === 'docx') {
       if (!window.mammoth) throw new Error('Word reading needs the mammoth library, which did not load. Check your connection or paste the text.');
-      const r = await window.mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() });
-      return make(name, 'docx', r.value || '');
+      const buf = await file.arrayBuffer();
+      const r = await window.mammoth.extractRawText({ arrayBuffer: buf });
+      const src = make(name, 'docx', r.value || '');
+      try { const h = await window.mammoth.convertToHtml({ arrayBuffer: buf }); src.file = { kind: 'html', name, html: h.value || '' }; } catch (e) { /* text only */ }
+      return src;
     }
     const raw = await file.text();
-    if (ext === 'html' || ext === 'htm' || /text\/html/.test(file.type)) { const h = htmlToText(raw, name); return make(h.title || name, 'html', h.text); }
+    if (ext === 'html' || ext === 'htm' || /text\/html/.test(file.type)) { const h = htmlToText(raw, name); const src = make(h.title || name, 'html', h.text); src.file = { kind: 'html', name, html: raw }; return src; }
     if (ext === 'md' || ext === 'markdown') return make(name, 'markdown', raw);
     return make(name, 'text', raw);
   }
@@ -340,12 +354,14 @@
     url = String(url || '').trim();
     if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
     let host = url; try { host = new URL(url).hostname + new URL(url).pathname; } catch (e) { /* keep */ }
-    try {
-      const { ct, body } = await fetchText(url);
-      if (/text\/html/.test(ct)) { const h = htmlToText(body, host); if (h.text.replace(/\s+/g, '').length > 200) return make(h.title, 'url', h.text, { url }); }
-      else if (/text\/plain|markdown|application\/json/.test(ct)) return make(host, 'url', body, { url });
-      throw new Error('not text');
-    } catch (e) { /* fall through to the reader proxy */ }
+    if (location.protocol !== 'file:') {
+      try {
+        const { ct, body } = await fetchText(url);
+        if (/text\/html/.test(ct)) { const h = htmlToText(body, host); if (h.text.replace(/\s+/g, '').length > 200) { const src = make(h.title, 'url', h.text, { url }); src.file = { kind: 'html', name: h.title, html: body }; return src; } }
+        else if (/text\/plain|markdown|application\/json/.test(ct)) return make(host, 'url', body, { url });
+        throw new Error('not text');
+      } catch (e) { /* fall through to the reader proxy */ }
+    }
     try {
       const { body } = await fetchText('https://r.jina.ai/' + url, 20000);
       const m = /^Title:\s*(.+)$/m.exec(body);

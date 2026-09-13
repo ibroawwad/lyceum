@@ -195,7 +195,10 @@ Prompts (author them in faculty.js, in this spirit):
 
 ```js
 L.registrar.budget() → { weekly, committed, available }          // hours; committed = Σ active/upcoming course.plan.hoursPerWeek
-L.registrar.plan({ analysis, segments, text, sources, words }) → Prospectus   // pure: no state writes (§8)
+L.registrar.PACES                                                 // { condensed, standard, extended } → { label, hpwCap, studyDays, blurb }
+L.registrar.plans({ analysis, segments, text, sources, words }) → { condensed, standard, extended }   // pure; each a Prospectus or { unavailable }
+L.registrar.plan(input) → Prospectus                              // = plans(input).standard
+L.registrar.locate(course, from, to) → { source, pages:[a,b]|null } // char range → original page range
 L.registrar.enrol(prospectus) → Promise<Course>                  // writes course, stores material, ledger 'enrolled'
 L.registrar.withdraw(courseId) → Promise<void>                   // allowed before 60% of term; ledger 'withdrawn'
 L.registrar.course(id) → Course | undefined
@@ -210,7 +213,7 @@ L.registrar.deadline(course, a) → ms | null                       // hard end 
 L.registrar.standing(course) → Standing                           // §8.6
 L.registrar.letter(pct) → 'A'…'F'   L.registrar.points(letter) → 4.0…0
 L.registrar.gpa() → { gpa, credits, completed }                   // completed courses only
-L.registrar.attend(courseId, sessionId) → Promise<'attended'|'not_today'|'already'>
+L.registrar.complete(courseId, sessionId, chunkId) → Promise<'done'|'late'|'not_yet'|'already'>  // ledger 'chunk_completed' { onTime }
 L.registrar.begin(courseId, aid, { onLog }) → Promise<void>       // seals paper (faculty.composePaper), sets attempt.startedAt, ledger
 L.registrar.answer(courseId, aid, qid, value)                     // autosave into attempt.answers; L.save()
 L.registrar.submit(courseId, aid, { auto = false }) → Promise<Grade>  // grades, penalties, ledger
@@ -231,7 +234,7 @@ L.render()                                     // re-render rail + main for the 
 L.boot()                                       // views-shell.js: attach listeners, first render, redirect to #/welcome if no student
 ```
 Routes: `#/welcome`, `#/today`, `#/courses`, `#/course/:id` (+ `?tab=syllabus|assessments|grades|materials`),
-`#/course/:id/week/:n` (reading view), `#/assess/:id/:aid`, `#/calendar` (+ `?m=YYYY-MM`),
+`#/course/:id/day/:date` (+ `?chunk=id&view=pages|text`, the study block and its original pages; `/week/:n` redirects), `#/assess/:id/:aid`, `#/calendar` (+ `?m=YYYY-MM`),
 `#/record`, `#/enrol`, `#/settings`.
 
 ---
@@ -254,10 +257,11 @@ Course = {
   prerequisites:[], credits:1..4, hue:0..359, createdAt,
   state: 'enrolled'|'withdrawn',            // completion is derived from dates (courseState)
   withdrawnAt?: iso,
-  material: { sources:[{ id, name, kind, words, chars, pages?, url? }], words, chars, segments: Segment[] },
+  material: { sources:[{ id, name, kind, words, chars, pages?, url?, offset, pageStarts?, hasFile }], words, chars, segments: Segment[] },
+              // offset = where this source starts in the joined material text; pageStarts = char offset of each PDF page; originals live in IndexedDB 'files'
   analysis: { source:'llm'|'offline', model?, note? , units: Unit[] },
   term: { start:'YYYY-MM-DD', end:'YYYY-MM-DD', weeks: n },      // end = Sunday of last week
-  plan: { hoursPerWeek, totalHours, slot:{ days:[0,2,4], start: 540, minutes: 50 }, sessionsPerWeek },
+  plan: { pace:'condensed'|'standard'|'extended', paceLabel, hoursPerWeek, totalHours, slot:{ days:[…studyDays], start: 540, minutes }, studyDays:[0..6], minutesPerDay, sessionsPerWeek },
   weeks: Week[],
   sessions: Session[],
   assessments: Assessment[],
@@ -267,11 +271,12 @@ Course = {
   final?: { pct, letter, at }                // written by sweep when the term ends (or on withdraw: letter 'W')
 }
 Unit = { title, segments:[from,to], topics:[], objectives:[], relativeSize }
-Segment = { i, title, start, end, words }                       // char offsets into the material text
+Segment = { i, title, start, end, words, subheads:[{ title, at }] }   // char offsets into the material text; subheads name chunks
 Week = { n, start:'YYYY-MM-DD', title, parts:[{ unit:idx, fraction:0..1, label:'Unit 3 · Cont.' }],
          segments:[i…], objectives:[], kind:'teaching'|'midterm'|'final' }
-Session = { id, week, day:0..6, date:'YYYY-MM-DD', start:540, minutes:50, kind:'Lecture'|'Problem class',
-            topic, attended: null | iso }
+Session = { id, week, day:0..6, date:'YYYY-MM-DD', start:540, minutes, kind:'Study block', topic, chunks: Chunk[] }  // one per study day
+Chunk = { id, kind:'read'|'practise'|'review', title, minutes:5..25 (practise ≤ 25, review 10), done: null|iso,
+          segment?, from?, to? (char offsets, read only), pages?:[a,b]|null, source?: sourceId }
 Assessment = { id, kind:'quiz'|'pset'|'midterm'|'final'|'project', title, week, coversWeeks:[…],
                opensAt: iso, dueAt: iso, closesAt: iso, durationMin: number|null, lateAllowed: boolean,
                paper: null | Paper, attempt: null | { startedAt, answers:{ [qid]: value }, submittedAt: null|iso, auto?:boolean },
@@ -288,7 +293,7 @@ Standing = { current: pct|null, projected: pct|null, letter, categories:[{ kind,
              participation:{ attended, held } }
 ```
 
-Ledger types: `matriculated, enrolled, withdrawn, session_attended, assessment_started, assessment_submitted,
+Ledger types: `matriculated, enrolled, withdrawn, chunk_completed, assessment_started, assessment_submitted,
 assessment_graded, assessment_missed, course_completed, clock_override, clock_reset, settings_changed, data_imported`.
 
 ---
@@ -450,19 +455,13 @@ extending the previous unit, overlaps trimmed, empty units removed; at least 1 u
 ### 8.2 Budget and length
 `available = settings.weeklyHours − Σ hoursPerWeek of courses in state enrolled that are upcoming or running`.
 If `available < 3` → throw `RegistrarError { code:'budget', available, nextFree: date the earliest
-running course ends }`. `hpw0 = min(available, 6)`. `weeks = clamp(ceil(totalHours / hpw0), 2, 16)`.
+running course ends }`. Three pacings (`PACES`): condensed `hpw0 = min(available, 10)`, study days Mon–Sun; standard `hpw0 = min(available, 6)`, Mon–Fri; extended `hpw0 = min(available, 4)`, Mon–Fri. `weeks = clamp(ceil(totalHours / hpw0), 2, 16)`; the three are nudged so condensed < standard < extended when possible. A pacing whose `hoursPerWeek` exceeds the free budget is returned as `{ unavailable }`; all three unavailable → the budget refusal.
 `hoursPerWeek = max(3, ceil(totalHours / weeks × 2) / 2)`. `credits = hpw ≥ 9 ? 4 : hpw ≥ 6 ? 3 : hpw ≥ 4 ? 2 : 1`.
 `term.start = L.date.nextMonday()`; `term.end = start + weeks×7 − 1` (Sunday).
 
-### 8.3 Timetable slot
-`sessionsPerWeek = hoursPerWeek ≥ 7 ? 3 : 2`; `minutes = hoursPerWeek ≥ 6 ? 75 : 50`.
-Candidate slots in order: `[MWF 09:00], [TT 09:00], [MWF 11:00], [TT 11:00], [MWF 14:00], [TT 14:00], [MWF 16:00], [TT 16:00], [MWF 18:00], [TT 18:00]`
-where MWF = days [0,2,4], TT = [1,3]. For 2-session courses also try `[MW 09:00]`… as the MWF
-row minus Friday. A slot is taken if any other enrolled course whose term overlaps this one has a
-session on the same day whose time range intersects. Pick the first free slot; if none, throw
-`RegistrarError { code:'timetable' }`. The third session of an MWF course is a `Problem class`.
-Sessions are generated for every teaching week (kind `teaching` or `midterm`); the final week gets
-only the first session (`Lecture`, topic "Review") and none on exam day.
+### 8.3 Daily study blocks
+One `Session` per study day (`kind:'Study block'`) at the course's slot hour — candidates 09:00, 11:00, 14:00, 16:00, 18:00, 07:00, 20:00; the first hour at which no concurrent course has a block overlapping on any shared day wins (`minutesPerDay = hoursPerWeek × 60 / studyDays`). Final week: blocks only on days before the final; midterm week: no block on the exam day.
+Each block holds 2–5 chunks: the week's reading split into bite-sized `read` chunks (at a segment's sub-headings, else at paragraph boundaries so none exceeds `clamp(round(minutesPerDay/3), 12, 25)` min; `minutes = clamp(round(words/70), 5, 60)`), spread across the week's days by count; a 10-min `review` of the previous day's reading (from day 2); a `practise` chunk (`clamp(round(minutesPerDay × 0.3), 10, 25)` min) on the day's focus, or on the coming exam in midterm/final weeks. Reading chunks carry `pages` via `locate()` when the source is a PDF.
 
 ### 8.4 Weeks
 Capacity per week: 1.0 teaching; 0.5 midterm week; 0.35 final week. `midterm week = ceil(weeks/2)`
@@ -501,8 +500,7 @@ final week title = "Review and final examination"; midterm week title prefixed "
 
 ### 8.6 Standing
 For each category with items: `avg` = mean `grade.pct` over items with a grade (missed = 0
-counts); `contrib = weight × avg / 100`. Participation: `attended / held` where held = sessions
-dated ≤ today. `current = Σ contrib / Σ weight of categories that have ≥ 1 graded item or held
+counts); `contrib = weight × avg / 100`. Participation: over chunks that have fallen due (days before today, plus today's completed ones): on-time = 1, late = ½, undone = 0. `current = Σ contrib / Σ weight of categories that have ≥ 1 graded item or held
 session × 100` (null if none). `projected` = same but ungraded future items assumed at the
 current average (null if none graded). Letter scale: A ≥ 93, A− ≥ 90, B+ ≥ 87, B ≥ 83, B− ≥ 80,
 C+ ≥ 77, C ≥ 73, C− ≥ 70, D+ ≥ 67, D ≥ 63, D− ≥ 60, else F. Points: A 4.0, A− 3.7, B+ 3.3, B 3.0,

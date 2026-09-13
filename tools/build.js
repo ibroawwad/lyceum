@@ -18,5 +18,7 @@ if (js.includes('</script>')) throw new Error('a JS module contains "</script>" 
 html = html.replace('/* SCRIPTS */', () => js);
 fs.mkdirSync(path.join(root, 'dist'), { recursive: true });
 fs.writeFileSync(path.join(root, 'dist', 'lyceum.html'), html);
+fs.writeFileSync(path.join(root, 'dist', 'index.html'), html); // hosting + Capacitor expect index.html
+if (fs.existsSync(path.join(root, 'sw.js'))) fs.copyFileSync(path.join(root, 'sw.js'), path.join(root, 'dist', 'sw.js'));
 const missing = ORDER.filter((f) => !fs.existsSync(src(f)));
 console.log(`built dist/lyceum.html (${(html.length / 1024).toFixed(0)} KB)` + (missing.length ? ` — missing modules: ${missing.join(', ')}` : ''));

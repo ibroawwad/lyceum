@@ -1,0 +1,100 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+2 0 obj
+<< /Length 553 >>
+stream
+BT
+/F1 18 Tf
+72 740 Td
+(Chapter 1 Kinematics) Tj
+/F1 12 Tf
+0 -28 Td
+(Kinematics describes motion without asking about its causes.) Tj
+0 -28 Td
+(Displacement is the change in position of a body; velocity is its rate of change.) Tj
+0 -28 Td
+(Acceleration is the rate of change of velocity and points along the change in velocity.) Tj
+0 -28 Td
+(Uniform acceleration gives the familiar equations of motion for straight-line travel.) Tj
+0 -28 Td
+(A graph of velocity against time has slope equal to the acceleration and area equal to the displacement.) Tj
+ET
+endstream
+endobj
+3 0 obj
+<< /Length 511 >>
+stream
+BT
+/F1 18 Tf
+72 740 Td
+(Chapter 2 Forces) Tj
+/F1 12 Tf
+0 -28 Td
+(A force is an interaction that changes the motion of a body.) Tj
+0 -28 Td
+(Newton's second law states that the net force equals mass times acceleration.) Tj
+0 -28 Td
+(Newton's third law states that forces come in equal and opposite pairs acting on different bodies.) Tj
+0 -28 Td
+(Friction opposes relative motion and depends on the normal force between surfaces.) Tj
+0 -28 Td
+(Free-body diagrams show every force acting on one chosen body.) Tj
+ET
+endstream
+endobj
+4 0 obj
+<< /Length 474 >>
+stream
+BT
+/F1 18 Tf
+72 740 Td
+(Chapter 3 Energy) Tj
+/F1 12 Tf
+0 -28 Td
+(Work is force times displacement along the direction of the force.) Tj
+0 -28 Td
+(Kinetic energy is one half of the mass times the square of the speed.) Tj
+0 -28 Td
+(Potential energy stores work done against a conservative force such as gravity.) Tj
+0 -28 Td
+(Mechanical energy is conserved when only conservative forces do work.) Tj
+0 -28 Td
+(Power is the rate at which work is done, measured in watts.) Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 8 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R >> >> /Contents 2 0 R >>
+endobj
+6 0 obj
+<< /Type /Page /Parent 8 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R >> >> /Contents 3 0 R >>
+endobj
+7 0 obj
+<< /Type /Page /Parent 8 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R >> >> /Contents 4 0 R >>
+endobj
+8 0 obj
+<< /Type /Pages /Kids [5 0 R 6 0 R 7 0 R] /Count 3 >>
+endobj
+9 0 obj
+<< /Type /Catalog /Pages 8 0 R >>
+endobj
+xref
+0 10
+0000000000 65535 f 
+0000000015 00000 n 
+0000000085 00000 n 
+0000000689 00000 n 
+0000001251 00000 n 
+0000001776 00000 n 
+0000001902 00000 n 
+0000002028 00000 n 
+0000002154 00000 n 
+0000002223 00000 n 
+trailer
+<< /Size 10 /Root 9 0 R >>
+startxref
+2272
+%%EOF

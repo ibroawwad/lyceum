@@ -6,6 +6,12 @@
   const HUES = [160, 220, 15, 275, 45, 195, 330, 95];
   const SCALE = [[93, 'A', 4.0], [90, 'A−', 3.7], [87, 'B+', 3.3], [83, 'B', 3.0], [80, 'B−', 2.7], [77, 'C+', 2.3], [73, 'C', 2.0], [70, 'C−', 1.7], [67, 'D+', 1.3], [63, 'D', 1.0], [60, 'D−', 0.7], [-Infinity, 'F', 0]];
   const KIND_TITLE = { quiz: 'Quiz', pset: 'Problem set', midterm: 'Midterm examination', final: 'Final examination', project: 'Term project' };
+  // the registrar's three pacings; the student picks one and it becomes binding
+  const PACES = {
+    condensed: { label: 'Condensed', hpwCap: 10, studyDays: [0, 1, 2, 3, 4, 5, 6], blurb: 'Every day of the week, the shortest term the material allows.' },
+    standard: { label: 'Standard', hpwCap: 6, studyDays: [0, 1, 2, 3, 4], blurb: 'Weekdays, the pace of a regular term.' },
+    extended: { label: 'Extended', hpwCap: 4, studyDays: [0, 1, 2, 3, 4], blurb: 'Weekdays at a lighter load over a longer term.' },
+  };
 
   class RegistrarError extends Error {
     constructor(code, message, extra = {}) { super(message); this.name = 'RegistrarError'; this.code = code; Object.assign(this, extra); }
@@ -45,41 +51,71 @@
   }
 
   // ---------- planning ----------
-  function plan({ analysis, segments, text, sources, words }) {
-    const now = L.today();
+  // Study hours the material needs: read + notes + practice + review; every headed section is at least a lecture's worth.
+  function hoursFor({ words, segments, analysis }) {
+    const readHours = words / 9000;
+    const diffMult = [0.85, 0.95, 1.05, 1.2, 1.4][analysis.difficulty - 1];
+    return Math.max(6, segments.length * 2.5, readHours * 3.5 * diffMult);
+  }
+
+  // Break one segment into bite-sized reading chunks: at its sub-headings when it has them, else at paragraph
+  // boundaries so no chunk runs past `maxMin` minutes. Never straddles a segment.
+  function chunkSegment(text, seg, maxMin) {
+    const minutesFor = (from, to) => L.clamp(Math.round(L.intake.words(text.slice(from, to)) / 70), 5, 60);
+    const pieces = [];
+    const cuts = [seg.start, ...(seg.subheads || []).map((h) => h.at).filter((a) => a > seg.start && a < seg.end), seg.end];
+    for (let i = 0; i + 1 < cuts.length; i++) {
+      const from = cuts[i], to = cuts[i + 1];
+      const title = i === 0 ? seg.title : (seg.subheads.find((h) => h.at === from) || {}).title || seg.title;
+      if (minutesFor(from, to) <= maxMin) { pieces.push({ title, from, to }); continue; }
+      // split long pieces at paragraph boundaries into roughly equal parts
+      const body = text.slice(from, to);
+      const paras = []; let p = 0;
+      for (const m of body.matchAll(/\n\s*\n/g)) { paras.push([from + p, from + m.index]); p = m.index + m[0].length; }
+      paras.push([from + p, to]);
+      const parts = Math.ceil(minutesFor(from, to) / maxMin);
+      const target = L.intake.words(body) / parts;
+      let cur = null, acc = 0, n = 1;
+      for (const [a, b] of paras) {
+        if (!cur) cur = [a, b]; else cur[1] = b;
+        acc += L.intake.words(text.slice(a, b));
+        if (acc >= target * 0.9 && n < parts) { pieces.push({ title: `${title} · part ${n}`, from: cur[0], to: cur[1] }); cur = null; acc = 0; n++; }
+      }
+      if (cur) pieces.push({ title: parts > 1 ? `${title} · part ${n}` : title, from: cur[0], to: cur[1] });
+    }
+    const kept = pieces.filter((p) => L.intake.words(text.slice(p.from, p.to)) > 0);
+    // a tiny opening piece (a title page, an intro line) joins the piece after it
+    if (kept.length > 1 && L.intake.words(text.slice(kept[0].from, kept[0].to)) < 80) { kept[1].from = kept[0].from; kept.shift(); }
+    return kept.map((p) => Object.assign(p, { minutes: minutesFor(p.from, p.to) }));
+  }
+
+  function buildPlan({ analysis, segments, text, sources, words, paceKey, weeksOverride }) {
+    const pace = PACES[paceKey];
     const b = budget();
     if (b.available < 3) {
       const running = courses('active').sort(L.by((c) => c.term.end));
       const nextFree = running.length ? running[0].term.end : null;
       throw new RegistrarError('budget', `Your timetable is full: ${b.available % 1 ? b.available.toFixed(1) : b.available} hours a week are free and a course needs at least 3.${nextFree ? ` The next course ends on ${L.fmt.date(nextFree)}.` : ''}`, { available: b.available, nextFree });
     }
-    // §8.1–8.2 hours, weeks, credits
-    const readHours = words / 9000;
-    const diffMult = [0.85, 0.95, 1.05, 1.2, 1.4][analysis.difficulty - 1];
-    // read + notes + practice + review; every headed section is at least a lecture's worth of study
-    const totalHours = Math.max(6, segments.length * 2.5, readHours * 3.5 * diffMult);
-    const hpw0 = Math.min(b.available, 6);
-    const weeks = L.clamp(Math.ceil(totalHours / hpw0), 2, 16);
+    const totalHours = hoursFor({ words, segments, analysis });
+    const hpw0 = Math.min(b.available, pace.hpwCap);
+    const weeks = weeksOverride || L.clamp(Math.ceil(totalHours / hpw0), 2, 16);
     const hoursPerWeek = Math.max(3, Math.ceil((totalHours / weeks) * 2) / 2);
+    if (hoursPerWeek > b.available + 1e-9) throw new RegistrarError('budget', `${pace.label} pace needs ${hoursPerWeek} h/week; ${b.available} are free.`, { available: b.available });
     const credits = hoursPerWeek >= 9 ? 4 : hoursPerWeek >= 6 ? 3 : hoursPerWeek >= 4 ? 2 : 1;
-    const start = D.nextMonday(now);
+    const studyDays = pace.studyDays;
+    const minutesPerDay = Math.round((hoursPerWeek * 60) / studyDays.length);
+    const start = D.nextMonday(L.today());
     const term = { start: D.iso(start), end: D.iso(D.addDays(start, weeks * 7 - 1)), weeks };
     const concurrent = L.S.courses.filter((c) => c.state === 'enrolled' && overlaps(c, { term }));
 
-    // §8.3 timetable slot
-    const sessionsPerWeek = hoursPerWeek >= 7 ? 3 : 2;
-    const minutes = hoursPerWeek >= 6 ? 75 : 50;
-    const rows = [];
-    for (const h of [9, 11, 14, 16, 18]) {
-      rows.push({ days: sessionsPerWeek === 3 ? [0, 2, 4] : [0, 2], start: h * 60 });
-      rows.push({ days: [1, 3], start: h * 60 });
-    }
-    const taken = (slot) => concurrent.some((c) => c.sessions.some((s) => slot.days.includes(s.day) && slot.start < s.start + s.minutes && s.start < slot.start + minutes));
+    // timetable slot: one daily study block on each study day, at an hour no concurrent course uses on those days
+    const rows = [9, 11, 14, 16, 18, 7, 20].map((h) => ({ days: studyDays, start: h * 60, minutes: minutesPerDay }));
+    const taken = (slot) => concurrent.some((c) => c.sessions.some((s) => slot.days.includes(s.day) && slot.start < s.start + s.minutes && s.start < slot.start + slot.minutes));
     const slot = rows.find((r) => !taken(r));
     if (!slot) throw new RegistrarError('timetable', 'No timetable slot is free for this term. Wait for a course to end, or withdraw from one.');
-    slot.minutes = minutes;
 
-    // §8.4 weeks
+    // weeks: pour units into weeks by relative size; the midterm week takes half a load, the final week a third
     const midWeek = weeks >= 5 ? Math.ceil(weeks / 2) : 0;
     const capacity = (n) => (n === weeks ? 0.35 : n === midWeek ? 0.5 : 1);
     const C = L.sum(Array.from({ length: weeks }, (_, i) => capacity(i + 1)));
@@ -87,7 +123,7 @@
     const sizeSum = L.sum(units.map((u) => u.relativeSize));
     const shares = units.map((u) => (u.relativeSize / sizeSum) * C);
     const weeksOut = [];
-    let ui = 0, uLeft = shares[0], uDone = 0; // uDone = fraction of the current unit already placed
+    let ui = 0, uLeft = shares[0], uDone = 0;
     for (let n = 1; n <= weeks; n++) {
       let cap = capacity(n);
       const parts = [];
@@ -101,48 +137,35 @@
       if (!parts.length && ui < units.length) parts.push({ unit: ui, from: uDone, to: uDone });
       weeksOut.push({ n, start: D.iso(D.addDays(start, (n - 1) * 7)), rawParts: parts, kind: n === weeks ? 'final' : n === midWeek ? 'midterm' : 'teaching' });
     }
-    // rounding can leave the tail of the last unit unplaced — give it to the last teaching week
-    if (ui < units.length) {
-      const tail = weeksOut[weeksOut.length - 1];
-      for (let k = ui; k < units.length; k++) tail.rawParts.push({ unit: k, from: k === ui ? uDone : 0, to: 1 });
-    }
-    // translate fractional unit coverage into segment indices and labels
-    const partCount = {};
-    weeksOut.forEach((w) => w.rawParts.forEach((p) => { partCount[p.unit] = (partCount[p.unit] || 0) + 1; }));
+    if (ui < units.length) { const tail = weeksOut[weeksOut.length - 1]; for (let k = ui; k < units.length; k++) tail.rawParts.push({ unit: k, from: k === ui ? uDone : 0, to: 1 }); }
+    const partCount = {}; weeksOut.forEach((w) => w.rawParts.forEach((p) => { partCount[p.unit] = (partCount[p.unit] || 0) + 1; }));
     const partSeen = {};
+    let nextSeg = 0; // segments are handed out in order so no two weeks read the same pages
     for (const w of weeksOut) {
-      const segs = new Set();
       const parts = [];
+      let wantEnd = nextSeg - 1;
       for (const p of w.rawParts) {
         const u = units[p.unit];
         const [a, z] = u.segments; const n = z - a + 1;
-        let s0 = a + Math.floor(p.from * n), s1 = a + Math.ceil(p.to * n) - 1;
-        s0 = L.clamp(s0, a, z); s1 = L.clamp(Math.max(s1, s0), a, z);
-        for (let i = s0; i <= s1; i++) segs.add(i);
+        wantEnd = Math.max(wantEnd, L.clamp(a + Math.ceil(p.to * n) - 1, a, z));
         partSeen[p.unit] = (partSeen[p.unit] || 0) + 1;
-        const label = partCount[p.unit] > 1 ? `${u.title} · Part ${partSeen[p.unit]} of ${partCount[p.unit]}` : u.title;
-        parts.push({ unit: p.unit, fraction: Math.max(0, p.to - p.from), label });
+        parts.push({ unit: p.unit, fraction: Math.max(0, p.to - p.from), label: partCount[p.unit] > 1 ? `${u.title} · Part ${partSeen[p.unit]} of ${partCount[p.unit]}` : u.title });
       }
-      if (!segs.size) { const prev = weeksOut[w.n - 2]; const last = prev ? prev.segments[prev.segments.length - 1] : 0; segs.add(last); }
+      const segs = [];
+      for (let i = nextSeg; i <= wantEnd && i < segments.length; i++) segs.push(i);
+      if (!segs.length && w.n < weeks) { if (nextSeg < segments.length) segs.push(nextSeg); else segs.push(segments.length - 1); }
+      if (segs.length) nextSeg = Math.max(nextSeg, segs[segs.length - 1] + 1);
       const titles = parts.map((p) => units[p.unit].title).filter((t, i, arr) => arr.indexOf(t) === i);
       let title = titles.length <= 2 ? titles.join(' · ') : `${titles.slice(0, 2).join(' · ')} … and ${titles.length - 2} more`;
       if (w.kind === 'final') title = 'Review and final examination';
       if (w.kind === 'midterm') title = 'Midterm week · ' + title;
-      const objectives = parts.flatMap((p) => units[p.unit].objectives).filter((o, i, arr) => arr.indexOf(o) === i).slice(0, 6);
-      w.title = title; w.parts = parts; w.segments = Array.from(segs).sort((x, y) => x - y); w.objectives = objectives;
+      w.title = title; w.parts = parts; w.segments = segs; w.objectives = parts.flatMap((p) => units[p.unit].objectives).filter((o, i, arr) => arr.indexOf(o) === i).slice(0, 6);
       delete w.rawParts;
     }
+    // anything left over (rounding) goes to the last teaching week
+    if (nextSeg < segments.length) { const w = weeksOut[Math.max(0, weeks - 2)]; for (let i = nextSeg; i < segments.length; i++) w.segments.push(i); }
 
-    // §8.3 sessions
-    const sessions = [];
-    for (const w of weeksOut) {
-      const days = w.kind === 'final' ? slot.days.slice(0, 1) : slot.days;
-      days.forEach((day, k) => {
-        sessions.push({ id: L.uid('s'), week: w.n, day, date: D.iso(D.addDays(D.parse(w.start), day)), start: slot.start, minutes, kind: k === 2 ? 'Problem class' : 'Lecture', topic: w.kind === 'final' ? 'Review' : w.title, attended: null });
-      });
-    }
-
-    // §8.5 assessments
+    // assessments
     const examDays = new Set();
     for (const c of concurrent) for (const a of c.assessments) if (a.kind === 'midterm' || a.kind === 'final') examDays.add(a.opensAt.slice(0, 10));
     const assessments = [];
@@ -163,19 +186,58 @@
       for (const day of prefs) { const d = D.iso(D.addDays(D.parse(weekStart), day)); if (!examDays.has(d)) { examDays.add(d); return d; } }
       const d = D.iso(D.addDays(D.parse(weekStart), prefs[0])); examDays.add(d); return d;
     };
+    let midDate = null, finalDate;
     if (midWeek) {
-      const d = examDate(wk(midWeek), [2, 3, 1]);
-      assessments.push({ id: L.uid('a'), kind: 'midterm', title: 'Midterm examination', week: midWeek, coversWeeks: Array.from({ length: midWeek }, (_, i) => i + 1), opensAt: at(d, 9), dueAt: at(d, 21), closesAt: at(d, 21), durationMin: 75, lateAllowed: false, paper: null, attempt: null, grade: null });
+      midDate = examDate(wk(midWeek), [2, 3, 1]);
+      assessments.push({ id: L.uid('a'), kind: 'midterm', title: 'Midterm examination', week: midWeek, coversWeeks: Array.from({ length: midWeek }, (_, i) => i + 1), opensAt: at(midDate, 9), dueAt: at(midDate, 21), closesAt: at(midDate, 21), durationMin: 75, lateAllowed: false, paper: null, attempt: null, grade: null });
     }
     if (weeks >= 8) {
       const due = at(D.addDays(D.parse(wk(weeks - 1)), 4), 23, 59, 0);
       assessments.push({ id: L.uid('a'), kind: 'project', title: 'Term project', week: weeks - 1, coversWeeks: Array.from({ length: weeks - 1 }, (_, i) => i + 1), opensAt: at(wk(3), 8), dueAt: due, closesAt: iso(D.addDays(D.parse(due), 3)), durationMin: null, lateAllowed: true, paper: null, attempt: null, grade: null });
     }
-    {
-      const d = examDate(wk(weeks), [4, 3, 2]);
-      assessments.push({ id: L.uid('a'), kind: 'final', title: 'Final examination', week: weeks, coversWeeks: weeksOut.map((w) => w.n), opensAt: at(d, 9), dueAt: at(d, 21), closesAt: at(d, 21), durationMin: 120, lateAllowed: false, paper: null, attempt: null, grade: null });
-    }
+    finalDate = examDate(wk(weeks), [4, 3, 2]);
+    assessments.push({ id: L.uid('a'), kind: 'final', title: 'Final examination', week: weeks, coversWeeks: weeksOut.map((w) => w.n), opensAt: at(finalDate, 9), dueAt: at(finalDate, 21), closesAt: at(finalDate, 21), durationMin: 120, lateAllowed: false, paper: null, attempt: null, grade: null });
     assessments.sort(L.by('dueAt'));
+
+    // daily study blocks with bite-sized chunks
+    const maxMin = L.clamp(Math.round(minutesPerDay / 3), 12, 25);
+    const practiseMin = L.clamp(Math.round(minutesPerDay * 0.3), 10, 25);
+    const locateIn = (from, to) => locateWith(sources, from, to);
+    const sessions = [];
+    let dayIndex = 0;
+    let prevTitles = [];
+    for (const w of weeksOut) {
+      const reading = w.segments.flatMap((i) => chunkSegment(text, segments[i], maxMin).map((p) => Object.assign(p, { segment: i })));
+      let days = studyDays.map((day) => ({ day, date: D.iso(D.addDays(D.parse(w.start), day)) }));
+      if (w.kind === 'final') days = days.filter((d) => d.date < finalDate);
+      if (w.kind === 'midterm' && midDate) days = days.filter((d) => d.date !== midDate);
+      if (!days.length) continue;
+      // spread the week's reading across its days: each day takes its share by count, capped by minutes
+      const readBudget = Math.max(maxMin, Math.ceil(L.sum(reading.map((r) => r.minutes)) / days.length));
+      let ri = 0;
+      days.forEach((d, di) => {
+        const chunks = [];
+        let acc = 0;
+        const share = Math.ceil((reading.length - ri) / (days.length - di));
+        while (ri < reading.length && chunks.length < share && (acc === 0 || acc + reading[ri].minutes <= readBudget * 1.25)) {
+          const r = reading[ri++];
+          const loc = locateIn(r.from, r.to);
+          chunks.push({ id: L.uid('k'), kind: 'read', title: r.title, segment: r.segment, from: r.from, to: r.to, pages: loc.pages, source: loc.source ? loc.source.id : null, minutes: r.minutes, done: null });
+          acc += r.minutes;
+        }
+        const clean = (t) => t.replace(/ · part \d+$/, '');
+        if (dayIndex > 0 && prevTitles.length) chunks.push({ id: L.uid('k'), kind: 'review', title: `Review: ${prevTitles.map(clean).filter((t, i, a) => a.indexOf(t) === i).slice(0, 2).join('; ')}`, minutes: 10, done: null });
+        const focus = chunks.filter((k) => k.kind === 'read').map((k) => k.title);
+        if (w.kind === 'final' || w.kind === 'midterm') chunks.push({ id: L.uid('k'), kind: 'practise', title: `Practise for the ${w.kind === 'final' ? 'final' : 'midterm'}: work problems across ${w.kind === 'final' ? 'the whole course' : 'weeks 1–' + midWeek}`, minutes: practiseMin, done: null });
+        else chunks.push({ id: L.uid('k'), kind: 'practise', title: `Practise: ${clean(focus[0] || prevTitles[0] || w.title)} — rework the examples, then write two problems of your own`, minutes: practiseMin, done: null });
+        const minutes = L.sum(chunks.map((k) => k.minutes));
+        sessions.push({ id: L.uid('s'), week: w.n, day: d.day, date: d.date, start: slot.start, minutes, kind: 'Study block', topic: focus.length ? focus[0].replace(/ · part \d+$/, '') : (w.kind === 'final' ? 'Review' : w.title), chunks });
+        prevTitles = focus.length ? focus : prevTitles;
+        dayIndex++;
+      });
+      // leftover reading (rare rounding) lands on the week's last day
+      while (ri < reading.length) { const r = reading[ri++]; const loc = locateIn(r.from, r.to); const last = sessions[sessions.length - 1]; last.chunks.splice(last.chunks.findIndex((k) => k.kind !== 'read'), 0, { id: L.uid('k'), kind: 'read', title: r.title, segment: r.segment, from: r.from, to: r.to, pages: loc.pages, source: loc.source ? loc.source.id : null, minutes: r.minutes, done: null }); last.minutes += r.minutes; }
+    }
 
     // weights
     let weights = weeks < 5 ? { quiz: 20, pset: 30, final: 45, participation: 5 }
@@ -194,19 +256,49 @@
     return {
       code, title: analysis.title, subject: analysis.subject, subjectCode: analysis.subjectCode, level: analysis.level, difficulty: analysis.difficulty,
       description: analysis.description, prerequisites: analysis.prerequisites || [], credits, hue,
-      material: { sources: sources.map((s) => ({ id: s.id, name: s.name, kind: s.kind, words: s.words, chars: s.chars, pages: s.pages, url: s.url })), words, chars: text.length, segments },
+      material: { sources: sources.map((s) => ({ id: s.id, name: s.name, kind: s.kind, words: s.words, chars: s.chars, pages: s.pages, url: s.url, offset: s.offset || 0, pageStarts: s.pageStarts, hasFile: !!s.file })), words, chars: text.length, segments },
       analysis: { source: analysis.source || 'offline', model: analysis.model, note: analysis.note, units },
-      term, plan: { hoursPerWeek, totalHours: Math.round(totalHours * 10) / 10, slot, sessionsPerWeek }, weeks: weeksOut, sessions, assessments, policy, notes: {},
-      sourcesText: text,
+      term, plan: { pace: paceKey, paceLabel: pace.label, hoursPerWeek, totalHours: Math.round(totalHours * 10) / 10, slot, studyDays, minutesPerDay, sessionsPerWeek: studyDays.length },
+      weeks: weeksOut, sessions, assessments, policy, notes: {},
+      sourcesText: text, sourceFiles: sources.filter((s) => s.file).map((s) => ({ id: s.id, file: s.file })),
     };
   }
+  function locateWith(sources, from, to) {
+    let src = sources[0];
+    for (const s of sources) if ((s.offset || 0) <= from) src = s;
+    if (!src || !src.pageStarts) return { source: src, pages: null };
+    const pageOf = (off) => { const rel = off - (src.offset || 0); let p = 0; for (let i = 0; i < src.pageStarts.length; i++) if (src.pageStarts[i] <= rel) p = i; return p + 1; };
+    return { source: src, pages: [pageOf(from), pageOf(Math.max(from, to - 1))] };
+  }
+
+  // The three pacings. Each is a full prospectus or { unavailable } — never a throw unless all three are impossible.
+  function plans(input) {
+    const out = {};
+    const errs = [];
+    for (const key of Object.keys(PACES)) {
+      try { out[key] = buildPlan(Object.assign({}, input, { paceKey: key })); }
+      catch (e) { out[key] = { pace: key, paceLabel: PACES[key].label, unavailable: e.message, code: e.code }; errs.push(e); }
+    }
+    // the three must differ in length: condensed shortest, extended longest
+    const ok = (k) => out[k] && !out[k].unavailable;
+    const rebuild = (key, weeks) => { try { out[key] = buildPlan(Object.assign({}, input, { paceKey: key, weeksOverride: weeks })); } catch (e) { out[key] = { pace: key, paceLabel: PACES[key].label, unavailable: e.message, code: e.code }; } };
+    if (ok('standard') && ok('condensed') && out.condensed.term.weeks >= out.standard.term.weeks) rebuild('condensed', Math.max(2, out.standard.term.weeks - 1));
+    if (ok('standard') && ok('extended') && out.extended.term.weeks <= out.standard.term.weeks) rebuild('extended', Math.min(16, out.standard.term.weeks + 1));
+    if (ok('condensed') && ok('extended') && ok('standard') && out.condensed.term.weeks === out.standard.term.weeks && out.standard.term.weeks < 16) rebuild('standard', out.standard.term.weeks + 1), (out.extended.term.weeks <= out.standard.term.weeks ? rebuild('extended', Math.min(16, out.standard.term.weeks + 1)) : null);
+    if (!Object.keys(PACES).some(ok)) throw errs[0] || new RegistrarError('budget', 'No pacing fits your study budget.');
+    return out;
+  }
+  const plan = (input) => plans(input).standard; // kept for tools that want one prospectus
 
   async function enrol(prospectus) {
+    if (prospectus.unavailable) throw new Error(prospectus.unavailable);
     const c = Object.assign({}, prospectus, { id: L.uid('c'), createdAt: new Date(L.now()).toISOString(), state: 'enrolled' });
     const text = c.sourcesText; delete c.sourcesText;
+    const files = c.sourceFiles || []; delete c.sourceFiles;
     L.S.courses.push(c);
     await L.db.putMaterial(c.id, text);
-    await L.ledger.append('enrolled', { courseId: c.id, code: c.code, title: c.title, weeks: c.term.weeks, start: c.term.start, end: c.term.end, hoursPerWeek: c.plan.hoursPerWeek });
+    for (const f of files) await L.db.putFile(f.id, f.file);
+    await L.ledger.append('enrolled', { courseId: c.id, code: c.code, title: c.title, weeks: c.term.weeks, start: c.term.start, end: c.term.end, hoursPerWeek: c.plan.hoursPerWeek, pace: c.plan.pace });
     L.save();
     return c;
   }
@@ -275,14 +367,16 @@
       if (contrib != null) { contribSum += contrib; weightUsed += weight; }
       done.forEach((a) => { gradedAvgSum += a.grade.pct; gradedN++; });
     }
-    const held = c.sessions.filter((s) => s.date <= today);
-    const attended = held.filter((s) => s.attended).length;
+    // participation = chunks done on their day (full credit) or later (half), over chunks due so far
+    // a day's chunks fall due at the end of that day; today's count only once they are done
+    const dueChunks = c.sessions.filter((s) => finalise || s.date <= today).flatMap((s) => s.chunks.filter((ch) => finalise || s.date < today || ch.done).map((ch) => ({ s, ch })));
+    const credit = L.sum(dueChunks.map(({ s, ch }) => (!ch.done ? 0 : D.iso(ch.done) <= s.date ? 1 : 0.5)));
+    const done = dueChunks.filter(({ ch }) => ch.done).length;
     const pw = c.policy.weights.participation || 0;
-    const participation = { attended, held: held.length, weight: pw, avg: held.length ? (attended / held.length) * 100 : null };
-    if (pw && (held.length || finalise)) {
-      const avg = finalise ? (attended / Math.max(1, c.sessions.length)) * 100 : participation.avg;
-      cats.push({ kind: 'participation', weight: pw, done: attended, total: finalise ? c.sessions.length : held.length, avg, contrib: (pw * avg) / 100 });
-      contribSum += (pw * avg) / 100; weightUsed += pw;
+    const participation = { done, due: dueChunks.length, credit, weight: pw, avg: dueChunks.length ? (credit / dueChunks.length) * 100 : null };
+    if (pw && dueChunks.length) {
+      cats.push({ kind: 'participation', weight: pw, done, total: dueChunks.length, avg: participation.avg, contrib: (pw * participation.avg) / 100 });
+      contribSum += (pw * participation.avg) / 100; weightUsed += pw;
     }
     const current = weightUsed ? (contribSum / weightUsed) * 100 : null;
     // projection: ungraded items assumed at the running average of graded work
@@ -291,7 +385,7 @@
       const runAvg = gradedAvgSum / gradedN;
       let sum = 0;
       for (const [kind, weight] of Object.entries(c.policy.weights)) {
-        if (kind === 'participation') { sum += weight * (participation.avg == null ? 100 : participation.avg) / 100; continue; }
+        if (kind === 'participation') { sum += weight * (participation.avg == null ? runAvg : participation.avg) / 100; continue; }
         const items = c.assessments.filter((a) => a.kind === kind);
         if (!items.length) continue;
         const avg = L.sum(items.map((a) => (a.grade ? a.grade.pct : runAvg))) / items.length;
@@ -337,15 +431,26 @@
     if (!segs.length || !text) return text;
     return segs.map((s) => `${s.title}\n\n${text.slice(s.start, s.end).trim()}`).join('\n\n');
   }
-  async function attend(courseId, sessionId) {
+  async function complete(courseId, sessionId, chunkId) {
     const c = course(courseId); if (!c) throw new Error('Unknown course.');
-    const s = c.sessions.find((x) => x.id === sessionId); if (!s) throw new Error('Unknown session.');
-    if (s.attended) return 'already';
-    if (D.iso(L.today()) !== s.date) return 'not_today';
-    s.attended = new Date(L.now()).toISOString();
-    await L.ledger.append('session_attended', { courseId: c.id, ref: s.id, week: s.week, kind: s.kind });
+    const s = c.sessions.find((x) => x.id === sessionId); if (!s) throw new Error('Unknown study block.');
+    const ch = s.chunks.find((x) => x.id === chunkId); if (!ch) throw new Error('Unknown chunk.');
+    if (ch.done) return 'already';
+    const today = D.iso(L.today());
+    if (today < s.date) return 'not_yet';
+    ch.done = new Date(L.now()).toISOString();
+    await L.ledger.append('chunk_completed', { courseId: c.id, ref: s.id, chunk: ch.id, week: s.week, onTime: today === s.date, title: ch.title });
     L.save();
-    return 'attended';
+    return today === s.date ? 'done' : 'late';
+  }
+  // which page range of which source a char range of the material falls on
+  function locate(c, from, to) {
+    const srcs = c.material.sources;
+    let src = srcs[0];
+    for (const s of srcs) if ((s.offset || 0) <= from) src = s;
+    if (!src || !src.pageStarts) return { source: src, pages: null };
+    const pageOf = (off) => { const rel = off - (src.offset || 0); let p = 0; for (let i = 0; i < src.pageStarts.length; i++) if (src.pageStarts[i] <= rel) p = i; return p + 1; };
+    return { source: src, pages: [pageOf(from), pageOf(Math.max(from, to - 1))] };
   }
   async function begin(courseId, aid, { onLog } = {}) {
     const { c, a } = find(courseId, aid);
@@ -441,5 +546,5 @@
     return sweeping;
   }
 
-  L.registrar = { RegistrarError, KIND_TITLE, SCALE, budget, plan, enrol, withdraw, course, courses, courseState, currentWeek, week, sessionsOn, deadlines, nextDeadline, load, assessmentState, deadline, standing, letter, points, gpa, attend, begin, answer, submit, sweep, materialFor };
+  L.registrar = { RegistrarError, KIND_TITLE, SCALE, PACES, budget, plan, plans, enrol, withdraw, course, courses, courseState, currentWeek, week, sessionsOn, deadlines, nextDeadline, load, assessmentState, deadline, standing, letter, points, gpa, complete, locate, begin, answer, submit, sweep, materialFor };
 })(window.L);

@@ -16,7 +16,7 @@
     const query = Object.fromEntries(new URLSearchParams(queryPart));
     const params = {};
     let name = seg[0] || 'today';
-    if (name === 'course' && seg[1]) { params.id = seg[1]; if (seg[2] === 'week' && seg[3]) { name = 'reading'; params.n = Number(seg[3]); } }
+    if (name === 'course' && seg[1]) { params.id = seg[1]; if (seg[2] === 'day' && seg[3]) { name = 'day'; params.date = seg[3]; } else if (seg[2] === 'week' && seg[3]) { name = 'week'; params.n = Number(seg[3]); } }
     if (name === 'assess') { params.id = seg[1]; params.aid = seg[2]; }
     return { name, params, query };
   };
@@ -39,7 +39,7 @@
     if (!s) { rail.innerHTML = ''; rail.hidden = true; return; }
     rail.hidden = false;
     const { name } = L.route();
-    const cur = (n) => (n === name || (n === 'courses' && ['course', 'reading', 'assess'].includes(name)) ? ' aria-current="page"' : '');
+    const cur = (n) => (n === name || (n === 'courses' && ['course', 'day', 'week', 'assess'].includes(name)) ? ' aria-current="page"' : '');
     const openNow = L.S.courses.filter((c) => c.state === 'enrolled').flatMap((c) => c.assessments.filter((a) => ['open', 'late', 'in_progress'].includes(R().assessmentState(c, a)))).length;
     const active = R().courses('active').length;
     const nd = R().nextDeadline();
@@ -50,7 +50,7 @@
         <a href="#/courses"${cur('courses')}>${I.courses}<span>Courses</span>${active ? `<span class="badge" style="background:var(--surface-2);color:var(--ink-2)">${active}</span>` : ''}</a>
         <a href="#/calendar"${cur('calendar')}>${I.calendar}<span>Calendar</span></a>
         <a href="#/record"${cur('record')}>${I.record}<span>Record</span></a>
-        <a href="#/enrol"${cur('enrol')}>${I.enrol}<span>Enrol</span></a>
+        <a href="#/enrol"${cur('enrol')} class="rail-enrol">${I.enrol}<span>Enrol</span></a>
         <a href="#/settings"${cur('settings')}>${I.settings}<span>Settings</span></a>
       </nav>
       <div class="rail-foot">
@@ -99,7 +99,8 @@
       document.querySelectorAll('[data-countdown]').forEach((n) => { n.textContent = L.fmt.rel(Number(n.dataset.countdown) - L.now()); });
       L.emit('tick-views');
     });
-    L.on('state', () => { /* views re-render explicitly; the rail badge follows on next render */ });
+    let tick = 0;
+    L.on('tick', () => { if (++tick % 30 === 0 && !document.querySelector('.exam')) renderRail(); });
     R().sweep().then(() => L.render()).catch((e) => { console.error(e); L.render(); });
   };
 
@@ -111,7 +112,7 @@
         <div class="welcome-left">
           <div class="wordmark">Lyceum</div>
           <h1>Any material you bring becomes a real course, with a real calendar.</h1>
-          <p class="lede">Upload notes, a textbook chapter, a PDF or a web page. The registrar reads it, fixes a term, timetables the lectures, sets the quizzes, problem sets and examinations, and keeps a permanent record of how you do. You study; the schedule holds.</p>
+          <p class="lede">Upload notes, a textbook chapter, a PDF or a web page. The registrar reads it, proposes three pacings, and once you choose one it fixes the term: a daily study block of bite-sized chunks, quizzes, problem sets and examinations, and a permanent record of how you do. You study; the schedule holds.</p>
           <ul class="rules">
             <li><span class="n">01</span><span>The schedule is binding. Once you enrol, dates, weights and examinations cannot be changed.</span></li>
             <li><span class="n">02</span><span>The clock is real. Papers open and close on the calendar, not when you feel ready.</span></li>
@@ -169,19 +170,24 @@
           <div class="page-head"><div><span class="eyebrow">${esc(eyebrow)}</span><h1 class="display">${greeting()}, ${esc(firstName())}.</h1><p class="lede">You are not enrolled in anything yet. Bring the registrar some material and it will come back as a course with a term calendar.</p></div></div>
           <div class="empty">
             <h2>Start with what you want to learn.</h2>
-            <p>Drop in a PDF, a chapter, lecture notes or a web page. The registrar assesses the material, fixes the length of the term and the weekly hours, timetables the lectures and sets every quiz, problem set and examination in advance.</p>
+            <p>Drop in a PDF, a chapter, lecture notes or a web page. The registrar assesses the material, proposes a condensed, a standard and an extended pace, and once you choose it fixes every study day, quiz, problem set and examination in advance.</p>
             <div class="cols mt-3"><a class="btn btn-primary" href="#/enrol">Enrol in a course</a><button class="btn" data-act="load-sample">Load the sample course</button></div>
             <p class="small muted mt-2">The sample is six lectures of introductory probability, plainly marked as sample material.</p>
           </div>
         </div>`;
       }
       const sessions = R().sessionsOn(today);
+      const todayIso = L.date.iso(today);
+      const overdue = [];
+      for (const c of L.S.courses) if (c.state === 'enrolled') for (const s of c.sessions) if (s.date < todayIso && s.date >= L.date.iso(L.date.addDays(today, -7))) for (const k of s.chunks) if (!k.done) overdue.push({ c, s, k });
       const openNow = [];
       for (const c of L.S.courses) if (c.state === 'enrolled') for (const a of c.assessments) { const st = R().assessmentState(c, a); if (['open', 'late', 'in_progress'].includes(st)) openNow.push({ c, a, st }); }
       const due = R().deadlines({ from: now, to: now + 7 * 86400000 }).filter(({ course: c, assessment: a }) => !a.grade && R().assessmentState(c, a) !== 'in_progress');
       const nd = R().nextDeadline();
+      const todayChunks = sessions.flatMap(({ session: s }) => s.chunks);
+      const todayDone = todayChunks.filter((k) => k.done).length;
       const lede = [
-        sessions.length ? `${sessions.length === 1 ? 'One session' : sessions.length + ' sessions'} today.` : 'No sessions today.',
+        todayChunks.length ? `${todayChunks.length} study chunk${todayChunks.length === 1 ? '' : 's'} today, about ${L.fmt.dur(L.sum(todayChunks.map((k) => k.minutes)))}${todayDone ? ` · ${todayDone} done` : ''}.` : 'No study block today.',
         nd ? `${esc(nd.assessment.title)} for ${esc(nd.course.code)} is due ${L.fmt.rel(nd.at - now)}.` : 'Nothing is due in the coming days.',
       ].join(' ');
       const load = R().load();
@@ -196,13 +202,9 @@
           <div class="actions"><a class="btn" href="#/enrol">Enrol</a></div></div>
         <div class="today-grid">
           <div>
-            <div class="section" style="margin-top:0"><div class="section-head"><h2>Today</h2><span class="small muted">${esc(L.fmt.date(now))}</span></div>
-              ${sessions.length ? `<div class="agenda">${sessions.map(({ course: c, session: s }) => {
-                const start = L.date.setTime(today, Math.floor(s.start / 60), s.start % 60);
-                const end = L.date.addMin(start, s.minutes);
-                const past = now > end.getTime();
-                return `<div class="agenda-item${past && !s.attended ? ' is-past' : ''}"><div class="time">${L.fmt.time(start)}–${L.fmt.time(end)}</div><div class="who"><span class="dot" style="--ch:${c.hue}"></span><span class="code" style="--ch:${c.hue}">${esc(c.code)}</span></div><div class="what"><div class="t truncate">${esc(s.kind)} · ${esc(s.topic)}</div><div class="s">${esc(c.title)} · week ${s.week}</div></div><div class="action">${s.attended ? '<span class="chip" data-state="good">Attended</span>' : `<button class="btn btn-sm" data-act="attend" data-course="${c.id}" data-session="${s.id}">Attend</button>`}</div></div>`;
-              }).join('')}</div>` : `<p class="muted">No lectures today. ${nd ? 'Use the time on what is due next.' : ''}</p>`}
+            <div class="section" style="margin-top:0"><div class="section-head"><h2>Today's study</h2><span class="small muted">${esc(L.fmt.date(now))}${todayChunks.length ? ` · ${todayDone}/${todayChunks.length}` : ''}</span></div>
+              ${sessions.length ? sessions.map(({ course: c, session: s }) => L.studyBlock(c, s, { today: true })).join('') : `<p class="muted">No study block today. ${nd ? 'Use the time on what is due next.' : ''}</p>`}
+              ${overdue.length ? `<div class="mt-3"><span class="label">Catch up · ${overdue.length} chunk${overdue.length === 1 ? '' : 's'} from earlier days</span><div class="chunks mt-1">${overdue.slice(0, 6).map(({ c, s, k }) => L.chunkRow(c, s, k)).join('')}${overdue.length > 6 ? `<p class="small muted">… and ${overdue.length - 6} more in the course plans.</p>` : ''}</div></div>` : ''}
             </div>
             <div class="section"><div class="section-head"><h2>Open now</h2></div>
               ${openNow.length ? `<div class="agenda">${openNow.map(({ c, a, st }) => `<div class="agenda-item"><div class="time">${st === 'in_progress' ? `<span data-countdown="${R().deadline(c, a)}">${L.fmt.rel(R().deadline(c, a) - now)}</span>` : st === 'late' ? `closes ${L.fmt.rel(L.date.parse(a.closesAt) - now)}` : `due ${L.fmt.rel(L.date.parse(a.dueAt) - now)}`}</div><div class="who"><span class="dot" style="--ch:${c.hue}"></span><span class="code" style="--ch:${c.hue}">${esc(c.code)}</span></div><div class="what"><div class="t">${esc(a.title)} ${stateChip(st)}</div><div class="s">${a.durationMin ? L.fmt.dur(a.durationMin) + ' · ' : ''}${esc(R().KIND_TITLE[a.kind])} · closes ${L.fmt.dt(a.closesAt)}</div></div><div class="action">${L.actionFor(c, a)}</div></div>`).join('')}</div>` : '<p class="muted">Nothing is open at the moment.</p>'}
@@ -224,10 +226,30 @@
     },
   };
   L.actions['load-sample'] = () => { L.go('/enrol?sample=1'); };
-  L.actions.attend = async (el) => {
-    const r = await R().attend(el.dataset.course, el.dataset.session);
-    if (r === 'attended') { L.ui.toast('Attendance recorded.', 'good'); const c = R().course(el.dataset.course); const s = c.sessions.find((x) => x.id === el.dataset.session); L.go(`/course/${c.id}/week/${s.week}`); }
-    else if (r === 'not_today') L.ui.toast('Attendance can only be recorded on the day of the session.', 'warn');
-    else L.render();
+
+  // one day's study block: heading + numbered bite-sized chunks
+  const KIND_LABEL = { read: 'Read', practise: 'Practise', review: 'Review' };
+  L.chunkRow = (c, s, k, { number } = {}) => {
+    const todayIso = L.date.iso(L.today());
+    const state = k.done ? (L.date.iso(k.done) <= s.date ? 'done' : 'late') : s.date < todayIso ? 'overdue' : s.date > todayIso ? 'future' : 'due';
+    const where = k.kind === 'read' ? (k.pages ? (k.pages[0] === k.pages[1] ? `p. ${k.pages[0]}` : `pp. ${k.pages[0]}–${k.pages[1]}`) : 'text') : '';
+    const href = k.kind === 'read' ? `#/course/${c.id}/day/${s.date}?chunk=${k.id}` : `#/course/${c.id}/day/${s.date}`;
+    return `<div class="chunk" data-state="${state}"><label class="chunk-check"><input type="checkbox" data-in="chunk-done" data-course="${c.id}" data-session="${s.id}" data-chunk="${k.id}"${k.done ? ' checked disabled' : state === 'future' ? ' disabled' : ''}><span class="sr-only">Done</span></label>
+      <div class="chunk-body"><a class="chunk-title" href="${href}">${number ? `<span class="chunk-n">${number}</span>` : ''}${esc(k.title)}</a><div class="chunk-meta"><span class="pill">${KIND_LABEL[k.kind] || k.kind}</span>${where ? ` <span class="mono">${where}</span>` : ''} <span class="num">${k.minutes} min</span>${state === 'late' ? ' <span class="chip" data-state="warn">Done late</span>' : state === 'overdue' ? ` <span class="chip" data-state="bad">Due ${L.fmt.date(s.date)}</span>` : ''}</div></div></div>`;
+  };
+  L.studyBlock = (c, s, { today = false } = {}) => {
+    const done = s.chunks.filter((k) => k.done).length;
+    const h = Math.floor(s.start / 60), m = s.start % 60;
+    return `<div class="study-block" style="--ch:${c.hue}"><div class="study-head"><div><span class="code" style="--ch:${c.hue}">${esc(c.code)}</span> <span class="small muted">· week ${s.week} · ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')} · ${L.fmt.dur(s.minutes)}</span><div class="study-topic">${esc(s.topic)}</div></div><div class="num small muted">${done}/${s.chunks.length}</div></div>
+      <div class="progress mb-2"><i style="width:${s.chunks.length ? (done / s.chunks.length) * 100 : 0}%"></i></div>
+      <div class="chunks">${s.chunks.map((k, i) => L.chunkRow(c, s, k, { number: i + 1 })).join('')}</div></div>`;
+  };
+  L.inputs['chunk-done'] = async (el) => {
+    if (!el.checked) return;
+    const r = await R().complete(el.dataset.course, el.dataset.session, el.dataset.chunk);
+    if (r === 'not_yet') { el.checked = false; L.ui.toast('That chunk is scheduled for a later day.', 'warn'); return; }
+    if (r === 'late') L.ui.toast('Done — recorded as late (half credit).', 'warn');
+    else if (r === 'done') L.ui.toast('Done.', 'good', 1600);
+    L.render();
   };
 })(window.L);

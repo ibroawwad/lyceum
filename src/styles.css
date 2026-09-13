@@ -352,19 +352,119 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .rules li:last-child { border-bottom: 1px solid var(--line); }
 .rules .n { font-family: var(--font-mono); font-size: 12px; color: var(--accent); padding-top: 2px; }
 
-/* ---------- responsive ---------- */
-@media (max-width: 1100px) { .week-row { grid-template-columns: 56px 100px minmax(0, 1fr); } .week-row .sessions, .week-row .due { grid-column: 2 / -1; } }
-@media (max-width: 900px) {
-  .app { grid-template-columns: 1fr; } .rail { position: static; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; border-right: 0; border-bottom: 1px solid var(--line); padding: 12px 16px; gap: 8px; }
-  .rail-nav { flex-direction: row; flex-wrap: wrap; } .rail-foot { display: none; } .rail-brand { padding: 0 8px 0 0; }
-  .page { padding: 24px 20px 56px; } .today-grid, .grid-2, .grid-3, .reading-layout { grid-template-columns: 1fr; } .exam-bar { margin: -24px 0 20px; }
-  .welcome { grid-template-columns: 1fr; } .welcome-left, .welcome-right { padding: 40px 28px; }
-  .agenda-item, .due-list .agenda-item { grid-template-columns: 90px minmax(0, 1fr); } .agenda-item .who { grid-column: 1; } .agenda-item .action { grid-column: 2; }
+/* ---------- study blocks & chunks ---------- */
+.study-block { border: 1px solid var(--line); border-left: 3px solid hsl(var(--ch, 160) var(--course-s) var(--course-l)); border-radius: var(--radius); background: var(--surface); padding: 12px 14px 8px; margin-bottom: 12px; }
+.study-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 8px; }
+.study-topic { font-family: var(--font-display); font-weight: 500; font-size: 19px; line-height: 1.2; margin-top: 2px; text-wrap: balance; }
+.chunks { display: flex; flex-direction: column; }
+.chunk { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 10px; align-items: flex-start; padding: 9px 0; border-top: 1px solid var(--line); }
+.chunk-check { display: flex; align-items: center; height: 22px; }
+.chunk-check input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.chunk-check input:disabled { cursor: default; }
+.chunk-title { display: block; color: var(--ink); font-weight: 500; line-height: 1.35; }
+.chunk-title:hover { text-decoration: none; color: var(--accent); }
+.chunk-n { display: inline-block; font-family: var(--font-mono); font-size: 11px; color: var(--muted); width: 18px; }
+.chunk-meta { font-size: 12px; color: var(--muted); margin-top: 3px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.chunk[data-state="done"] .chunk-title, .chunk[data-state="late"] .chunk-title { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--line-2); }
+.chunk[data-state="future"] { opacity: 0.7; }
+.plan-week { margin-top: 28px; }
+.plan-days { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+.plan-day .plan-date { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.plan-day.is-today .plan-date { color: var(--accent); font-weight: 600; }
+.plan-day.is-past { opacity: 0.75; }
+
+/* ---------- pace cards ---------- */
+.paces { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.pace-card { border: 1px solid var(--line-2); border-radius: var(--radius); background: var(--surface); padding: 18px 18px 16px; display: flex; flex-direction: column; gap: 8px; }
+.pace-card.is-default { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.pace-card.is-unavailable { opacity: 0.6; background: var(--paper); }
+.pace-card .pace-n { font-family: var(--font-mono); font-size: 40px; font-weight: 500; line-height: 1; font-variant-numeric: tabular-nums; }
+.pace-card .pace-n span { font-family: var(--font-body); font-size: 14px; color: var(--muted); font-weight: 400; }
+.pace-card .kv { margin-top: 4px; }
+
+/* ---------- original pages ---------- */
+.reading-src { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.reading-src .switch a { padding: 4px 10px; font-size: 12px; color: var(--ink-2); letter-spacing: 0; text-transform: none; font-family: var(--font-body); }
+.reading-src .switch a.is-on { background: var(--ink); color: var(--paper); }
+.reading-src .switch a:hover { text-decoration: none; }
+.pages { display: flex; flex-direction: column; gap: 18px; }
+.pdf-page { margin: 0; }
+.pdf-page canvas { display: block; max-width: 100%; height: auto; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.12), 0 6px 20px rgba(0,0,0,0.08); border: 1px solid var(--line); }
+.pdf-page figcaption { margin-top: 6px; }
+.html-page { font-family: var(--font-body); font-size: 15px; line-height: 1.6; max-width: 72ch; }
+.html-page img { max-width: 100%; height: auto; }
+.html-page h1, .html-page h2, .html-page h3 { margin: 24px 0 8px; }
+.html-page table { border-collapse: collapse; max-width: 100%; display: block; overflow-x: auto; }
+.html-page td, .html-page th { border: 1px solid var(--line); padding: 4px 8px; }
+.agenda-14 { display: none; }
+.agenda-day { padding: 10px 0; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 4px; }
+.agenda-date { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+
+/* ---------- responsive: tablet ---------- */
+@media (max-width: 1100px) { .week-row { grid-template-columns: 56px 100px minmax(0, 1fr); } .week-row .sessions, .week-row .due { grid-column: 2 / -1; } .paces { grid-template-columns: 1fr; } }
+
+/* ---------- responsive: phone — the rail becomes a bottom tab bar ---------- */
+@media (max-width: 760px) {
+  :root { --rail-w: 0px; }
+  .app { grid-template-columns: 1fr; padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+  .rail { position: fixed; left: 0; right: 0; bottom: 0; top: auto; height: auto; z-index: 30; flex-direction: row; align-items: stretch; padding: 0; border-right: 0; border-top: 1px solid var(--line-2); background: var(--surface); padding-bottom: env(safe-area-inset-bottom); }
+  .rail-brand, .rail-foot { display: none; }
+  .rail-nav { flex: 1; flex-direction: row; gap: 0; }
+  .rail-nav a { flex: 1; flex-direction: column; justify-content: center; gap: 3px; padding: 8px 2px 6px; border-left: 0; border-top: 2px solid transparent; border-radius: 0; font-size: 10.5px; font-weight: 500; letter-spacing: 0.02em; color: var(--muted); }
+  .rail-nav a svg { width: 20px; height: 20px; opacity: 1; }
+  .rail-nav a[aria-current="page"] { background: transparent; box-shadow: none; color: var(--accent); border-top-color: var(--accent); }
+  .rail-nav .badge { position: absolute; margin: 0; transform: translate(14px, -8px); font-size: 10px; padding: 0 5px; }
+  .rail-nav a { position: relative; }
+  .rail-nav .rail-enrol { display: none; }
+  .page { padding: 18px 16px 48px; }
+  .page-head { flex-direction: column; align-items: stretch; gap: 12px; padding-bottom: 14px; margin-bottom: 18px; }
+  .page-head .actions { flex-wrap: wrap; }
+  .display { font-size: 26px; }
+  .lede { font-size: 15px; }
+  .today-grid, .grid-2, .grid-3, .reading-layout { grid-template-columns: 1fr; }
+  .reading-side { position: static; }
+  .section { margin-top: 24px; }
+  .agenda-item, .due-list .agenda-item { grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; }
+  .agenda-item .time { grid-column: 1 / -1; font-size: 12px; }
+  .agenda-item .who { grid-column: 1; } .agenda-item .what { grid-column: 1; } .agenda-item .action { grid-column: 2; grid-row: 2 / 4; align-self: center; }
+  .week-row { grid-template-columns: 48px minmax(0, 1fr); gap: 8px 12px; padding: 12px 8px; }
+  .week-row .dates { grid-column: 2; font-size: 12px; } .week-row .sessions, .week-row .due { grid-column: 1 / -1; }
+  .exam-bar { grid-template-columns: minmax(0, 1fr) auto; gap: 8px 14px; padding: 10px 14px; margin: -18px -16px 18px; border-radius: 0; }
+  .exam-bar .count { grid-column: 1; font-size: 11.5px; } .exam-bar .timer { grid-column: 2; grid-row: 1 / 3; font-size: 30px; align-self: center; }
+  .options label { min-height: 44px; align-items: center; }
+  .question .prompt { font-size: 15.5px; } .question .prompt.serif { font-size: 17px; }
+  .result-head { grid-template-columns: 1fr; padding: 16px; } .result-head .score { font-size: 36px; }
+  .calendar, .timetable { display: none; }
+  .agenda-14 { display: block; }
+  .transcript { padding: 18px 16px; } .transcript .table { display: block; overflow-x: auto; white-space: nowrap; }
+  .transcript-head { flex-direction: column; }
+  .table td, .table th { padding: 8px 6px; font-size: 13px; }
+  .assess-table thead { display: none; }
+  .assess-table tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .assess-table td { display: block; border: 0; padding: 0; }
+  .assess-table td:nth-child(2)::before { content: "Opens "; color: var(--muted); } .assess-table td:nth-child(3)::before { content: "Due "; color: var(--muted); }
+  .assess-table td:nth-child(4), .assess-table td:nth-child(5) { display: none; }
+  .assess-table td:nth-child(6), .assess-table td:nth-child(7), .assess-table td.action { grid-column: 2; text-align: right; }
+  .assess-table td:first-child { grid-row: 1 / 4; }
+  .wizard-steps { font-size: 12px; } .wizard-step { padding: 8px 8px; }
+  .source-row { grid-template-columns: auto minmax(0, 1fr); } .source-row .num { grid-column: 2; }
+  .prospectus-head, .prospectus-body { padding: 18px 16px; } .prospectus-head { flex-direction: column; } .prospectus-head h2 { font-size: 24px; }
+  .weights { grid-template-columns: repeat(2, 1fr); }
+  .plan-days { grid-template-columns: 1fr; }
+  .welcome { grid-template-columns: 1fr; min-height: auto; } .welcome-left, .welcome-right { padding: 32px 20px; } .welcome-left h1 { font-size: 30px; }
+  .toast-host { left: 12px; right: 12px; bottom: calc(76px + env(safe-area-inset-bottom)); max-width: none; }
+  .modal { width: calc(100vw - 24px); padding: 18px 16px; }
+  .busy { margin: 0 0 14px; }
+  .tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; } .tabs a { white-space: nowrap; padding: 8px 10px; }
+  .study-topic { font-size: 17px; }
+  .empty { padding: 28px 18px; } .empty h2 { font-size: 22px; }
+  .cols > .btn { flex: 1 1 auto; }
 }
+@media (max-width: 760px) and (display-mode: standalone) { .rail { padding-bottom: max(env(safe-area-inset-bottom), 6px); } }
 
 /* ---------- print ---------- */
 @media print {
   .rail, .page-head .actions, .btn, .toast-host, .modal-host, .tabs { display: none !important; }
-  .app { display: block; } .page { max-width: none; padding: 0; } body { background: #fff; color: #000; }
+  .app { display: block; padding: 0; } .page { max-width: none; padding: 0; } body { background: #fff; color: #000; }
   .transcript { border: 0; padding: 0; }
 }

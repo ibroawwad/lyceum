@@ -25,7 +25,7 @@
         const sess = R().sessionsOn(d);
         const due = R().deadlines({ from: D.setTime(d, 0, 0), to: D.setTime(d, 23, 59, 59) });
         const ev = [
-          ...sess.map(({ course: c, session: s }) => `<a class="cal-ev" style="--ch:${c.hue}" href="#/course/${c.id}/week/${s.week}" title="${esc(c.title)} · ${esc(s.kind)}">${hm(s.start)} ${esc(c.code)}${s.attended ? ' ✓' : ''}</a>`),
+          ...sess.map(({ course: c, session: s }) => `<a class="cal-ev" style="--ch:${c.hue}" href="#/course/${c.id}/day/${s.date}" title="${esc(c.title)} · ${s.chunks.length} chunks">${hm(s.start)} ${esc(c.code)}${s.chunks.length && s.chunks.every((k) => k.done) ? ' ✓' : ''}</a>`),
           ...due.map(({ course: c, assessment: a }) => `<a class="cal-ev is-due${a.kind === 'midterm' || a.kind === 'final' ? ' is-exam' : ''}" style="--ch:${c.hue}" href="#/assess/${c.id}/${a.id}" title="${esc(a.title)} due ${L.fmt.time(a.dueAt)}">${esc(a.title)} · ${esc(c.code)}</a>`),
         ];
         cells.push(`<div class="cal-day${other ? ' is-other' : ''}${iso === D.iso(today) ? ' is-today' : ''}"><div class="d">${d.getDate()}${d.getDate() === 1 ? ' ' + D.monthName(d).slice(0, 3) : ''}</div>${ev.join('')}</div>`);
@@ -36,7 +36,7 @@
       const H0 = 8, H1 = 21, PX = 40; // 40px per hour → 520px
       const cols = DAYS.map((name, di) => {
         const d = D.addDays(weekStart, di);
-        const blocks = R().sessionsOn(d).map(({ course: c, session: s }) => `<a class="tt-block" style="--ch:${c.hue};top:${((s.start / 60) - H0) * PX}px;height:${(s.minutes / 60) * PX - 2}px" href="#/course/${c.id}/week/${s.week}" title="${esc(c.title)}"><b>${esc(c.code)}</b>${hm(s.start)} · ${esc(s.kind)}</a>`);
+        const blocks = R().sessionsOn(d).map(({ course: c, session: s }) => `<a class="tt-block" style="--ch:${c.hue};top:${((s.start / 60) - H0) * PX}px;height:${(s.minutes / 60) * PX - 2}px" href="#/course/${c.id}/day/${s.date}" title="${esc(c.title)}"><b>${esc(c.code)}</b>${hm(s.start)} · ${s.chunks.length} chunks</a>`);
         const exams = R().deadlines({ from: D.setTime(d, 0, 0), to: D.setTime(d, 23, 59, 59) }).filter(({ assessment: a }) => a.durationMin && (a.kind === 'midterm' || a.kind === 'final')).map(({ course: c, assessment: a }) => `<a class="tt-block" style="--ch:${c.hue};top:${(new Date(a.opensAt).getHours() - H0) * PX}px;height:${(new Date(a.dueAt) - new Date(a.opensAt)) / 3600000 * PX - 2}px;background:var(--surface-2);border-left-color:var(--ink)" href="#/assess/${c.id}/${a.id}"><b>${esc(c.code)}</b>${esc(a.title)} window</a>`);
         return `<div class="tt-col">${blocks.join('')}${exams.join('')}</div>`;
       });
@@ -46,15 +46,16 @@
         <div class="page-head"><div><span class="eyebrow">Calendar</span><h1 class="display">${D.monthName(m)} ${m.getFullYear()}</h1></div>
           <div class="actions cal-nav"><a class="btn btn-quiet" href="#/calendar?m=${ym(prev)}">← ${D.monthName(prev).slice(0, 3)}</a><a class="btn" href="#/calendar">Today</a><a class="btn btn-quiet" href="#/calendar?m=${ym(next)}">${D.monthName(next).slice(0, 3)} →</a></div></div>
         <div class="calendar">${DAYS.map((d) => `<div class="cal-h">${d}</div>`).join('')}${cells.join('')}</div>
+        <div class="agenda-14">${Array.from({ length: 14 }, (_, i) => D.addDays(today, i)).map((d, i) => { const sess = R().sessionsOn(d); const due = R().deadlines({ from: D.setTime(d, 0, 0), to: D.setTime(d, 23, 59, 59) }); if (!sess.length && !due.length) return ''; return `<div class="agenda-day"><div class="agenda-date"><b>${D.dayName(d).slice(0, 3)}</b> ${L.fmt.date(d).slice(4)}${i === 0 ? ' · today' : ''}</div>${sess.map(({ course: c, session: s }) => `<a class="cal-ev" style="--ch:${c.hue}" href="#/course/${c.id}/day/${s.date}">${hm(s.start)} ${esc(c.code)} · ${s.chunks.length} chunks · ${L.fmt.dur(s.minutes)}</a>`).join('')}${due.map(({ course: c, assessment: a }) => `<a class="cal-ev is-due${a.kind === 'midterm' || a.kind === 'final' ? ' is-exam' : ''}" style="--ch:${c.hue}" href="#/assess/${c.id}/${a.id}">${esc(a.title)} · ${esc(c.code)} · ${L.fmt.time(a.dueAt)}</a>`).join('')}</div>`; }).join('') || '<p class="muted small">Nothing in the next two weeks.</p>'}</div>
         <div class="cols mt-2 small muted">${active.map((c) => `<span class="cols gap-1"><span class="dot" style="--ch:${c.hue}"></span>${esc(c.code)} ${esc(c.title)}</span>`).join('') || 'No active courses.'}</div>
-        <div class="section"><div class="section-head"><h2>Timetable · week of ${L.fmt.date(weekStart)}</h2><span class="small muted">Concurrent courses never share a slot</span></div>
+        <div class="section"><div class="section-head"><h2>Timetable · week of ${L.fmt.date(weekStart)}</h2><span class="small muted">Concurrent courses never share a block</span></div>
           <div class="timetable"><div class="tt-h"></div>${DAYS.map((n, i) => `<div class="tt-h${D.iso(D.addDays(weekStart, i)) === D.iso(today) ? ' is-today' : ''}">${n} ${D.addDays(weekStart, i).getDate()}</div>`).join('')}<div class="tt-hours">${hours.join('')}</div>${cols.join('')}</div></div>
       </div>`;
     },
   };
 
   // ---------- record ----------
-  const LEDGER_LABEL = { matriculated: 'Matriculated', enrolled: 'Enrolled', withdrawn: 'Withdrew', session_attended: 'Attended session', assessment_started: 'Began paper', assessment_submitted: 'Submitted paper', assessment_graded: 'Graded', assessment_missed: 'Missed', course_completed: 'Course completed', clock_override: 'Clock moved', clock_reset: 'Clock reset', settings_changed: 'Settings changed', data_imported: 'Record imported' };
+  const LEDGER_LABEL = { matriculated: 'Matriculated', enrolled: 'Enrolled', withdrawn: 'Withdrew', session_attended: 'Attended session', chunk_completed: 'Chunk done', assessment_started: 'Began paper', assessment_submitted: 'Submitted paper', assessment_graded: 'Graded', assessment_missed: 'Missed', course_completed: 'Course completed', clock_override: 'Clock moved', clock_reset: 'Clock reset', settings_changed: 'Settings changed', data_imported: 'Record imported' };
   function ledgerDetail(e) {
     const c = e.courseId && R().course(e.courseId);
     const code = c ? c.code : (e.detail.code || '');
@@ -65,6 +66,7 @@
       case 'enrolled': return `${code} ${d.title} · ${d.weeks} weeks from ${L.fmt.date(d.start)}`;
       case 'withdrawn': return `${code} in week ${d.week}`;
       case 'session_attended': return `${code} · week ${d.week} ${d.kind}`;
+      case 'chunk_completed': return `${code} · ${d.title}${d.onTime ? '' : ' · late'}`;
       case 'assessment_started': return `${code} · ${a ? a.title : d.kind} · seal ${String(d.seal || '').slice(0, 8)}`;
       case 'assessment_submitted': return `${code} · ${a ? a.title : ''} · ${d.answered}/${d.of} answered${d.auto ? ' · auto' : ''}`;
       case 'assessment_graded': return `${code} · ${a ? a.title : ''} · ${L.fmt.pct(d.pct)}${d.penaltyPct ? ` (−${d.penaltyPct}% late)` : ''} · ${d.source}`;
@@ -86,7 +88,7 @@
         <div class="transcript">
           <div class="transcript-head"><div><div class="label">Student</div><div class="serif" style="font-size:24px;font-weight:500">${esc(s.name)}</div><div class="mono small muted">${esc(s.id)} · matriculated ${L.fmt.date(s.createdAt)}</div></div><div class="seal-lg">L</div></div>
           <table class="table"><thead><tr><th>Code</th><th>Course</th><th class="num">Credits</th><th>Term</th><th class="num">Mark</th><th class="num">Grade</th></tr></thead><tbody>
-            ${courses.length ? courses.map((c) => { const st = R().courseState(c); const sd = R().standing(c); return `<tr><td class="code" style="--ch:${c.hue}">${esc(c.code)}</td><td>${esc(c.title)}<div class="small muted">${esc(c.level)}</div></td><td class="num">${c.credits}</td><td class="mono small">${L.fmt.date(c.term.start)} – ${L.fmt.date(c.term.end)}</td><td class="num">${c.final ? (c.final.pct == null ? '—' : L.fmt.pct(c.final.pct)) : (sd.current == null ? '—' : L.fmt.pct(sd.current) + '*')}</td><td class="num"><span class="letter" style="font-size:18px">${c.final ? c.final.letter : (st === 'upcoming' ? '·' : 'IP')}</span></td></tr>`; }).join('') : '<tr class="row-muted"><td colspan="6">No courses on record.</td></tr>'}
+            ${courses.length ? courses.map((c) => { const st = R().courseState(c); const sd = R().standing(c); return `<tr><td class="code" style="--ch:${c.hue}">${esc(c.code)}</td><td>${esc(c.title)}<div class="small muted">${esc(c.level)}${c.plan.paceLabel ? ` · ${esc(c.plan.paceLabel.toLowerCase())} pace` : ''}</div></td><td class="num">${c.credits}</td><td class="mono small">${L.fmt.date(c.term.start)} – ${L.fmt.date(c.term.end)}</td><td class="num">${c.final ? (c.final.pct == null ? '—' : L.fmt.pct(c.final.pct)) : (sd.current == null ? '—' : L.fmt.pct(sd.current) + '*')}</td><td class="num"><span class="letter" style="font-size:18px">${c.final ? c.final.letter : (st === 'upcoming' ? '·' : 'IP')}</span></td></tr>`; }).join('') : '<tr class="row-muted"><td colspan="6">No courses on record.</td></tr>'}
           </tbody></table>
           <div class="cols mt-3" style="justify-content:space-between"><div class="small muted">IP = in progress (*standing to date) · W = withdrawn · GPA counts completed courses only</div><div class="cols gap-3"><span><span class="label">Credits</span> <b class="num">${g.credits}</b></span><span><span class="label">GPA</span> <b class="num">${g.gpa == null ? '—' : g.gpa.toFixed(2)}</b></span></div></div>
         </div>

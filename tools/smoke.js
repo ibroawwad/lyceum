@@ -49,7 +49,13 @@ const local = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.
 
   console.log('2. sample course → prospectus');
   await page.click('[data-act=load-sample]');
-  await page.waitForSelector('.prospectus', { timeout: 60000 });
+  await page.waitForSelector('.paces', { timeout: 60000 });
+  await shot('02-paces');
+  const paceWeeks = await page.evaluate(() => Array.from(document.querySelectorAll('.pace-card .pace-n')).map((n) => parseInt(n.textContent, 10)));
+  assert(paceWeeks.length === 3 && new Set(paceWeeks.filter(Number.isFinite)).size === paceWeeks.filter(Number.isFinite).length, `three pacings with distinct lengths (${paceWeeks.join('/')})`);
+  assert(paceWeeks[0] <= paceWeeks[1] && paceWeeks[1] <= paceWeeks[2], 'condensed ≤ standard ≤ extended');
+  await page.click('[data-act=choose-pace][data-pace=standard]');
+  await page.waitForSelector('.prospectus', { timeout: 10000 });
   await shot('02-prospectus');
   const pro = await page.evaluate(() => window.__prospectus || null);
   assert(pro, 'wizard exposes window.__prospectus while a prospectus is shown (debug aid)');
@@ -65,27 +71,51 @@ const local = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.
     assert(w === 100, `weights sum to 100 (${w})`);
     assert(new Date(pro.term.start + 'T00:00:00').getDay() === 1, 'term starts on a Monday');
     assert(pro.sessions.length >= pro.term.weeks * 2 - 2, 'sessions generated for every teaching week');
+    assert(pro.plan.pace === 'standard' && pro.plan.studyDays.length === 5, 'standard pace: Mon–Fri study blocks');
+    assert(pro.sessions.every((s) => s.chunks.length >= 2 && s.chunks.length <= 5), 'every study block has 2–5 chunks');
+    assert(pro.sessions.every((s) => s.chunks.every((k) => k.minutes >= 5 && k.minutes <= 25)), 'every chunk is 5–25 minutes');
+    const readSegs = pro.sessions.flatMap((s) => s.chunks.filter((k) => k.kind === 'read').map((k) => k.segment));
+    assert(new Set(readSegs).size === pro.material.segments.length, `reading chunks cover every segment (${new Set(readSegs).size}/${pro.material.segments.length})`);
+    const reads = pro.sessions.flatMap((s) => s.chunks.filter((k) => k.kind === 'read')).sort((a, b) => a.from - b.from);
+    assert(reads.every((k, i) => i === 0 || k.from >= reads[i - 1].to), 'reading chunks never overlap');
   }
   await page.click('[data-act=enrol-confirm]');
   await okModal();
-  await page.waitForFunction(() => L.route().name === 'course' && document.querySelector('.syllabus'), null, { timeout: 15000 });
+  await page.waitForFunction(() => L.route().name === 'course' && document.querySelector('.plan'), null, { timeout: 15000 });
   assert((await route()) === 'course', 'enrolment lands on the course page');
   const course = await page.evaluate(() => L.S.courses[0]);
   assert(course && course.code && /\s\d{3}$/.test(course.code), `course code assigned (${course && course.code})`);
   assert(course.weeks.length === course.term.weeks, 'weeks array matches term length');
-  assert(course.weeks.every((w) => w.segments.length > 0), 'every week has reading segments');
+  assert(course.weeks.every((w) => w.kind === 'final' || w.segments.length > 0), 'every teaching week has reading segments');
   const ledger1 = await page.evaluate(() => L.S.ledger.map((e) => e.type));
   assert(ledger1.includes('matriculated') && ledger1.includes('enrolled'), 'ledger has matriculated + enrolled');
-  await shot('03-course-syllabus');
+  await shot('03-course-plan');
 
-  console.log('3. attend a session on its day');
+  console.log('3. daily chunks: today, not yet, late');
   const s0 = course.sessions[0];
   await setClock(`${s0.date}T${String(Math.floor(s0.start / 60)).padStart(2, '0')}:${String(s0.start % 60).padStart(2, '0')}:30`);
   await sweep();
-  const att = await page.evaluate(({ cid, sid }) => L.registrar.attend(cid, sid), { cid: course.id, sid: s0.id });
-  assert(att === 'attended', 'attendance recorded on the session day');
-  const att2 = await page.evaluate(({ cid, sid }) => L.registrar.attend(cid, sid), { cid: course.id, sid: course.sessions[1].id });
-  assert(att2 === 'not_today', 'cannot attend a session on another day');
+  await page.goto(file + '?debug=1#/today');
+  await page.waitForSelector('.study-block', { timeout: 5000 });
+  await shot('03b-today-study');
+  const nChecks = await page.evaluate(() => document.querySelectorAll('.study-block [data-in=chunk-done]').length);
+  assert(nChecks === s0.chunks.length, `today's study lists the day's ${s0.chunks.length} chunks`);
+  const done1 = await page.evaluate(({ cid, sid, kid }) => L.registrar.complete(cid, sid, kid), { cid: course.id, sid: s0.id, kid: s0.chunks[0].id });
+  assert(done1 === 'done', 'a chunk completed on its day counts on time');
+  const notYet = await page.evaluate(({ cid, sid, kid }) => L.registrar.complete(cid, sid, kid), { cid: course.id, sid: course.sessions[2].id, kid: course.sessions[2].chunks[0].id });
+  assert(notYet === 'not_yet', 'a future day\'s chunk cannot be completed early');
+  const s1 = course.sessions[1];
+  await setClock(`${course.sessions[2].date}T12:00:00`);
+  await sweep();
+  const late1 = await page.evaluate(({ cid, sid, kid }) => L.registrar.complete(cid, sid, kid), { cid: course.id, sid: s1.id, kid: s1.chunks[0].id });
+  assert(late1 === 'late', 'a chunk completed after its day is recorded late');
+  const part = await page.evaluate((cid) => L.registrar.standing(L.registrar.course(cid)).participation, course.id);
+  assert(part && part.done === 2 && Math.abs(part.credit - 1.5) < 1e-9, `participation credit: on-time 1 + late ½ (${part && part.credit})`);
+  await page.goto(file + `?debug=1#/course/${course.id}/day/${s0.date}`);
+  await page.waitForFunction(() => document.querySelector('#reading-body') && !/Loading/.test(document.querySelector('#reading-body').textContent), null, { timeout: 10000 });
+  const readTxt = await page.evaluate(() => document.querySelector('#reading-body').innerText.length);
+  assert(readTxt > 200, 'day view shows the chunk\'s material (text source)');
+  await shot('03c-day-view');
 
   console.log('4. quiz 1: locked → open → sit → graded');
   const quiz1 = course.assessments.find((a) => a.kind === 'quiz');
@@ -164,7 +194,7 @@ const local = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.
     const norm = L.intake.normalize(src.text);
     const segments = L.intake.segment(norm);
     const { analysis } = await L.faculty.offline.analyze({ text: norm, segments, hint: 'Classical Mechanics', words: L.intake.words(norm) });
-    const p = L.registrar.plan({ analysis, segments, text: norm, sources: [src], words: L.intake.words(norm) });
+    const p = L.registrar.plans({ analysis, segments, text: norm, sources: [src], words: L.intake.words(norm) }).standard;
     const c = await L.registrar.enrol(p);
     return { id: c.id, code: c.code, slot: c.plan.slot, weeks: c.term.weeks, start: c.term.start };
   });
@@ -194,7 +224,7 @@ const local = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.
       const src = L.intake.fromText('## A\n\n' + 'Cells divide by mitosis. '.repeat(400), 'Bio');
       const norm = L.intake.normalize(src.text); const segments = L.intake.segment(norm);
       const { analysis } = await L.faculty.offline.analyze({ text: norm, segments, hint: 'Cell Biology', words: L.intake.words(norm) });
-      L.registrar.plan({ analysis, segments, text: norm, sources: [src], words: L.intake.words(norm) });
+      L.registrar.plans({ analysis, segments, text: norm, sources: [src], words: L.intake.words(norm) });
       return 'planned';
     } catch (e) { return e.code || 'error'; } finally { L.S.settings.weeklyHours = 12; L.save(); }
   });
@@ -238,7 +268,7 @@ const local = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.
   assert(rt.same && rt.hasMaterial && rt.hasLedger, 'export/import preserves courses, materials and ledger');
 
   console.log('10. every route renders, light and dark, no overflow');
-  const routes = ['#/today', '#/courses', `#/course/${course.id}?tab=syllabus`, `#/course/${course.id}?tab=assessments`, `#/course/${course.id}?tab=grades`, `#/course/${course.id}?tab=materials`, `#/course/${course.id}/week/1`, '#/calendar', '#/record', '#/settings', '#/enrol'];
+  const routes = ['#/today', '#/courses', `#/course/${course.id}?tab=syllabus`, `#/course/${course.id}?tab=assessments`, `#/course/${course.id}?tab=grades`, `#/course/${course.id}?tab=materials`, `#/course/${course.id}?tab=plan`, `#/course/${course.id}/day/${course.sessions[0].date}`, '#/calendar', '#/record', '#/settings', '#/enrol'];
   let i = 8;
   for (const r of routes) {
     await page.goto(file + '?debug=1' + r);
@@ -259,6 +289,50 @@ const local = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.
   await page.evaluate(() => L.clock.reset());
   const types = await page.evaluate(() => L.S.ledger.map((e) => e.type));
   assert(types.includes('clock_override') && types.includes('clock_reset'), 'clock overrides and reset are in the ledger');
+
+  console.log('12. a PDF through the wizard: original pages');
+  await page.goto(file + '?debug=1#/enrol');
+  await page.waitForSelector('#file-input', { state: 'attached', timeout: 5000 });
+  await page.setInputFiles('#file-input', path.join(root, 'tools', 'fixtures', 'mechanics.pdf'));
+  await page.waitForSelector('.source-row', { timeout: 30000 });
+  await page.click('[data-act=submit-registrar]');
+  await page.waitForSelector('.paces', { timeout: 60000 });
+  await page.click('[data-act=choose-pace][data-pace=condensed]');
+  await page.waitForSelector('.prospectus', { timeout: 10000 });
+  const pdfPro = await page.evaluate(() => window.__prospectus);
+  assert(pdfPro.material.sources[0].pageStarts && pdfPro.material.sources[0].pageStarts.length === 3, 'PDF source carries page offsets (3 pages)');
+  assert(pdfPro.sessions.some((s) => s.chunks.some((k) => k.kind === 'read' && k.pages && k.pages[0] >= 1)), 'reading chunks point at page ranges');
+  assert(pdfPro.plan.pace === 'condensed' && pdfPro.plan.studyDays.length === 7, 'condensed pace studies every day');
+  await page.click('[data-act=enrol-confirm]');
+  await okModal();
+  await page.waitForFunction(() => L.route().name === 'course', null, { timeout: 15000 });
+  const pdfCourse = await page.evaluate(() => L.S.courses[L.S.courses.length - 1]);
+  const firstRead = pdfCourse.sessions.flatMap((s) => s.chunks.filter((k) => k.kind === 'read').map((k) => ({ s, k })))[0];
+  await page.goto(file + `?debug=1#/course/${pdfCourse.id}/day/${firstRead.s.date}?chunk=${firstRead.k.id}`);
+  await page.waitForSelector('#reading-body canvas', { timeout: 30000 });
+  const canvases = await page.evaluate(() => document.querySelectorAll('#reading-body canvas').length);
+  assert(canvases >= 1, `original PDF pages rendered (${canvases} canvas)`);
+  await shot('22-pdf-pages');
+  await page.goto(file + `?debug=1#/course/${pdfCourse.id}/day/${firstRead.s.date}?chunk=${firstRead.k.id}&view=text`);
+  await page.waitForFunction(() => document.querySelector('#reading-body.reading') && document.querySelector('#reading-body').innerText.length > 50, null, { timeout: 10000 });
+  assert(true, 'text toggle shows the extracted text');
+  const stored = await page.evaluate(async (id) => { const f = await L.db.getFile(id); return f && f.kind === 'pdf' && f.bytes && f.bytes.byteLength > 1000; }, pdfCourse.material.sources[0].id);
+  assert(stored, 'original PDF bytes stored on the device');
+
+  console.log('13. phone layout');
+  await page.setViewportSize({ width: 390, height: 844 });
+  for (const r of ['#/today', `#/course/${pdfCourse.id}?tab=plan`, `#/course/${pdfCourse.id}?tab=assessments`, '#/calendar', `#/assess/${course.id}/${quiz1.id}`, '#/record']) {
+    await page.goto(file + '?debug=1' + r); await sleep(350);
+    const ov = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    assert(ov <= 0, `phone ${r} has no horizontal overflow (${ov}px)`);
+  }
+  const tabbar = await page.evaluate(() => getComputedStyle(document.querySelector('.rail')).position);
+  assert(tabbar === 'fixed', 'rail becomes a fixed bottom tab bar on phones');
+  await page.goto(file + '?debug=1#/today'); await sleep(300);
+  await shot('23-phone-today');
+  await page.goto(file + `?debug=1#/assess/${course.id}/${quiz1.id}`); await sleep(300);
+  await shot('24-phone-result');
+  await page.setViewportSize({ width: 1440, height: 900 });
 
   await browser.close();
   if (consoleErrors.length) { console.log('\nConsole errors:'); consoleErrors.forEach((e) => console.log('  ! ' + e)); }
