@@ -537,6 +537,7 @@ window.L = window.L || {};
     const d = defaults();
     const out = Object.assign(d, s || {});
     out.settings = Object.assign(d.settings, s?.settings || {});
+    if (out.settings.theme === 'system' && !out.settings.themeChosen) out.settings.theme = 'dark'; // dark is the default until the student picks
     out.clock = Object.assign(d.clock, s?.clock || {});
     out.ui = Object.assign(d.ui, s?.ui || {});
     out.courses = (Array.isArray(s?.courses) ? s.courses : []).filter((c) => {
@@ -767,9 +768,9 @@ window.L = window.L || {};
       const root = document.documentElement;
       if (mode === 'light' || mode === 'dark') root.setAttribute('data-theme', mode); else root.removeAttribute('data-theme');
       try { if (mode === 'light' || mode === 'dark') localStorage.setItem(THEME_KEY, mode); else localStorage.removeItem(THEME_KEY); } catch (e) { /* ignore */ }
-      if (L.S) { L.S.settings.theme = mode; L.save(); }
+      if (L.S) { L.S.settings.theme = mode; L.S.settings.themeChosen = true; L.save(); }
     },
-    apply() { L.theme.set(L.S?.settings?.theme || 'system'); },
+    apply() { const chosen = L.S?.settings?.themeChosen; L.theme.set(L.S?.settings?.theme || 'dark'); if (L.S && !chosen) { L.S.settings.themeChosen = false; } },
   };
 
   // ---------- ui helpers ----------
