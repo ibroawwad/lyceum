@@ -14,6 +14,7 @@ window.L = window.L || {};
     const f = typeof key === 'function' ? key : (o) => o[key];
     return (a, b) => { const x = f(a), y = f(b); return x < y ? -1 : x > y ? 1 : 0; };
   };
+  L.cc = (c) => (c && c.color) || '#4ade80'; // a course's colour, HabitKit-style
   L.groupBy = (arr, fn) => arr.reduce((m, x) => { const k = typeof fn === 'function' ? fn(x) : x[fn]; (m[k] = m[k] || []).push(x); return m; }, {});
   L.uid = (prefix = 'x') => {
     const b = new Uint8Array(6); crypto.getRandomValues(b);
@@ -35,7 +36,7 @@ window.L = window.L || {};
     return {
       version: L.VERSION,
       student: null,
-      settings: { apiKey: '', model: 'anthropic/claude-fable-5.1', weeklyHours: 12, theme: 'system' },
+      settings: { apiKey: '', model: 'anthropic/claude-fable-5.1', weeklyHours: 12, theme: 'dark' },
       clock: { offsetMs: 0 },
       courses: [],
       ledger: [],
@@ -48,7 +49,11 @@ window.L = window.L || {};
     out.settings = Object.assign(d.settings, s?.settings || {});
     out.clock = Object.assign(d.clock, s?.clock || {});
     out.ui = Object.assign(d.ui, s?.ui || {});
-    out.courses = Array.isArray(s?.courses) ? s.courses : [];
+    out.courses = (Array.isArray(s?.courses) ? s.courses : []).filter((c) => {
+      const ok = c && c.id && c.term && c.plan && Array.isArray(c.sessions) && Array.isArray(c.assessments) && Array.isArray(c.weeks) && c.material && c.policy;
+      if (!ok) console.warn('Lyceum: skipped a corrupt course record', c && c.id);
+      return ok;
+    });
     out.ledger = Array.isArray(s?.ledger) ? s.ledger : [];
     out.version = L.VERSION;
     return out;
@@ -62,9 +67,15 @@ window.L = window.L || {};
     return L.S;
   };
   let saveTimer = null;
+  L.storageProblem = null; // set when the record cannot be written; the UI shows it until it clears
   L.saveNow = () => {
     if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
-    try { localStorage.setItem(KEY, JSON.stringify(L.S)); } catch (e) { console.error('Lyceum: could not save', e); }
+    try { localStorage.setItem(KEY, JSON.stringify(L.S)); L.storageProblem = null; }
+    catch (e) {
+      console.error('Lyceum: could not save', e);
+      L.storageProblem = /quota/i.test(e.name + e.message) ? 'Storage is full on this device. Export your record from Settings, then erase old courses.' : 'This device refused to save the record: ' + e.message;
+      if (L.ui) L.ui.toast(L.storageProblem, 'bad', 8000);
+    }
     L.emit('state');
   };
   L.save = () => { if (saveTimer) clearTimeout(saveTimer); saveTimer = setTimeout(L.saveNow, 150); };
@@ -182,9 +193,9 @@ window.L = window.L || {};
     getMaterial: (id) => tx('readonly', (s) => s.get(id)).then((r) => (r == null ? null : r)),
     deleteMaterial: (id) => tx('readwrite', (s) => s.delete(id)),
     allMaterials: () => all('materials'),
-    // originals: { kind:'pdf', name, bytes: ArrayBuffer } | { kind:'html', name, html }
-    putFile: (id, file) => tx('readwrite', (s) => s.put(file, id), 'files'),
-    getFile: (id) => tx('readonly', (s) => s.get(id), 'files').then((r) => (r == null ? null : r)),
+    // originals: { kind:'pdf', name, blob: Blob } | { kind:'html', name, html }. Blobs are what iOS Safari stores reliably.
+    putFile: (id, file) => tx('readwrite', (s) => s.put(file.bytes ? { kind: file.kind, name: file.name, blob: new Blob([file.bytes], { type: 'application/pdf' }) } : file, id), 'files'),
+    getFile: (id) => tx('readonly', (s) => s.get(id), 'files').then(async (r) => { if (r == null) return null; if (r.blob && !r.bytes) r.bytes = await r.blob.arrayBuffer(); return r; }),
     deleteFile: (id) => tx('readwrite', (s) => s.delete(id), 'files'),
     allFiles: () => all('files'),
   };
@@ -235,11 +246,14 @@ window.L = window.L || {};
     state.settings.apiKey = ''; // a record export is meant to travel; the key is not
     const files = await L.db.allFiles();
     let bytes = 0;
-    for (const f of Object.values(files)) bytes += f.bytes ? f.bytes.byteLength : (f.html || '').length;
+    for (const f of Object.values(files)) bytes += f.blob ? f.blob.size : f.bytes ? f.bytes.byteLength : (f.html || '').length;
     const out = { version: L.VERSION, exportedAt: new Date().toISOString(), state, materials: await L.db.allMaterials() };
     if (bytes <= FILE_EXPORT_LIMIT) {
       out.files = {};
-      for (const [id, f] of Object.entries(files)) out.files[id] = f.bytes ? { kind: f.kind, name: f.name, bytes64: b64(f.bytes) } : f;
+      for (const [id, f] of Object.entries(files)) {
+        const raw = f.blob ? await f.blob.arrayBuffer() : f.bytes;
+        out.files[id] = raw ? { kind: f.kind, name: f.name, bytes64: b64(raw) } : f;
+      }
     } else out.filesOmitted = bytes;
     return out;
   };

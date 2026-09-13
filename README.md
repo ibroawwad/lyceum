@@ -6,8 +6,9 @@ grades on a 4.0 scale and keeps a hash-chained permanent record. Single HTML fil
 
 - **Open** `dist/lyceum.html` in a browser (double-click), or install the hosted PWA from
   https://ibroawwad.github.io/lyceum/ (Safari/Chrome → *Add to Home Screen*). Everything is stored in that browser.
-- **How a course is built:** upload → the registrar proposes a condensed, a standard and an extended
-  pace → you pick one → binding. Every study day gets a block of 2–5 bite-sized chunks (read /
+- **How a course is built:** upload → the registrar proposes three pacings by daily effort —
+  Condensed (2 h/day, Mon–Sat), Standard (1 h/day, Mon–Fri), Extended (30 min/day, Mon–Fri); the term
+  length follows from the material (a 600-page book is months, not weeks) → you pick one → binding. Every study day gets a block of 2–5 bite-sized chunks (read /
   review / practise); reading chunks open the **original pages** (PDF rendered as-is) with a Text toggle.
   Ticking chunks off on their day is the participation grade.
 - **Faculty (optional):** Settings → paste an OpenRouter key. Papers, grading and lecture notes then

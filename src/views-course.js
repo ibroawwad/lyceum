@@ -13,18 +13,19 @@
     title: 'Courses',
     render() {
       const all = R().courses('all');
-      if (!all.length) return `<div class="page"><div class="page-head"><div><span class="eyebrow">Courses</span><h1 class="display">No courses on record.</h1></div><div class="actions"><a class="btn btn-primary" href="#/enrol">Enrol in a course</a></div></div><div class="empty"><h2>Bring the registrar some material.</h2><p>A course appears here once you enrol. Its calendar, weights and examinations are fixed from that moment.</p><div class="cols mt-3"><a class="btn btn-primary" href="#/enrol">Enrol</a><button class="btn" data-act="load-sample">Load the sample course</button></div></div></div>`;
+      if (!all.length) return `<div class="page"><div class="page-head"><div><h1 class="display">Courses</h1></div><div class="actions"><a class="btn btn-primary" href="#/enrol">Add a course</a></div></div><div class="empty"><h2>No courses yet.</h2><p>Add material and choose a pace. Dates, weights and exams are fixed from that moment.</p><div class="cols mt-3"><a class="btn btn-primary" href="#/enrol">Add a course</a><button class="btn" data-act="load-sample">Try the sample</button></div></div></div>`;
       const rows = all.map((c) => {
         const st = R().courseState(c); const s = R().standing(c); const wk = R().currentWeek(c);
+        const todayS = c.sessions.find((x) => x.date === L.date.iso(L.today()));
+        const doneToday = todayS ? todayS.chunks.filter((k) => k.done).length : 0;
         const canWithdraw = c.state === 'enrolled' && st !== 'completed' && L.date.iso(L.today()) < c.policy.withdrawBefore;
-        return `<div class="card"><div class="card-body" style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:16px;align-items:start">
-          <div><div class="course-lockup"><span class="code" style="--ch:${c.hue}">${esc(c.code)}</span><a href="#/course/${c.id}" style="color:inherit"><h2 class="serif" style="font-size:22px;font-weight:500">${esc(c.title)}</h2></a>${courseChip(st)}</div>
-            <div class="course-meta"><span><b>${c.credits}</b> credit${c.credits === 1 ? '' : 's'}</span><span>${esc(c.level)}</span><span class="mono">${L.fmt.date(c.term.start)} – ${L.fmt.date(c.term.end)}</span><span>${c.term.weeks} weeks · ${c.plan.hoursPerWeek} h/week</span>${st === 'running' ? `<span>week <b>${wk}</b> of ${c.term.weeks}</span>` : ''}</div></div>
-          <div class="right"><div class="letter">${c.final ? c.final.letter : (s.letter || '·')}</div><div class="small muted num">${c.final ? (c.final.pct == null ? 'withdrawn' : L.fmt.pct(c.final.pct)) : (s.current == null ? 'no grades yet' : L.fmt.pct(s.current) + ' so far')}</div>
-            <div class="cols mt-2" style="justify-content:flex-end"><a class="btn btn-sm" href="#/course/${c.id}">Open</a>${canWithdraw ? `<button class="btn btn-quiet btn-sm" data-act="withdraw" data-course="${c.id}">Withdraw</button>` : ''}</div></div>
-        </div></div>`;
+        return `<div class="course-card" style="--ch:${L.cc(c)}">
+          <div class="head"><a class="icon-sq" href="#/course/${c.id}" aria-label="${esc(c.code)}">${esc(c.subjectCode.slice(0, 2))}</a><div class="t"><a href="#/course/${c.id}" style="color:inherit"><b>${esc(c.title)}</b></a><span>${esc(c.code)} · ${st === 'running' ? `week ${wk} of ${c.term.weeks}` : st === 'upcoming' ? `starts ${L.fmt.date(c.term.start)}` : st}${c.plan.paceLabel ? ` · ${esc(c.plan.paceLabel.toLowerCase())}` : ''}</span></div><div class="right"><div class="letter">${c.final ? c.final.letter : (s.letter || '·')}</div><div class="small muted num">${c.final ? (c.final.pct == null ? 'W' : L.fmt.pct(c.final.pct)) : (s.current == null ? '' : L.fmt.pct(s.current))}</div></div></div>
+          ${L.tilesGrid(c)}
+          <div class="foot"><span>${todayS ? `Today: ${doneToday}/${todayS.chunks.length} chunks` : st === 'running' ? 'No block today' : `${c.term.weeks} weeks · ${c.plan.minutesPerDay} min/day`}</span><span class="cols gap-1">${todayS ? `<a class="btn btn-sm btn-primary" href="#/course/${c.id}/day/${todayS.date}">Study</a>` : `<a class="btn btn-sm" href="#/course/${c.id}">Open</a>`}${canWithdraw ? `<button class="btn btn-quiet btn-sm" data-act="withdraw" data-course="${c.id}">Withdraw</button>` : ''}</span></div>
+        </div>`;
       });
-      return `<div class="page"><div class="page-head"><div><span class="eyebrow">Courses · ${all.length} on record</span><h1 class="display">Courses</h1></div><div class="actions"><a class="btn btn-primary" href="#/enrol">Enrol in a course</a></div></div><div class="stack gap-2">${rows.join('')}</div></div>`;
+      return `<div class="page"><div class="page-head"><div><h1 class="display">Courses</h1><p class="lede">${all.length} on record</p></div><div class="actions"><a class="btn btn-primary" href="#/enrol">Add a course</a></div></div><div class="stack gap-2">${rows.join('')}</div></div>`;
     },
   };
   L.actions.withdraw = async (el) => {
@@ -42,8 +43,8 @@
     const slot = c.plan.slot; const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     const h = Math.floor(slot.start / 60), m = slot.start % 60;
     const canWithdraw = c.state === 'enrolled' && st !== 'completed' && L.date.iso(L.today()) < c.policy.withdrawBefore;
-    return `<div class="page-head"><div><span class="eyebrow">${esc(c.subject)} · ${esc(c.level)} · ${c.credits} credit${c.credits === 1 ? '' : 's'}</span>
-      <div class="course-lockup"><span class="code" style="--ch:${c.hue}">${esc(c.code)}</span>${courseChip(st)}</div><h1 class="display mt-1">${esc(c.title)}</h1>
+    return `<div class="page-head" style="--ch:${L.cc(c)}"><div><div class="course-lockup"><span class="icon-sq">${esc(c.subjectCode.slice(0, 2))}</span><div><span class="code">${esc(c.code)}</span> ${courseChip(st)}<div class="small muted">${esc(c.subject)} · ${esc(c.level)} · ${c.credits} credit${c.credits === 1 ? '' : 's'}</div></div></div><h1 class="display mt-2">${esc(c.title)}</h1>
+      <div class="mt-2">${L.tilesGrid(c)}</div>
       <div class="course-meta"><span class="mono">${L.fmt.date(c.term.start)} – ${L.fmt.date(c.term.end)}</span><span><b>${c.term.weeks}</b> weeks${st === 'running' ? ` · week <b>${wk}</b>` : ''}</span><span><b>${c.plan.hoursPerWeek}</b> h/week</span><span>${esc(c.plan.paceLabel || 'Standard')} pace · ${slot.days.length === 7 ? 'daily' : slot.days.map((d) => dayNames[d]).join('/')} ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')} · ${c.plan.minutesPerDay} min/day</span><span class="small muted">Faculty: ${c.analysis.source === 'llm' ? esc(c.analysis.model || 'model') : 'offline registrar'}</span></div></div>
       <div class="actions">${canWithdraw ? `<button class="btn btn-quiet" data-act="withdraw" data-course="${c.id}">Withdraw</button>` : ''}${wk >= 1 && wk <= c.term.weeks ? `<a class="btn btn-primary" href="#/course/${c.id}/day/${nextBlockDate(c)}">${c.sessions.some((s) => s.date === L.date.iso(L.today())) ? "Today's block" : 'Next block'}</a>` : ''}</div></div>`;
   }
@@ -85,7 +86,7 @@
         </tbody></table></div></div>
       </div>
       <div class="stack gap-2">
-        <div class="registrar-note"><span class="label">Registrar's note</span>Weights, dates and examinations were fixed at enrolment on ${L.fmt.date(c.createdAt)} and cannot be changed. Late work loses ${c.policy.late.perDayPct}% per day for up to ${c.policy.late.maxDays} days where a late window exists; examinations have none. Withdrawal was possible until ${L.fmt.date(L.date.addDays(L.date.parse(c.policy.withdrawBefore), -1))}.</div>
+        <div class="registrar-note"><span class="label">Fixed at enrolment.</span>Late work −${c.policy.late.perDayPct}%/day up to ${c.policy.late.maxDays} days; exams have no late window. Withdrawal until ${L.fmt.date(L.date.addDays(L.date.parse(c.policy.withdrawBefore), -1))}.</div>
         <div class="card"><div class="card-head"><h3>Letter scale</h3><span class="small muted">standard 4.0</span></div><div class="card-body"><div class="weights">${scale.map(([min, l, p]) => `<div class="small"><span class="letter" style="font-size:16px">${l}</span> <span class="muted">≥ ${min}%</span> <span class="mono muted">${p.toFixed(1)}</span></div>`).join('')}</div></div></div>
       </div></div>`;
   }
@@ -128,7 +129,7 @@
       const mode = q.view === 'text' ? 'text' : 'pages';
       const src = active && c.material.sources.find((x) => x.id === active.source);
       const canPages = !!(src && src.hasFile);
-      return `<div class="page"><div class="page-head"><div><span class="eyebrow"><a href="#/course/${c.id}">${esc(c.code)}</a> · Week ${s.week} · ${L.fmt.dateLong(s.date)}</span><h1 class="display">${esc(s.topic)}</h1><p class="lede">${L.fmt.dur(s.minutes)} of study · ${s.chunks.length} chunks${w ? ` · ${esc(w.title)}` : ''}</p></div>
+      return `<div class="page"><div class="page-head" style="--ch:${L.cc(c)}"><div><span class="eyebrow"><a href="#/course/${c.id}" class="code">${esc(c.code)}</a> · week ${s.week} · ${L.fmt.dateLong(s.date)}</span><h1 class="display">${esc(s.topic)}</h1><p class="lede">${L.fmt.dur(s.minutes)} · ${s.chunks.length} chunks${w ? ` · ${esc(w.title)}` : ''}</p></div>
         <div class="actions">${prev ? `<a class="btn btn-quiet" href="#/course/${c.id}/day/${prev.date}">← ${L.fmt.date(prev.date)}</a>` : ''}${next ? `<a class="btn btn-quiet" href="#/course/${c.id}/day/${next.date}">${L.fmt.date(next.date)} →</a>` : ''}</div></div>
         <div class="reading-layout">
           <div>

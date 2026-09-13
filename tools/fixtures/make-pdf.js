@@ -1,6 +1,14 @@
 // Writes a small, valid 3-page PDF with real text so the smoke test can exercise the PDF path.
 const fs = require('fs'); const path = require('path');
-const pages = [
+const want = Number((process.argv.find((a) => a.startsWith('--pages=')) || '').split('=')[1] || 0);
+const out_name = want ? `book-${want}.pdf` : 'mechanics.pdf';
+const TOPICS = ['Kinematics', 'Forces', 'Energy', 'Momentum', 'Rotation', 'Gravitation', 'Oscillations', 'Waves', 'Fluids', 'Thermodynamics', 'Electrostatics', 'Circuits', 'Magnetism', 'Induction', 'Optics', 'Relativity'];
+const bigPages = want ? Array.from({ length: want }, (_, i) => {
+  const ch = Math.floor(i / 10) + 1, topic = TOPICS[(ch - 1) % TOPICS.length];
+  const head = i % 10 === 0 ? `Chapter ${ch} ${topic}` : `${ch}.${i % 10} ${topic} in practice`;
+  return [head, `${topic} rests on a small set of definitions that the following pages develop in order.`, `The first result relates the quantities defined above and is proved from the axioms alone.`, `A worked example on page ${i + 1} shows the computation step by step with units carried through.`, `Common mistakes include dropping a sign, mixing reference frames and forgetting the normal force.`, `The exercises at the end of the section extend the example to two and three dimensions.`, `Later chapters reuse this idea, so the reader should be able to reproduce the derivation unaided.`];
+}) : null;
+const pages = bigPages || [
   ['Chapter 1 Kinematics', 'Kinematics describes motion without asking about its causes.', 'Displacement is the change in position of a body; velocity is its rate of change.', 'Acceleration is the rate of change of velocity and points along the change in velocity.', 'Uniform acceleration gives the familiar equations of motion for straight-line travel.', 'A graph of velocity against time has slope equal to the acceleration and area equal to the displacement.'],
   ['Chapter 2 Forces', 'A force is an interaction that changes the motion of a body.', 'Newton\'s second law states that the net force equals mass times acceleration.', 'Newton\'s third law states that forces come in equal and opposite pairs acting on different bodies.', 'Friction opposes relative motion and depends on the normal force between surfaces.', 'Free-body diagrams show every force acting on one chosen body.'],
   ['Chapter 3 Energy', 'Work is force times displacement along the direction of the force.', 'Kinetic energy is one half of the mass times the square of the speed.', 'Potential energy stores work done against a conservative force such as gravity.', 'Mechanical energy is conserved when only conservative forces do work.', 'Power is the rate at which work is done, measured in watts.'],
@@ -29,5 +37,5 @@ objs.forEach((o, i) => { offsets.push(Buffer.byteLength(out, 'latin1')); out += 
 const xref = Buffer.byteLength(out, 'latin1');
 out += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n` + offsets.map((o) => String(o).padStart(10, '0') + ' 00000 n \n').join('');
 out += `trailer\n<< /Size ${objs.length + 1} /Root ${catalog} 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
-fs.writeFileSync(path.join(__dirname, 'mechanics.pdf'), Buffer.from(out, 'latin1'));
-console.log('wrote tools/fixtures/mechanics.pdf', Buffer.byteLength(out, 'latin1'), 'bytes');
+fs.writeFileSync(path.join(__dirname, out_name), Buffer.from(out, 'latin1'));
+console.log('wrote tools/fixtures/' + out_name, Buffer.byteLength(out, 'latin1'), 'bytes');

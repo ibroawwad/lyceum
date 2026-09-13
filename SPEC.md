@@ -254,7 +254,7 @@ Routes: `#/welcome`, `#/today`, `#/courses`, `#/course/:id` (+ `?tab=syllabus|as
 
 Course = {
   id:'c_…', code:'PROB 201', title, subject, subjectCode, level, difficulty:1..5, description,
-  prerequisites:[], credits:1..4, hue:0..359, createdAt,
+  prerequisites:[], credits:1..4, color:'#4ade80', createdAt,
   state: 'enrolled'|'withdrawn',            // completion is derived from dates (courseState)
   withdrawnAt?: iso,
   material: { sources:[{ id, name, kind, words, chars, pages?, url?, offset, pageStarts?, hasFile }], words, chars, segments: Segment[] },
@@ -455,7 +455,7 @@ extending the previous unit, overlaps trimmed, empty units removed; at least 1 u
 ### 8.2 Budget and length
 `available = settings.weeklyHours − Σ hoursPerWeek of courses in state enrolled that are upcoming or running`.
 If `available < 3` → throw `RegistrarError { code:'budget', available, nextFree: date the earliest
-running course ends }`. Three pacings (`PACES`): condensed `hpw0 = min(available, 10)`, study days Mon–Sun; standard `hpw0 = min(available, 6)`, Mon–Fri; extended `hpw0 = min(available, 4)`, Mon–Fri. `weeks = clamp(ceil(totalHours / hpw0), 2, 16)`; the three are nudged so condensed < standard < extended when possible. A pacing whose `hoursPerWeek` exceeds the free budget is returned as `{ unavailable }`; all three unavailable → the budget refusal.
+running course ends }`. Three pacings (`PACES`) defined by daily effort: condensed 120 min/day Mon–Sat (12 h/week); standard 60 min/day Mon–Fri (5 h); extended 30 min/day Mon–Fri (2.5 h). `weeks = clamp(ceil(totalHours / hoursPerWeek), 2, 52)` — no 16-week cap. If a pace exceeds the free budget it is reduced to fit (`plan.reduced = true`, fewer minutes/day, longer term); the registrar refuses only when fewer than 2.5 h/week are free. `hoursFor = max(6, min(segments × 2.5, 40), readHours × 3.5 × diffMult)`.
 `hoursPerWeek = max(3, ceil(totalHours / weeks × 2) / 2)`. `credits = hpw ≥ 9 ? 4 : hpw ≥ 6 ? 3 : hpw ≥ 4 ? 2 : 1`.
 `term.start = L.date.nextMonday()`; `term.end = start + weeks×7 − 1` (Sunday).
 

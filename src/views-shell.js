@@ -31,6 +31,32 @@
     settings: '<svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>',
   };
 
+  L.LOGO = '<svg viewBox="0 0 512 512" aria-hidden="true"><rect width="512" height="512" rx="132" fill="#4ade80"/><path d="M168 128h64v192h112v64H168z" fill="#0f1012"/></svg>';
+  L.logo = (big = false) => `<span class="logo${big ? ' is-big' : ''}">${L.LOGO}<span>Lyceum</span></span>`;
+
+  // one tile per calendar day of the term: full / part / none / future / off (no study block that day)
+  L.tileState = (c, iso) => {
+    const s = c.sessions.find((x) => x.date === iso);
+    const today = L.date.iso(L.today());
+    if (!s) return 'off';
+    if (iso > today) return 'future';
+    const done = s.chunks.filter((k) => k.done).length;
+    return done === s.chunks.length && s.chunks.length ? 'full' : done ? 'part' : 'none';
+  };
+  L.tilesGrid = (c) => {
+    const today = L.date.iso(L.today());
+    const start = L.date.parse(c.term.start), end = L.date.parse(c.term.end);
+    const out = [];
+    for (let d = start; d <= end; d = L.date.addDays(d, 1)) { const iso = L.date.iso(d); out.push(`<i data-v="${L.tileState(c, iso)}"${iso === today ? ' class="is-today"' : ''} title="${iso}"></i>`); }
+    return `<div class="tiles-wrap"><div class="tiles" style="--ch:${L.cc(c)};--cols:${c.term.weeks}">${out.join('')}</div></div>`;
+  };
+  L.tilesRow = (c, days = 14) => {
+    const today = L.today();
+    const out = [];
+    for (let i = days - 1; i >= 0; i--) { const iso = L.date.iso(L.date.addDays(today, -i)); const v = iso < c.term.start || iso > c.term.end ? 'off' : L.tileState(c, iso); out.push(`<i data-v="${v}"${i === 0 ? ' class="is-today"' : ''}></i>`); }
+    return `<div class="tiles-row" style="--ch:${L.cc(c)}">${out.join('')}</div>`;
+  };
+
   // ---------- rail ----------
   function renderRail() {
     const rail = document.getElementById('rail');
@@ -44,14 +70,13 @@
     const active = R().courses('active').length;
     const nd = R().nextDeadline();
     rail.innerHTML = `
-      <div class="rail-brand"><span class="wordmark">Lyceum</span><span class="est">Registrar</span></div>
+      <div class="rail-brand">${L.logo()}</div>
       <nav class="rail-nav">
         <a href="#/today"${cur('today')}>${I.today}<span>Today</span>${openNow ? `<span class="badge">${openNow}</span>` : ''}</a>
-        <a href="#/courses"${cur('courses')}>${I.courses}<span>Courses</span>${active ? `<span class="badge" style="background:var(--surface-2);color:var(--ink-2)">${active}</span>` : ''}</a>
+        <a href="#/courses"${cur('courses')}>${I.courses}<span>Courses</span>${active ? `<span class="badge is-quiet">${active}</span>` : ''}</a>
         <a href="#/calendar"${cur('calendar')}>${I.calendar}<span>Calendar</span></a>
-        <a href="#/record"${cur('record')}>${I.record}<span>Record</span></a>
-        <a href="#/enrol"${cur('enrol')} class="rail-enrol">${I.enrol}<span>Enrol</span></a>
-        <a href="#/settings"${cur('settings')}>${I.settings}<span>Settings</span></a>
+        <a href="#/record"${cur('record')}>${I.record}<span>Grades</span></a>
+        <a href="#/settings"${cur('settings') || (name === 'enrol' ? ' aria-current="page"' : '')}>${I.settings}<span>More</span></a>
       </nav>
       <div class="rail-foot">
         <div class="rail-clock"><div class="big" data-clock>${L.fmt.time(L.now())}</div><div class="sub" data-clock-date>${L.fmt.date(L.now())} ${new Date(L.now()).getFullYear()}${L.S.clock.offsetMs ? ' · clock offset' : ''}</div></div>
@@ -72,11 +97,12 @@
     if (current && current.unmount) { try { current.unmount(); } catch (e) { console.error(e); } }
     current = view;
     document.title = (view.title ? (typeof view.title === 'function' ? view.title(route.params) : view.title) + ' · ' : '') + 'Lyceum';
-    renderRail();
+    try { renderRail(); } catch (e) { console.error(e); }
     const busy = main.querySelector('.busy'); // keep an in-flight progress strip across re-renders
-    main.innerHTML = view.render(route.params, route.query);
+    try { main.innerHTML = view.render(route.params, route.query); }
+    catch (e) { console.error(e); main.innerHTML = `<div class="page"><div class="empty"><h2>This page could not be drawn.</h2><p class="mono small">${esc(e.message)}</p><p><a class="btn mt-2" href="#/today">Back to Today</a></p></div></div>`; return; }
     if (busy) main.prepend(busy);
-    if (view.mount) view.mount(main, route.params, route.query);
+    if (view.mount) { try { const r = view.mount(main, route.params, route.query); if (r && r.catch) r.catch((e) => { console.error(e); L.ui.toast(e.message || 'Something went wrong.', 'bad'); }); } catch (e) { console.error(e); } }
     L.S.ui.lastRoute = location.hash;
     window.scrollTo(0, 0);
   };
@@ -106,25 +132,22 @@
 
   // ---------- welcome ----------
   L.views.welcome = {
-    title: 'Matriculation',
+    title: 'Start',
     render() {
       return `<div class="welcome">
-        <div class="welcome-left">
-          <div class="wordmark">Lyceum</div>
-          <h1>Any material you bring becomes a real course, with a real calendar.</h1>
-          <p class="lede">Upload notes, a textbook chapter, a PDF or a web page. The registrar reads it, proposes three pacings, and once you choose one it fixes the term: a daily study block of bite-sized chunks, quizzes, problem sets and examinations, and a permanent record of how you do. You study; the schedule holds.</p>
-          <ul class="rules">
-            <li><span class="n">01</span><span>The schedule is binding. Once you enrol, dates, weights and examinations cannot be changed.</span></li>
-            <li><span class="n">02</span><span>The clock is real. Papers open and close on the calendar, not when you feel ready.</span></li>
-            <li><span class="n">03</span><span>One attempt per assessment. A missed paper is recorded as zero.</span></li>
-            <li><span class="n">04</span><span>The record is permanent and tamper-evident. Withdrawals are allowed only in the first 60% of a term.</span></li>
-          </ul>
-        </div>
+        ${L.logo(true)}
+        <h1>Any material becomes a real course, with a real calendar.</h1>
+        <p class="lede">Bring a PDF, notes or a web page. The registrar proposes three pacings; pick one and the term is fixed: a daily block of bite-sized chunks, quizzes, problem sets and exams, and a permanent record.</p>
+        <ul class="rules">
+          <li><span class="n">01</span><span>Dates, weights and exams are fixed once you enrol.</span></li>
+          <li><span class="n">02</span><span>Papers open and close on the calendar, not when you feel ready.</span></li>
+          <li><span class="n">03</span><span>One attempt each. A missed paper is a zero.</span></li>
+          <li><span class="n">04</span><span>The record is permanent. Withdraw only in the first 60% of a term.</span></li>
+        </ul>
         <div class="welcome-right">
-          <span class="eyebrow">Office of the Registrar · Matriculation</span>
-          <h2 class="display" style="font-size:28px">Enter your name as it should appear on the record.</h2>
-          <div class="field mt-3"><label for="student-name">Full name</label><input id="student-name" class="input" autocomplete="name" placeholder="e.g. Ada Lovelace" data-in="student-name"></div>
-          <div class="cols mt-3"><button class="btn btn-primary" data-act="matriculate">Matriculate</button><span class="small muted">This device holds one student record.</span></div>
+          <div class="field"><label for="student-name">Your name, as it should appear on the record</label><input id="student-name" class="input" autocomplete="name" placeholder="e.g. Ada Lovelace" data-in="student-name"></div>
+          <button class="btn btn-primary w-full" data-act="matriculate">Start</button>
+          <span class="small muted center">One student per device.</span>
         </div>
       </div>`;
     },
@@ -167,12 +190,12 @@
       const eyebrow = `${L.fmt.dateLong(now)}${week ? ` · Week ${week} of term` : ''}`;
       if (!L.S.courses.length) {
         return `<div class="page">
-          <div class="page-head"><div><span class="eyebrow">${esc(eyebrow)}</span><h1 class="display">${greeting()}, ${esc(firstName())}.</h1><p class="lede">You are not enrolled in anything yet. Bring the registrar some material and it will come back as a course with a term calendar.</p></div></div>
+          <div class="page-head"><div><span class="eyebrow">${esc(eyebrow)}</span><h1 class="display">${greeting()}, ${esc(firstName())}.</h1><p class="lede">Nothing enrolled yet.</p></div></div>
           <div class="empty">
             <h2>Start with what you want to learn.</h2>
-            <p>Drop in a PDF, a chapter, lecture notes or a web page. The registrar assesses the material, proposes a condensed, a standard and an extended pace, and once you choose it fixes every study day, quiz, problem set and examination in advance.</p>
-            <div class="cols mt-3"><a class="btn btn-primary" href="#/enrol">Enrol in a course</a><button class="btn" data-act="load-sample">Load the sample course</button></div>
-            <p class="small muted mt-2">The sample is six lectures of introductory probability, plainly marked as sample material.</p>
+            <p>Drop in a PDF, a chapter, notes or a web page. You get three pacings; choose one and every study day, quiz and exam is fixed.</p>
+            <div class="cols mt-3"><a class="btn btn-primary" href="#/enrol">Add a course</a><button class="btn" data-act="load-sample">Try the sample</button></div>
+            <p class="small muted mt-2">The sample is six short lectures on probability.</p>
           </div>
         </div>`;
       }
@@ -193,13 +216,14 @@
       const load = R().load();
       const missed = L.S.courses.filter((c) => c.state === 'enrolled').flatMap((c) => c.assessments.filter((a) => a.grade && a.grade.missed).map((a) => ({ c, a })));
       const notices = [];
+      if (L.storageProblem) notices.push(`<div class="notice" data-kind="bad"><span>${esc(L.storageProblem)}</span></div>`);
       if (L.S.clock.offsetMs) notices.push(`<div class="notice" data-kind="warn"><span>The registrar clock is offset by ${L.fmt.rel(L.S.clock.offsetMs).replace(/^in /, '')}. Every action is recorded against the offset time. <a href="#/settings">Reset</a>.</span></div>`);
       missed.slice(-3).forEach(({ c, a }) => notices.push(`<div class="notice" data-kind="bad"><span>${esc(a.title)} for ${esc(c.code)} was missed and is recorded as 0.</span></div>`));
       openNow.filter((x) => x.st === 'late').forEach(({ c, a }) => notices.push(`<div class="notice"><span>${esc(a.title)} for ${esc(c.code)} is past due. Late submissions lose ${c.policy.late.perDayPct}% per day until ${L.fmt.dt(a.closesAt)}.</span></div>`));
       const gpa = R().gpa();
       return `<div class="page">
         <div class="page-head"><div><span class="eyebrow">${esc(eyebrow)}</span><h1 class="display">${greeting()}, ${esc(firstName())}.</h1><p class="lede">${lede}</p></div>
-          <div class="actions"><a class="btn" href="#/enrol">Enrol</a></div></div>
+          <div class="actions"><a class="btn" href="#/enrol">Add a course</a></div></div>
         <div class="today-grid">
           <div>
             <div class="section" style="margin-top:0"><div class="section-head"><h2>Today's study</h2><span class="small muted">${esc(L.fmt.date(now))}${todayChunks.length ? ` · ${todayDone}/${todayChunks.length}` : ''}</span></div>
@@ -207,16 +231,16 @@
               ${overdue.length ? `<div class="mt-3"><span class="label">Catch up · ${overdue.length} chunk${overdue.length === 1 ? '' : 's'} from earlier days</span><div class="chunks mt-1">${overdue.slice(0, 6).map(({ c, s, k }) => L.chunkRow(c, s, k)).join('')}${overdue.length > 6 ? `<p class="small muted">… and ${overdue.length - 6} more in the course plans.</p>` : ''}</div></div>` : ''}
             </div>
             <div class="section"><div class="section-head"><h2>Open now</h2></div>
-              ${openNow.length ? `<div class="agenda">${openNow.map(({ c, a, st }) => `<div class="agenda-item"><div class="time">${st === 'in_progress' ? `<span data-countdown="${R().deadline(c, a)}">${L.fmt.rel(R().deadline(c, a) - now)}</span>` : st === 'late' ? `closes ${L.fmt.rel(L.date.parse(a.closesAt) - now)}` : `due ${L.fmt.rel(L.date.parse(a.dueAt) - now)}`}</div><div class="who"><span class="dot" style="--ch:${c.hue}"></span><span class="code" style="--ch:${c.hue}">${esc(c.code)}</span></div><div class="what"><div class="t">${esc(a.title)} ${stateChip(st)}</div><div class="s">${a.durationMin ? L.fmt.dur(a.durationMin) + ' · ' : ''}${esc(R().KIND_TITLE[a.kind])} · closes ${L.fmt.dt(a.closesAt)}</div></div><div class="action">${L.actionFor(c, a)}</div></div>`).join('')}</div>` : '<p class="muted">Nothing is open at the moment.</p>'}
+              ${openNow.length ? `<div class="agenda">${openNow.map(({ c, a, st }) => `<div class="agenda-item"><div class="time">${st === 'in_progress' ? `<span data-countdown="${R().deadline(c, a)}">${L.fmt.rel(R().deadline(c, a) - now)}</span>` : st === 'late' ? `closes ${L.fmt.rel(L.date.parse(a.closesAt) - now)}` : `due ${L.fmt.rel(L.date.parse(a.dueAt) - now)}`}</div><div class="who"><span class="dot" style="--ch:${L.cc(c)}"></span><span class="code" style="--ch:${L.cc(c)}">${esc(c.code)}</span></div><div class="what"><div class="t">${esc(a.title)} ${stateChip(st)}</div><div class="s">${a.durationMin ? L.fmt.dur(a.durationMin) + ' · ' : ''}${esc(R().KIND_TITLE[a.kind])} · closes ${L.fmt.dt(a.closesAt)}</div></div><div class="action">${L.actionFor(c, a)}</div></div>`).join('')}</div>` : '<p class="muted">Nothing is open at the moment.</p>'}
             </div>
             <div class="section"><div class="section-head"><h2>Due in the next 7 days</h2></div>
-              ${due.length ? `<div class="agenda due-list">${due.map(({ course: c, assessment: a, at }) => `<div class="agenda-item"><div class="time">${L.fmt.dt(at)}</div><div class="who"><span class="dot" style="--ch:${c.hue}"></span><span class="code" style="--ch:${c.hue}">${esc(c.code)}</span></div><div class="what"><div class="t">${esc(a.title)}</div><div class="s">${esc(R().KIND_TITLE[a.kind])}${a.durationMin ? ` · ${L.fmt.dur(a.durationMin)}` : ''} · opens ${L.fmt.dt(a.opensAt)}</div></div><div class="action">${L.actionFor(c, a)}</div></div>`).join('')}</div>` : '<p class="muted">Nothing due this week.</p>'}
+              ${due.length ? `<div class="agenda due-list">${due.map(({ course: c, assessment: a, at }) => `<div class="agenda-item"><div class="time">${L.fmt.dt(at)}</div><div class="who"><span class="dot" style="--ch:${L.cc(c)}"></span><span class="code" style="--ch:${L.cc(c)}">${esc(c.code)}</span></div><div class="what"><div class="t">${esc(a.title)}</div><div class="s">${esc(R().KIND_TITLE[a.kind])}${a.durationMin ? ` · ${L.fmt.dur(a.durationMin)}` : ''} · opens ${L.fmt.dt(a.opensAt)}</div></div><div class="action">${L.actionFor(c, a)}</div></div>`).join('')}</div>` : '<p class="muted">Nothing due this week.</p>'}
             </div>
           </div>
           <div class="stack gap-3">
             <div class="card"><div class="card-head"><h2>Standing</h2><span class="small muted">${gpa.completed ? `${gpa.completed} completed` : 'no completed courses'}</span></div><div class="card-body">
               <div class="cols gap-2"><div class="tile" style="flex:1"><div class="tile-n">${gpa.gpa == null ? '—' : gpa.gpa.toFixed(2)}</div><div class="tile-l">GPA · ${gpa.credits} credit${gpa.credits === 1 ? '' : 's'} earned</div></div></div>
-              <div class="mt-2">${courses.length ? courses.map((c) => { const s = R().standing(c); const st = R().courseState(c); return `<div class="standing-row"><div><a class="code" style="--ch:${c.hue}" href="#/course/${c.id}">${esc(c.code)}</a> <span class="small muted">· ${st === 'upcoming' ? `starts ${L.fmt.date(c.term.start)}` : `week ${R().currentWeek(c)} of ${c.term.weeks}`}</span><div class="small truncate">${esc(c.title)}</div></div><div class="num mono small">${s.current == null ? '—' : L.fmt.pct(s.current)}</div><div class="letter">${s.letter || '·'}</div></div>`; }).join('') : '<p class="muted small">No active courses.</p>'}</div>
+              <div class="mt-2">${courses.length ? courses.map((c) => { const s = R().standing(c); const st = R().courseState(c); return `<div class="standing-row"><div style="min-width:0"><a class="code" style="--ch:${L.cc(c)}" href="#/course/${c.id}">${esc(c.code)}</a> <span class="small muted">· ${st === 'upcoming' ? `starts ${L.fmt.date(c.term.start)}` : `week ${R().currentWeek(c)} of ${c.term.weeks}`}</span><div class="small truncate">${esc(c.title)}</div><div class="mt-1">${L.tilesRow(c)}</div></div><div class="num mono small">${s.current == null ? '—' : L.fmt.pct(s.current)}</div><div class="letter">${s.letter || '·'}</div></div>`; }).join('') : '<p class="muted small">No active courses.</p>'}</div>
             </div></div>
             <div class="card"><div class="card-head"><h2>This week's load</h2><span class="small muted num">${load.hours} / ${load.budget} h</span></div><div class="card-body"><div class="progress${load.hours > load.budget ? ' is-over' : ''}"><i style="width:${Math.min(100, (load.hours / load.budget) * 100)}%"></i></div><p class="small muted mt-2">${courses.map((c) => `${esc(c.code)} ${c.plan.hoursPerWeek} h`).join(' · ') || 'No committed hours.'}</p></div></div>
             ${notices.length ? `<div class="stack gap-1"><span class="label">Notices</span>${notices.join('')}</div>` : ''}
@@ -240,7 +264,7 @@
   L.studyBlock = (c, s, { today = false } = {}) => {
     const done = s.chunks.filter((k) => k.done).length;
     const h = Math.floor(s.start / 60), m = s.start % 60;
-    return `<div class="study-block" style="--ch:${c.hue}"><div class="study-head"><div><span class="code" style="--ch:${c.hue}">${esc(c.code)}</span> <span class="small muted">· week ${s.week} · ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')} · ${L.fmt.dur(s.minutes)}</span><div class="study-topic">${esc(s.topic)}</div></div><div class="num small muted">${done}/${s.chunks.length}</div></div>
+    return `<div class="study-block" style="--ch:${L.cc(c)}"><div class="study-head"><div><span class="code" style="--ch:${L.cc(c)}">${esc(c.code)}</span> <span class="small muted">· week ${s.week} · ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')} · ${L.fmt.dur(s.minutes)}</span><div class="study-topic">${esc(s.topic)}</div></div><div class="num small muted">${done}/${s.chunks.length}</div></div>
       <div class="progress mb-2"><i style="width:${s.chunks.length ? (done / s.chunks.length) * 100 : 0}%"></i></div>
       <div class="chunks">${s.chunks.map((k, i) => L.chunkRow(c, s, k, { number: i + 1 })).join('')}</div></div>`;
   };

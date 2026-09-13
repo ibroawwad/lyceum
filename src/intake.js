@@ -58,7 +58,7 @@
     }
     let segs = [];
     const spansOk = () => {
-      if (heads.length < 3 || heads.length > 400) return false;
+      if (heads.length < 3) return false;
       const gaps = [];
       for (let i = 0; i < heads.length; i++) {
         const end = i + 1 < heads.length ? heads[i + 1].start : text.length;
@@ -97,7 +97,8 @@
         segs[best].end = segs[best + 1].end; segs.splice(best + 1, 1);
       }
     } else {
-      // paragraph chunks of ~1,200 words
+      // paragraph chunks of ~1,200 words, larger when the document is long (at most ~60 segments)
+      const chunkWords = Math.max(1200, Math.ceil(words(text) / 60));
       const paras = [];
       let p = 0;
       for (const m of text.matchAll(/\n\s*\n/g)) { paras.push({ start: p, end: m.index }); p = m.index + m[0].length; }
@@ -106,7 +107,7 @@
       for (const para of paras) {
         if (!cur) cur = { title: `Part ${n}`, start: para.start, end: para.end };
         else cur.end = para.end;
-        if (words(text.slice(cur.start, cur.end)) >= 1200) { segs.push(cur); cur = null; n++; }
+        if (words(text.slice(cur.start, cur.end)) >= chunkWords) { segs.push(cur); cur = null; n++; }
       }
       if (cur) { if (segs.length && words(text.slice(cur.start, cur.end)) < 300) segs[segs.length - 1].end = cur.end; else segs.push(cur); }
       if (!segs.length) segs.push({ title: 'Part 1', start: 0, end: text.length });
@@ -294,15 +295,20 @@
     if (!alreadyNormalized) text = normalize(text);
     return Object.assign({ id: L.uid('src'), name, kind, text, words: words(text), chars: text.length }, extra);
   }
-  async function fromFile(file) {
+  const MAX_PAGES = 1500;
+  async function fromFile(file, onProgress) {
     const name = file.name || 'file';
     const ext = (name.split('.').pop() || '').toLowerCase();
+    const progress = onProgress || (() => {});
     if (ext === 'pdf' || file.type === 'application/pdf') {
       if (!window.pdfjsLib) throw new Error('PDF reading needs the pdf.js library, which did not load. Check your connection or paste the text.');
       const bytes = await file.arrayBuffer();
       const pdf = await window.pdfjsLib.getDocument({ data: bytes.slice(0) }).promise;
+      const numPages = pdf.numPages;
+      if (numPages > MAX_PAGES) throw new Error(`${name} has ${numPages} pages; the limit is ${MAX_PAGES}. Split it and enrol the parts as one course.`);
       const pages = [];
-      for (let p = 1; p <= pdf.numPages; p++) {
+      for (let p = 1; p <= numPages; p++) {
+        if (p === 1 || p % 10 === 0 || p === numPages) { progress(`Reading page ${p} of ${numPages}…`); await new Promise((r) => setTimeout(r, 0)); }
         const page = await pdf.getPage(p);
         const content = await page.getTextContent();
         let line = '', lastY = null, buf = [];
@@ -315,14 +321,17 @@
         }
         buf.push(line.trim());
         pages.push(buf.join('\n'));
+        page.cleanup();
       }
+      pdf.destroy();
       if (pages.join('').replace(/\s+/g, '').length < 200) throw new Error('That PDF has no extractable text (it may be scanned). Try a text export.');
+      progress('Cleaning up the text…');
       // normalise the whole document once (running headers repeat across pages), then recover page offsets from the separators
       const norm = normalize(pages.join('\n\n' + PAGE + '\n\n'));
       const pieces = norm.split(PAGE);
       const pageStarts = []; const parts = []; let pos = 0;
       for (const piece of pieces) { const t = piece.replace(/^\n+/, '').replace(/\n+$/, ''); pageStarts.push(pos); parts.push(t); pos += t.length + 2; }
-      const src = make(name, 'pdf', parts.join('\n\n'), { pages: pdf.numPages, pageStarts }, true);
+      const src = make(name, 'pdf', parts.join('\n\n'), { pages: numPages, pageStarts }, true);
       src.file = { kind: 'pdf', name, bytes };
       return src;
     }

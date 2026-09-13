@@ -3,15 +3,16 @@
 
   const D = L.date;
   const DAY = 86400000;
-  const HUES = [160, 220, 15, 275, 45, 195, 330, 95];
+  const COLORS = ['#4ade80', '#22d3ee', '#f5b12b', '#fb7185', '#a78bfa', '#60a5fa', '#a3e635', '#fb923c'];
   const SCALE = [[93, 'A', 4.0], [90, 'A−', 3.7], [87, 'B+', 3.3], [83, 'B', 3.0], [80, 'B−', 2.7], [77, 'C+', 2.3], [73, 'C', 2.0], [70, 'C−', 1.7], [67, 'D+', 1.3], [63, 'D', 1.0], [60, 'D−', 0.7], [-Infinity, 'F', 0]];
   const KIND_TITLE = { quiz: 'Quiz', pset: 'Problem set', midterm: 'Midterm examination', final: 'Final examination', project: 'Term project' };
-  // the registrar's three pacings; the student picks one and it becomes binding
+  // the registrar's three pacings, defined by daily effort; the term length follows from the material
   const PACES = {
-    condensed: { label: 'Condensed', hpwCap: 10, studyDays: [0, 1, 2, 3, 4, 5, 6], blurb: 'Every day of the week, the shortest term the material allows.' },
-    standard: { label: 'Standard', hpwCap: 6, studyDays: [0, 1, 2, 3, 4], blurb: 'Weekdays, the pace of a regular term.' },
-    extended: { label: 'Extended', hpwCap: 4, studyDays: [0, 1, 2, 3, 4], blurb: 'Weekdays at a lighter load over a longer term.' },
+    condensed: { label: 'Condensed', minutesPerDay: 120, studyDays: [0, 1, 2, 3, 4, 5], blurb: 'Two hours a day, six days a week. The shortest term the material allows.' },
+    standard: { label: 'Standard', minutesPerDay: 60, studyDays: [0, 1, 2, 3, 4], blurb: 'An hour a day on weekdays. The pace of a regular term.' },
+    extended: { label: 'Extended', minutesPerDay: 30, studyDays: [0, 1, 2, 3, 4], blurb: 'Half an hour a day on weekdays. Light and long.' },
   };
+  const MIN_HPW = 2.5;
 
   class RegistrarError extends Error {
     constructor(code, message, extra = {}) { super(message); this.name = 'RegistrarError'; this.code = code; Object.assign(this, extra); }
@@ -55,7 +56,8 @@
   function hoursFor({ words, segments, analysis }) {
     const readHours = words / 9000;
     const diffMult = [0.85, 0.95, 1.05, 1.2, 1.4][analysis.difficulty - 1];
-    return Math.max(6, segments.length * 2.5, readHours * 3.5 * diffMult);
+    // the per-section floor matters for dense short notes; for a long book the word count carries the estimate
+    return Math.max(6, Math.min(segments.length * 2.5, 40), readHours * 3.5 * diffMult);
   }
 
   // Break one segment into bite-sized reading chunks: at its sub-headings when it has them, else at paragraph
@@ -83,28 +85,37 @@
       }
       if (cur) pieces.push({ title: parts > 1 ? `${title} · part ${n}` : title, from: cur[0], to: cur[1] });
     }
-    const kept = pieces.filter((p) => L.intake.words(text.slice(p.from, p.to)) > 0);
+    let kept = pieces.filter((p) => L.intake.words(text.slice(p.from, p.to)) > 0);
     // a tiny opening piece (a title page, an intro line) joins the piece after it
     if (kept.length > 1 && L.intake.words(text.slice(kept[0].from, kept[0].to)) < 80) { kept[1].from = kept[0].from; kept.shift(); }
+    // tiny sub-sections merge with their neighbours until a chunk is worth sitting down for
+    const merged = [];
+    for (const p of kept) {
+      const last = merged[merged.length - 1];
+      if (last && minutesFor(last.from, last.to) < 12 && minutesFor(last.from, p.to) <= maxMin) { last.to = p.to; last.title = last.title.replace(/ …$/, '') + ' …'; }
+      else merged.push(Object.assign({}, p));
+    }
+    kept = merged;
     return kept.map((p) => Object.assign(p, { minutes: minutesFor(p.from, p.to) }));
   }
 
-  function buildPlan({ analysis, segments, text, sources, words, paceKey, weeksOverride }) {
+  function buildPlan({ analysis, segments, text, sources, words, paceKey }) {
     const pace = PACES[paceKey];
     const b = budget();
-    if (b.available < 3) {
+    if (b.available < MIN_HPW) {
       const running = courses('active').sort(L.by((c) => c.term.end));
       const nextFree = running.length ? running[0].term.end : null;
-      throw new RegistrarError('budget', `Your timetable is full: ${b.available % 1 ? b.available.toFixed(1) : b.available} hours a week are free and a course needs at least 3.${nextFree ? ` The next course ends on ${L.fmt.date(nextFree)}.` : ''}`, { available: b.available, nextFree });
+      throw new RegistrarError('budget', `Your timetable is full: ${b.available % 1 ? b.available.toFixed(1) : b.available} hours a week are free and a course needs at least ${MIN_HPW}.${nextFree ? ` The next course ends on ${L.fmt.date(nextFree)}.` : ''}`, { available: b.available, nextFree });
     }
     const totalHours = hoursFor({ words, segments, analysis });
-    const hpw0 = Math.min(b.available, pace.hpwCap);
-    const weeks = weeksOverride || L.clamp(Math.ceil(totalHours / hpw0), 2, 16);
-    const hoursPerWeek = Math.max(3, Math.ceil((totalHours / weeks) * 2) / 2);
-    if (hoursPerWeek > b.available + 1e-9) throw new RegistrarError('budget', `${pace.label} pace needs ${hoursPerWeek} h/week; ${b.available} are free.`, { available: b.available });
-    const credits = hoursPerWeek >= 9 ? 4 : hoursPerWeek >= 6 ? 3 : hoursPerWeek >= 4 ? 2 : 1;
     const studyDays = pace.studyDays;
-    const minutesPerDay = Math.round((hoursPerWeek * 60) / studyDays.length);
+    // daily effort sets the weekly load; if the budget cannot carry it, the pace is reduced to fit (and says so)
+    let minutesPerDay = pace.minutesPerDay;
+    let hoursPerWeek = (minutesPerDay * studyDays.length) / 60;
+    let reduced = false;
+    if (hoursPerWeek > b.available + 1e-9) { hoursPerWeek = Math.floor(b.available * 2) / 2; minutesPerDay = Math.floor((hoursPerWeek * 60) / studyDays.length); reduced = true; }
+    const weeks = L.clamp(Math.ceil(totalHours / hoursPerWeek), 2, 52);
+    const credits = hoursPerWeek >= 9 ? 4 : hoursPerWeek >= 6 ? 3 : hoursPerWeek >= 4 ? 2 : 1;
     const start = D.nextMonday(L.today());
     const term = { start: D.iso(start), end: D.iso(D.addDays(start, weeks * 7 - 1)), weeks };
     const concurrent = L.S.courses.filter((c) => c.state === 'enrolled' && overlaps(c, { term }));
@@ -199,9 +210,9 @@
     assessments.push({ id: L.uid('a'), kind: 'final', title: 'Final examination', week: weeks, coversWeeks: weeksOut.map((w) => w.n), opensAt: at(finalDate, 9), dueAt: at(finalDate, 21), closesAt: at(finalDate, 21), durationMin: 120, lateAllowed: false, paper: null, attempt: null, grade: null });
     assessments.sort(L.by('dueAt'));
 
-    // daily study blocks with bite-sized chunks
-    const maxMin = L.clamp(Math.round(minutesPerDay / 3), 12, 25);
-    const practiseMin = L.clamp(Math.round(minutesPerDay * 0.3), 10, 25);
+    // daily study blocks with bite-sized chunks; reading gets the larger share of each day, practice the rest
+    const maxMin = L.clamp(Math.round(minutesPerDay / 3), 10, 25);
+    const practiseMin = L.clamp(Math.round(minutesPerDay * 0.3), 10, 30);
     const locateIn = (from, to) => locateWith(sources, from, to);
     const sessions = [];
     let dayIndex = 0;
@@ -212,8 +223,8 @@
       if (w.kind === 'final') days = days.filter((d) => d.date < finalDate);
       if (w.kind === 'midterm' && midDate) days = days.filter((d) => d.date !== midDate);
       if (!days.length) continue;
-      // spread the week's reading across its days: each day takes its share by count, capped by minutes
-      const readBudget = Math.max(maxMin, Math.ceil(L.sum(reading.map((r) => r.minutes)) / days.length));
+      // spread the week's reading across its days: each day takes its share by count, capped by the day's reading time
+      const readBudget = Math.max(maxMin, Math.min(Math.ceil(L.sum(reading.map((r) => r.minutes)) / days.length), Math.round(minutesPerDay * 0.7)));
       let ri = 0;
       days.forEach((d, di) => {
         const chunks = [];
@@ -250,15 +261,15 @@
     const levelNo = analysis.level === 'advanced' ? 3 : analysis.level === 'intermediate' ? 2 : 1;
     const seq = 1 + L.S.courses.filter((c) => c.subjectCode === analysis.subjectCode).length;
     const code = `${analysis.subjectCode} ${levelNo}${String(seq).padStart(2, '0')}`;
-    const hueUse = HUES.map((h) => L.S.courses.filter((c) => c.hue === h).length);
-    const hue = HUES[hueUse.indexOf(Math.min(...hueUse))];
+    const colorUse = COLORS.map((h) => L.S.courses.filter((c) => c.color === h).length);
+    const color = COLORS[colorUse.indexOf(Math.min(...colorUse))];
 
     return {
       code, title: analysis.title, subject: analysis.subject, subjectCode: analysis.subjectCode, level: analysis.level, difficulty: analysis.difficulty,
-      description: analysis.description, prerequisites: analysis.prerequisites || [], credits, hue,
-      material: { sources: sources.map((s) => ({ id: s.id, name: s.name, kind: s.kind, words: s.words, chars: s.chars, pages: s.pages, url: s.url, offset: s.offset || 0, pageStarts: s.pageStarts, hasFile: !!s.file })), words, chars: text.length, segments },
+      description: analysis.description, prerequisites: analysis.prerequisites || [], credits, color,
+      material: { sources: sources.map((s) => ({ id: s.id, name: s.name, kind: s.kind, words: s.words, chars: s.chars, pages: s.pages, url: s.url, offset: s.offset || 0, pageStarts: s.pageStarts, hasFile: !!s.file })), words, chars: text.length, segments: segments.map((g) => ({ i: g.i, title: g.title, start: g.start, end: g.end, words: g.words })) },
       analysis: { source: analysis.source || 'offline', model: analysis.model, note: analysis.note, units },
-      term, plan: { pace: paceKey, paceLabel: pace.label, hoursPerWeek, totalHours: Math.round(totalHours * 10) / 10, slot, studyDays, minutesPerDay, sessionsPerWeek: studyDays.length },
+      term, plan: { pace: paceKey, paceLabel: pace.label, hoursPerWeek, totalHours: Math.round(totalHours * 10) / 10, slot, studyDays, minutesPerDay, sessionsPerWeek: studyDays.length, reduced },
       weeks: weeksOut, sessions, assessments, policy, notes: {},
       sourcesText: text, sourceFiles: sources.filter((s) => s.file).map((s) => ({ id: s.id, file: s.file })),
     };
@@ -271,7 +282,7 @@
     return { source: src, pages: [pageOf(from), pageOf(Math.max(from, to - 1))] };
   }
 
-  // The three pacings. Each is a full prospectus or { unavailable } — never a throw unless all three are impossible.
+  // The three pacings. Each is a full prospectus or { unavailable } — a throw only when all three are impossible.
   function plans(input) {
     const out = {};
     const errs = [];
@@ -279,13 +290,7 @@
       try { out[key] = buildPlan(Object.assign({}, input, { paceKey: key })); }
       catch (e) { out[key] = { pace: key, paceLabel: PACES[key].label, unavailable: e.message, code: e.code }; errs.push(e); }
     }
-    // the three must differ in length: condensed shortest, extended longest
-    const ok = (k) => out[k] && !out[k].unavailable;
-    const rebuild = (key, weeks) => { try { out[key] = buildPlan(Object.assign({}, input, { paceKey: key, weeksOverride: weeks })); } catch (e) { out[key] = { pace: key, paceLabel: PACES[key].label, unavailable: e.message, code: e.code }; } };
-    if (ok('standard') && ok('condensed') && out.condensed.term.weeks >= out.standard.term.weeks) rebuild('condensed', Math.max(2, out.standard.term.weeks - 1));
-    if (ok('standard') && ok('extended') && out.extended.term.weeks <= out.standard.term.weeks) rebuild('extended', Math.min(16, out.standard.term.weeks + 1));
-    if (ok('condensed') && ok('extended') && ok('standard') && out.condensed.term.weeks === out.standard.term.weeks && out.standard.term.weeks < 16) rebuild('standard', out.standard.term.weeks + 1), (out.extended.term.weeks <= out.standard.term.weeks ? rebuild('extended', Math.min(16, out.standard.term.weeks + 1)) : null);
-    if (!Object.keys(PACES).some(ok)) throw errs[0] || new RegistrarError('budget', 'No pacing fits your study budget.');
+    if (!Object.keys(PACES).some((k) => !out[k].unavailable)) throw errs[0] || new RegistrarError('budget', 'No pacing fits your study budget.');
     return out;
   }
   const plan = (input) => plans(input).standard; // kept for tools that want one prospectus
@@ -295,11 +300,18 @@
     const c = Object.assign({}, prospectus, { id: L.uid('c'), createdAt: new Date(L.now()).toISOString(), state: 'enrolled' });
     const text = c.sourcesText; delete c.sourcesText;
     const files = c.sourceFiles || []; delete c.sourceFiles;
+    // the record comes first; a storage failure for the material must never lose the enrolment
     L.S.courses.push(c);
-    await L.db.putMaterial(c.id, text);
-    for (const f of files) await L.db.putFile(f.id, f.file);
+    L.saveNow();
+    const problems = [];
+    try { await L.db.putMaterial(c.id, text); } catch (e) { console.error(e); c.material.textStored = false; problems.push('the text copy'); }
+    for (const f of files) {
+      try { await L.db.putFile(f.id, f.file); }
+      catch (e) { console.error(e); const src = c.material.sources.find((x) => x.id === f.id); if (src) src.hasFile = false; problems.push(`the original of ${f.file.name || 'a file'}`); }
+    }
     await L.ledger.append('enrolled', { courseId: c.id, code: c.code, title: c.title, weeks: c.term.weeks, start: c.term.start, end: c.term.end, hoursPerWeek: c.plan.hoursPerWeek, pace: c.plan.pace });
-    L.save();
+    L.saveNow();
+    if (problems.length && L.ui) L.ui.toast(`Enrolled, but this device could not store ${problems.join(' and ')}. Reading will use what is available.`, 'warn', 8000);
     return c;
   }
 

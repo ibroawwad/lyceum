@@ -62,3 +62,31 @@ const L = ctx.L;
   await L.registrar.sweep();
   console.log('auto-submitted:', q2.grade && q2.grade.pct === 0 && q2.attempt.auto === true && !q2.grade.missed, 'state', L.registrar.assessmentState(c, q2));
 })().catch(e => { console.error(e); process.exit(1); });
+// a 600-page book: pacings must scale with the material
+(async () => {
+  await new Promise(r => setTimeout(r, 2500));
+  const L = ctx.L;
+  L.S.courses = []; L.S.settings.weeklyHours = 14;
+  const para = 'The theory develops from a small set of definitions into a body of results that support the applications in later chapters. Each section introduces one idea, proves the results that depend on it, and closes with worked examples that the exercises extend. ';
+  const big = Array.from({ length: 120 }, (_, i) => `## ${i + 1}. Section ${i + 1}\n\n` + Array.from({ length: 10 }, (_, j) => `### ${i + 1}.${j + 1} Topic ${j + 1}\n\n` + para.repeat(5)).join('\n\n')).join('\n\n');
+  const n = L.intake.normalize(big); const segs = L.intake.segment(n); const w = L.intake.words(n);
+  const a = (await L.faculty.offline.analyze({ text: n, segments: segs, hint: 'Big Book' })).analysis;
+  const all = L.registrar.plans({ analysis: a, segments: segs, text: n, sources: [L.intake.fromText(n, 'big')], words: w });
+  console.log('BIG BOOK', w, 'words', segs.length, 'segments');
+  for (const k of Object.keys(all)) { const p = all[k]; console.log(' ', k, p.unavailable || `${p.term.weeks}w · ${p.plan.hoursPerWeek}h/w · ${p.plan.minutesPerDay}min/day · ${p.sessions.length} blocks · avg block ${Math.round(p.sessions.reduce((x, s) => x + s.minutes, 0) / p.sessions.length)} min · ${p.assessments.length} assessments`); }
+  const std = all.standard; const reads = std.sessions.flatMap(s => s.chunks.filter(k => k.kind === 'read'));
+  console.log('  standard read chunks', reads.length, 'min', Math.min(...reads.map(k => k.minutes)), 'max', Math.max(...reads.map(k => k.minutes)), 'segments covered', new Set(reads.map(k => k.segment)).size, '/', segs.length, 'state size KB', Math.round(JSON.stringify(std).length / 1024));
+})().catch(e => { console.error(e); process.exit(1); });
+(async () => {
+  await new Promise(r => setTimeout(r, 4000));
+  const L = ctx.L; const c = L.S.courses[0] || null;
+  // size breakdown of the last big plan
+  const para = 'The theory develops from a small set of definitions into a body of results that support the applications in later chapters. Each section introduces one idea, proves the results that depend on it, and closes with worked examples that the exercises extend. ';
+  const big = Array.from({ length: 120 }, (_, i) => `## ${i + 1}. Section ${i + 1}\n\n` + Array.from({ length: 10 }, (_, j) => `### ${i + 1}.${j + 1} Topic ${j + 1}\n\n` + para.repeat(5)).join('\n\n')).join('\n\n');
+  const n = L.intake.normalize(big); const segs = L.intake.segment(n); const w = L.intake.words(n);
+  const a = (await L.faculty.offline.analyze({ text: n, segments: segs, hint: 'Big Book' })).analysis;
+  const p = L.registrar.plans({ analysis: a, segments: segs, text: n, sources: [L.intake.fromText(n, 'big')], words: w }).standard;
+  for (const k of Object.keys(p)) { const v = JSON.stringify(p[k] === undefined ? null : p[k]); if (v.length > 5000) console.log('  size', k, Math.round(v.length / 1024), 'KB'); }
+  const reads = p.sessions.flatMap(s => s.chunks.filter(k => k.kind === 'read'));
+  console.log('  chunks now', reads.length, 'min', Math.min(...reads.map(k => k.minutes)), 'max', Math.max(...reads.map(k => k.minutes)));
+})().catch(e => { console.error(e); process.exit(1); });
