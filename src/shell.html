@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lyceum</title>
+<meta name="description" content="Lyceum turns any study material into a real university course with a binding term calendar, examinations and a permanent record.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- FONTS -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+<script>
+  if (window.pdfjsLib) {
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+  try {
+    var t = localStorage.getItem('lyceum.theme');
+    if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+  } catch (e) {}
+</script>
+<style>
+/* STYLES */
+</style>
+</head>
+<body>
+<div id="app" class="app">
+  <aside id="rail" class="rail" aria-label="Navigation"></aside>
+  <main id="main" class="main" tabindex="-1"></main>
+</div>
+<div id="toasts" class="toast-host" aria-live="polite"></div>
+<div id="modals" class="modal-host"></div>
+<script>
+/* SCRIPTS */
+</script>
+</body>
+</html>
