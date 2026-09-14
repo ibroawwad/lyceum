@@ -43,7 +43,7 @@
       const hours = []; for (let h = H0 + 1; h < H1; h++) hours.push(`<span style="top:${(h - H0) * PX}px">${String(h).padStart(2, '0')}:00</span>`);
       const active = R().courses('active');
       return `<div class="page is-wide">
-        <div class="page-head"><div><h1 class="display">Calendar</h1><span class="small muted">${D.monthName(m)} ${m.getFullYear()}</span></div>
+        <div class="page-head is-row"><div><h1 class="display">Calendar</h1><span class="small muted">${D.monthName(m)} ${m.getFullYear()}</span></div>
           <div class="actions cal-nav"><a class="btn btn-quiet" href="#/calendar?m=${ym(prev)}">← ${D.monthName(prev).slice(0, 3)}</a><a class="btn" href="#/calendar">Today</a><a class="btn btn-quiet" href="#/calendar?m=${ym(next)}">${D.monthName(next).slice(0, 3)} →</a></div></div>
         <div class="calendar">${DAYS.map((d) => `<div class="cal-h">${d}</div>`).join('')}${cells.join('')}</div>
         <div class="agenda-14">${Array.from({ length: 14 }, (_, i) => D.addDays(today, i)).map((d, i) => { const sess = R().sessionsOn(d); const due = R().deadlines({ from: D.setTime(d, 0, 0), to: D.setTime(d, 23, 59, 59) }); if (!sess.length && !due.length) return ''; return `<div class="agenda-day"><div class="agenda-date"><b>${D.dayName(d).slice(0, 3)}</b> ${L.fmt.date(d).slice(4)}${i === 0 ? ' · today' : ''}</div>${sess.map(({ course: c, session: s }) => `<a class="cal-ev" style="--ch:${L.cc(c)}" href="#/course/${c.id}/day/${s.date}">${hm(s.start)} ${esc(c.code)} · ${s.chunks.length} chunks · ${L.fmt.dur(s.minutes)}</a>`).join('')}${due.map(({ course: c, assessment: a }) => `<a class="cal-ev is-due${a.kind === 'midterm' || a.kind === 'final' ? ' is-exam' : ''}" style="--ch:${L.cc(c)}" href="#/assess/${c.id}/${a.id}">${esc(a.title)} · ${esc(c.code)} · ${L.fmt.time(a.dueAt)}</a>`).join('')}</div>`; }).join('') || '<p class="muted small">Nothing in the next two weeks.</p>'}</div>
@@ -64,7 +64,7 @@
       const W = 560, H = 160, pad = 28, bw = (W - pad * 2) / 8;
       const bars = st.weekMinutes.map((w, i) => { const h = Math.round((w.minutes / max) * (H - 40)); return `<g transform="translate(${pad + i * bw} 0)"><rect x="${bw * 0.18}" y="${H - 24 - h}" width="${bw * 0.64}" height="${h}" rx="4" fill="${i === 7 ? 'var(--accent)' : 'var(--card-3)'}"/><text x="${bw / 2}" y="${H - 8}" text-anchor="middle" font-size="10" fill="var(--muted)">${L.fmt.date(w.from).slice(4)}</text>${w.minutes ? `<text x="${bw / 2}" y="${H - 30 - h}" text-anchor="middle" font-size="10" fill="var(--text-2)">${w.minutes >= 60 ? (w.minutes / 60).toFixed(1) + 'h' : w.minutes + 'm'}</text>` : ''}</g>`; }).join('');
       const courses = st.perCourse.filter((x) => x.due > 0 || R().courseState(x.course) === 'running');
-      return `<div class="page"><div class="page-head"><div><h1 class="display">Stats</h1></div><div class="actions"><a class="btn btn-sm btn-quiet" href="#/record">Grades →</a></div></div>
+      return `<div class="page"><div class="page-head is-row"><div><h1 class="display">Stats</h1></div><div class="actions"><a class="btn btn-sm btn-quiet" href="#/record">Grades →</a></div></div>
         ${!courses.length ? `<div class="empty"><h2>No study days yet.</h2><p>Streaks and rates appear once a course is running.</p></div>` : `
         <div class="grid-2" style="grid-template-columns:repeat(2,minmax(0,1fr))"><div class="tile"><div class="tile-n">${st.streak}<span class="small muted" style="font-size:14px;font-weight:500"> day${st.streak === 1 ? '' : 's'}</span></div><div class="tile-l">Current streak</div></div><div class="tile"><div class="tile-n">${st.longest}</div><div class="tile-l">Longest streak</div></div><div class="tile"><div class="tile-n">${pct(st.completionRate)}</div><div class="tile-l">Chunks done</div></div><div class="tile"><div class="tile-n">${pct(st.onTimeRate)}</div><div class="tile-l">Done on the day</div></div></div>
         <div class="section"><div class="section-head"><h2>Minutes studied · last 8 weeks</h2><span class="small muted">${st.days.perfect} perfect · ${st.days.partial} partial · ${st.days.missed} missed days</span></div><div class="card"><div class="card-body"><svg viewBox="0 0 ${W} ${H}" width="100%" class="chart" role="img" aria-label="Minutes studied per week">${bars}</svg></div></div></div>
@@ -105,7 +105,7 @@
       const s = L.S.student; const g = R().gpa();
       const courses = R().courses('all');
       return `<div class="page">
-        <div class="page-head"><div><h1 class="display">Grades</h1></div><div class="actions"><button class="btn btn-sm" data-act="verify-ledger">Verify record</button><button class="btn btn-sm" data-act="print">Print</button></div></div>
+        <div class="page-head is-row"><div><h1 class="display">Grades</h1></div><div class="actions"><button class="btn btn-sm" data-act="verify-ledger">Verify record</button><button class="btn btn-sm" data-act="print">Print</button></div></div>
         <div class="transcript">
           <div class="transcript-head"><div><div class="label">Student</div><div style="font-size:20px;font-weight:700">${esc(s.name)}</div><div class="mono small muted">${esc(s.id)} · since ${L.fmt.date(s.createdAt)}</div></div><div class="seal-lg">L</div></div>
           <div class="table-wrap"><table class="table"><thead><tr><th>Code</th><th>Course</th><th class="num">Credits</th><th>Term</th><th class="num">Mark</th><th class="num">Grade</th></tr></thead><tbody>
@@ -132,7 +132,7 @@
       const off = L.S.clock.offsetMs || 0;
       const models = L.faculty.MODELS.includes(s.model) ? L.faculty.MODELS : [s.model, ...L.faculty.MODELS];
       return `<div class="page">
-        <div class="page-head"><div><h1 class="display">More</h1></div><div class="actions"><a class="btn btn-sm btn-quiet" href="#/record">Grades →</a></div></div>
+        <div class="page-head is-row"><div><h1 class="display">More</h1></div><div class="actions"><a class="btn btn-sm btn-quiet" href="#/record">Grades →</a></div></div>
         <div class="grid-2">
           <div class="stack gap-3">
             <div class="card"><div class="card-head"><h2>Faculty</h2><span class="small muted">${L.faculty.available() ? 'key set' : 'offline examiner'}</span></div><div class="card-body stack gap-2">

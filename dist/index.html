@@ -114,11 +114,13 @@ button { cursor: pointer; }
 
 /* ---------- layout: phone-first, tab bar; desktop gets a slim rail ---------- */
 @media (max-width: 1023px) { html, body { overflow-x: hidden; } }
-.app { min-height: 100dvh; padding-bottom: calc(var(--tab-h) + env(safe-area-inset-bottom)); }
+.app { min-height: 100dvh; padding-top: env(safe-area-inset-top); padding-bottom: calc(var(--tab-h) + env(safe-area-inset-bottom)); }
+body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: env(safe-area-inset-top); background: var(--bg); z-index: 35; }
 .page > * { min-width: 0; }
 .main { min-width: 0; }
 .page { max-width: 640px; margin: 0 auto; padding: 18px 16px 40px; }
-.page-head { display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 18px; }
+.page-head { display: flex; flex-direction: column; gap: 12px; margin-bottom: 18px; }
+.page-head.is-row { flex-direction: row; align-items: center; justify-content: space-between; }
 .page-head > div:first-child { min-width: 0; }
 .page-head .actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .rail { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; background: var(--card); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); }
@@ -159,7 +161,7 @@ button { cursor: pointer; }
 
 @media (min-width: 1024px) {
   .app { display: grid; grid-template-columns: var(--rail-w) minmax(0, 1fr); padding-bottom: 0; }
-  .rail { position: sticky; top: 0; bottom: auto; height: 100dvh; display: flex; flex-direction: column; background: var(--bg); border-top: 0; border-right: 1px solid var(--line); padding: 22px 14px 18px; }
+  .rail { position: sticky; top: 0; bottom: auto; height: 100dvh; margin-top: calc(-1 * env(safe-area-inset-top)); padding-top: calc(22px + env(safe-area-inset-top)); display: flex; flex-direction: column; background: var(--bg); border-top: 0; border-right: 1px solid var(--line); padding: 22px 14px 18px; }
   .rail-brand { display: block; padding: 0 10px 22px; }
   .rail-nav { flex-direction: column; height: auto; gap: 2px; }
   .rail-nav a { flex: none; flex-direction: row; justify-content: flex-start; gap: 12px; padding: 10px 12px; border-radius: var(--r-ctl); font-size: 14px; }
@@ -168,7 +170,8 @@ button { cursor: pointer; }
   .rail-nav .badge { position: static; margin-left: auto; }
   .rail-foot { display: flex; flex-direction: column; gap: 12px; margin-top: auto; padding-top: 16px; }
   .page { max-width: 680px; padding: 36px 40px 60px; }
-  .page-head { flex-direction: row; align-items: center; justify-content: space-between; margin-bottom: 22px; }
+  .page-head { flex-direction: row; align-items: flex-end; justify-content: space-between; margin-bottom: 22px; }
+  .page-head.is-row { align-items: center; }
   .display { font-size: 30px; }
   .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -254,17 +257,17 @@ button { cursor: pointer; }
 .icon-sq.is-sm { width: 34px; height: 34px; border-radius: 10px; font-size: 12px; }
 
 /* ---------- study tiles (the signature grid) ---------- */
-.tiles { display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, minmax(0, 1fr)); grid-template-columns: repeat(var(--cols, 12), minmax(0, 1fr)); gap: 3px; width: max(100%, calc(var(--cols, 12) * 13px)); max-width: calc(var(--cols, 12) * 36px); }
-.tiles i { display: block; width: 100%; aspect-ratio: 1; border-radius: var(--r-tile); background: var(--card-2); }
+.tiles { display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, var(--tile, 12px)); grid-auto-columns: var(--tile, 12px); gap: 3px; width: max-content; }
+.tiles i { display: block; width: var(--tile, 12px); height: var(--tile, 12px); border-radius: var(--r-tile); background: var(--card-2); }
 .tiles i[data-v="full"] { background: var(--ch); }
 .tiles i[data-v="part"] { background: var(--ch); opacity: 0.45; }
 .tiles i[data-v="future"] { background: var(--card-2); opacity: 0.55; }
 .tiles i[data-v="off"] { background: var(--card-2); opacity: 0.35; }
 .tiles i.is-today { box-shadow: 0 0 0 1.5px var(--text); }
 .tiles-wrap { max-width: 100%; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
-.tiles-row { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 3px; width: 100%; }
-.tiles-row i { display: block; width: 100%; aspect-ratio: 1; max-height: 14px; border-radius: 3px; background: var(--card-2); }
-.tiles-row i[data-v="full"] { background: var(--ch); } .tiles-row i[data-v="part"] { background: var(--ch); opacity: 0.45; } .tiles-row i[data-v="future"] { background: var(--card-2); opacity: 0.55; } .tiles-row i[data-v="off"] { background: transparent; }
+.tiles-row { display: grid; grid-auto-flow: column; grid-auto-columns: var(--tile, 12px); gap: 3px; width: max-content; max-width: 100%; overflow: hidden; }
+.tiles-row i { display: block; width: var(--tile, 12px); height: var(--tile, 12px); border-radius: 3px; background: var(--card-2); }
+.tiles-row i[data-v="full"] { background: var(--ch); } .tiles-row i[data-v="part"] { background: var(--ch); opacity: 0.45; } .tiles-row i[data-v="future"] { background: var(--card-2); opacity: 0.55; } .tiles-row i[data-v="off"] { background: var(--card-2); opacity: 0.35; }
 .tiles-row i.is-today { box-shadow: 0 0 0 1.5px var(--text); }
 
 /* ---------- course cards ---------- */
@@ -366,7 +369,7 @@ button { cursor: pointer; }
 .standing-row:first-child { border-top: 0; }
 
 /* ---------- exam ---------- */
-.exam-bar { position: sticky; top: 0; z-index: 5; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 14px; align-items: center; padding: 12px 16px; margin: -18px -16px 18px; background: var(--card); border-bottom: 1px solid var(--line); }
+.exam-bar { position: sticky; top: env(safe-area-inset-top); z-index: 5; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 14px; align-items: center; padding: 12px 16px; margin: -18px -16px 18px; background: var(--card); border-bottom: 1px solid var(--line); }
 .exam-bar .title { font-weight: 700; } .exam-bar .sub { font-size: 12px; color: var(--muted); }
 .exam-bar .count { grid-column: 1; font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .exam-bar .timer { grid-column: 2; grid-row: 1 / 3; font-family: var(--font-mono); font-size: 32px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
@@ -437,7 +440,8 @@ button { cursor: pointer; }
 
 /* ---------- wizard / paces / prospectus ---------- */
 .wizard-steps { display: flex; gap: 6px; margin-bottom: 18px; }
-.wizard-step { flex: 1; padding: 8px 10px; font-size: 12px; font-weight: 600; color: var(--muted); background: var(--card); border-radius: 10px; display: flex; gap: 8px; align-items: center; }
+.wizard-step { flex: 1 1 0; min-width: 0; padding: 8px 10px; font-size: 12px; font-weight: 600; color: var(--muted); background: var(--card); border-radius: 10px; display: flex; gap: 8px; align-items: center; white-space: nowrap; overflow: hidden; }
+@media (max-width: 760px) { .wizard-step { flex: 0 0 auto; padding: 8px 9px; } .wizard-step:not(.is-active) { font-size: 0; gap: 0; } .wizard-step:not(.is-active) .n { font-size: 11px; } .wizard-step.is-active { flex: 1 1 auto; } }
 .wizard-step .n { font-family: var(--font-mono); font-size: 11px; width: 20px; height: 20px; border-radius: 50%; background: var(--card-2); display: grid; place-items: center; flex: none; }
 .wizard-step.is-active { color: var(--text); } .wizard-step.is-active .n { background: var(--accent); color: var(--accent-ink); }
 .wizard-step.is-done .n { background: var(--text); color: var(--bg); }
@@ -530,7 +534,7 @@ button { cursor: pointer; }
   .sheet-cols, .sheet-sign { grid-template-columns: 1fr; gap: 16px; }
   .sheet-table { font-size: 13px; } .sheet-table th { white-space: normal; }
 }
-.chart text { font-family: var(--font); }
+.chart text { font-family: var(--font); font-size: 15px; }
 
 /* ---------- print ---------- */
 @media print {
@@ -2628,10 +2632,12 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
   };
   L.tilesGrid = (c) => {
     const today = L.date.iso(L.today());
-    const start = L.date.parse(c.term.start), end = L.date.parse(c.term.end);
+    const start = L.date.parse(c.term.start);
+    const cols = Math.max(12, c.term.weeks); // a fixed horizon keeps short courses from looking like three fat columns
+    const end = L.date.addDays(start, cols * 7 - 1);
     const out = [];
-    for (let d = start; d <= end; d = L.date.addDays(d, 1)) { const iso = L.date.iso(d); out.push(`<i data-v="${L.tileState(c, iso)}"${iso === today ? ' class="is-today"' : ''} title="${iso}"></i>`); }
-    return `<div class="tiles-wrap"><div class="tiles" style="--ch:${L.cc(c)};--cols:${c.term.weeks}">${out.join('')}</div></div>`;
+    for (let d = start; d <= end; d = L.date.addDays(d, 1)) { const iso = L.date.iso(d); const v = iso > c.term.end ? 'off' : L.tileState(c, iso); out.push(`<i data-v="${v}"${iso === today ? ' class="is-today"' : ''} title="${iso}"></i>`); }
+    return `<div class="tiles-wrap"><div class="tiles" style="--ch:${L.cc(c)};--cols:${cols}">${out.join('')}</div></div>`;
   };
   L.tilesRow = (c, days = 14) => {
     const today = L.today();
@@ -2668,6 +2674,23 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
       </div>`;
   }
 
+  // tile grids get an explicit pixel size from their container so they never spill out of a card (Safari
+  // sizes aspect-ratio grid items unreliably); long terms scroll to the most recent weeks
+  L.sizeTiles = (root = document) => {
+    root.querySelectorAll('.tiles').forEach((g) => {
+      const wrap = g.parentElement; const cols = Number(g.style.getPropertyValue('--cols')) || 12;
+      const w = wrap.clientWidth || 300;
+      g.style.setProperty('--tile', `${L.clamp(Math.floor((w - (cols - 1) * 3) / cols), 7, 24)}px`);
+      wrap.scrollLeft = wrap.scrollWidth;
+    });
+    root.querySelectorAll('.tiles-row').forEach((g) => {
+      const n = g.children.length || 14; const w = g.parentElement.clientWidth || 300;
+      g.style.setProperty('--tile', `${L.clamp(Math.floor((w - (n - 1) * 3) / n), 6, 14)}px`);
+    });
+  };
+  let resizeTimer = null;
+  window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => L.sizeTiles(), 120); });
+
   // ---------- render ----------
   let current = null;
   L.render = () => {
@@ -2685,7 +2708,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
     try { main.innerHTML = view.render(route.params, route.query); }
     catch (e) { console.error(e); main.innerHTML = `<div class="page"><div class="empty"><h2>This page could not be drawn.</h2><p class="mono small">${esc(e.message)}</p><p><a class="btn mt-2" href="#/today">Back to Today</a></p></div></div>`; return; }
     if (busy) main.prepend(busy);
-    main.querySelectorAll('.tiles-wrap').forEach((w) => { w.scrollLeft = w.scrollWidth; }); // long terms: show the recent weeks
+    L.sizeTiles(main);
     if (view.mount) { try { const r = view.mount(main, route.params, route.query); if (r && r.catch) r.catch((e) => { console.error(e); L.ui.toast(e.message || 'Something went wrong.', 'bad'); }); } catch (e) { console.error(e); } }
     L.S.ui.lastRoute = location.hash;
     window.scrollTo(0, 0);
@@ -2807,7 +2830,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
       const gpa = R().gpa();
       const row = (c, a, when, action) => `<div class="row"><span class="icon-sq is-sm" style="--ch:${L.cc(c)}">${esc(c.subjectCode.slice(0, 2))}</span><div class="t"><b>${esc(a.title)}</b><span>${esc(c.code)} · ${when}</span></div>${action}</div>`;
       return `<div class="page">
-        <div class="page-head"><div><span class="eyebrow">${esc(eyebrow)}</span><h1 class="display">${greeting()}, ${esc(firstName())}.</h1></div><div class="actions"><a class="btn btn-icon" href="#/enrol" aria-label="Add a course" title="Add a course">+</a></div></div>
+        <div class="page-head is-row"><div><span class="eyebrow">${esc(eyebrow)}</span><h1 class="display">${greeting()}, ${esc(firstName())}.</h1></div><div class="actions"><a class="btn btn-icon" href="#/enrol" aria-label="Add a course" title="Add a course">+</a></div></div>
         ${notices.length ? `<div class="stack gap-1 mb-3">${notices.join('')}</div>` : ''}
         <div class="today-grid stack gap-2">
           ${sessions.length ? sessions.map(({ course: c, session: s }) => L.studyBlock(c, s, { today: true })).join('') : `<div class="card quiet"><div class="card-body"><b>No study block today.</b><div class="small muted mt-1">${nd ? `${esc(nd.assessment.title)} for ${esc(nd.course.code)} is due ${L.fmt.rel(nd.at - now)}.` : 'Nothing is due in the coming days.'}</div></div></div>`}
@@ -2874,7 +2897,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
           ${L.tilesGrid(c)}
         </a>`;
       });
-      return `<div class="page"><div class="page-head"><div><h1 class="display">Courses</h1></div><div class="actions"><a class="btn btn-icon" href="#/enrol" aria-label="Add a course" title="Add a course">+</a></div></div><div class="stack gap-2">${rows.join('')}</div></div>`;
+      return `<div class="page"><div class="page-head is-row"><div><h1 class="display">Courses</h1></div><div class="actions"><a class="btn btn-icon" href="#/enrol" aria-label="Add a course" title="Add a course">+</a></div></div><div class="stack gap-2">${rows.join('')}</div></div>`;
     },
   };
   L.actions.withdraw = async (el) => {
@@ -2978,7 +3001,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
       const mode = q.view === 'text' ? 'text' : 'pages';
       const src = active && c.material.sources.find((x) => x.id === active.source);
       const canPages = !!(src && src.hasFile);
-      return `<div class="page is-wide"><div class="page-head" style="--ch:${L.cc(c)}"><div><span class="eyebrow"><a href="#/course/${c.id}" class="code">${esc(c.code)}</a> · week ${s.week} · ${L.fmt.dateLong(s.date)}</span><h1 class="display">${esc(s.topic)}</h1><p class="lede">${L.fmt.dur(s.minutes)} · ${s.chunks.length} chunks${w ? ` · ${esc(w.title)}` : ''}</p></div>
+      return `<div class="page is-wide"><div class="page-head" style="--ch:${L.cc(c)}"><div><span class="eyebrow"><a href="#/course/${c.id}" class="code">${esc(c.code)}</a> · week ${s.week} · ${L.fmt.dateLong(s.date)}</span><h1 class="display">${esc(s.topic)}</h1><p class="lede">${L.fmt.dur(s.minutes)} · ${s.chunks.length} chunks</p></div>
         <div class="actions">${prev ? `<a class="btn btn-quiet" href="#/course/${c.id}/day/${prev.date}">← ${L.fmt.date(prev.date)}</a>` : ''}${next ? `<a class="btn btn-quiet" href="#/course/${c.id}/day/${next.date}">${L.fmt.date(next.date)} →</a>` : ''}</div></div>
         <div class="reading-layout">
           <div>
@@ -3241,7 +3264,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
       const hours = []; for (let h = H0 + 1; h < H1; h++) hours.push(`<span style="top:${(h - H0) * PX}px">${String(h).padStart(2, '0')}:00</span>`);
       const active = R().courses('active');
       return `<div class="page is-wide">
-        <div class="page-head"><div><h1 class="display">Calendar</h1><span class="small muted">${D.monthName(m)} ${m.getFullYear()}</span></div>
+        <div class="page-head is-row"><div><h1 class="display">Calendar</h1><span class="small muted">${D.monthName(m)} ${m.getFullYear()}</span></div>
           <div class="actions cal-nav"><a class="btn btn-quiet" href="#/calendar?m=${ym(prev)}">← ${D.monthName(prev).slice(0, 3)}</a><a class="btn" href="#/calendar">Today</a><a class="btn btn-quiet" href="#/calendar?m=${ym(next)}">${D.monthName(next).slice(0, 3)} →</a></div></div>
         <div class="calendar">${DAYS.map((d) => `<div class="cal-h">${d}</div>`).join('')}${cells.join('')}</div>
         <div class="agenda-14">${Array.from({ length: 14 }, (_, i) => D.addDays(today, i)).map((d, i) => { const sess = R().sessionsOn(d); const due = R().deadlines({ from: D.setTime(d, 0, 0), to: D.setTime(d, 23, 59, 59) }); if (!sess.length && !due.length) return ''; return `<div class="agenda-day"><div class="agenda-date"><b>${D.dayName(d).slice(0, 3)}</b> ${L.fmt.date(d).slice(4)}${i === 0 ? ' · today' : ''}</div>${sess.map(({ course: c, session: s }) => `<a class="cal-ev" style="--ch:${L.cc(c)}" href="#/course/${c.id}/day/${s.date}">${hm(s.start)} ${esc(c.code)} · ${s.chunks.length} chunks · ${L.fmt.dur(s.minutes)}</a>`).join('')}${due.map(({ course: c, assessment: a }) => `<a class="cal-ev is-due${a.kind === 'midterm' || a.kind === 'final' ? ' is-exam' : ''}" style="--ch:${L.cc(c)}" href="#/assess/${c.id}/${a.id}">${esc(a.title)} · ${esc(c.code)} · ${L.fmt.time(a.dueAt)}</a>`).join('')}</div>`; }).join('') || '<p class="muted small">Nothing in the next two weeks.</p>'}</div>
@@ -3262,7 +3285,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
       const W = 560, H = 160, pad = 28, bw = (W - pad * 2) / 8;
       const bars = st.weekMinutes.map((w, i) => { const h = Math.round((w.minutes / max) * (H - 40)); return `<g transform="translate(${pad + i * bw} 0)"><rect x="${bw * 0.18}" y="${H - 24 - h}" width="${bw * 0.64}" height="${h}" rx="4" fill="${i === 7 ? 'var(--accent)' : 'var(--card-3)'}"/><text x="${bw / 2}" y="${H - 8}" text-anchor="middle" font-size="10" fill="var(--muted)">${L.fmt.date(w.from).slice(4)}</text>${w.minutes ? `<text x="${bw / 2}" y="${H - 30 - h}" text-anchor="middle" font-size="10" fill="var(--text-2)">${w.minutes >= 60 ? (w.minutes / 60).toFixed(1) + 'h' : w.minutes + 'm'}</text>` : ''}</g>`; }).join('');
       const courses = st.perCourse.filter((x) => x.due > 0 || R().courseState(x.course) === 'running');
-      return `<div class="page"><div class="page-head"><div><h1 class="display">Stats</h1></div><div class="actions"><a class="btn btn-sm btn-quiet" href="#/record">Grades →</a></div></div>
+      return `<div class="page"><div class="page-head is-row"><div><h1 class="display">Stats</h1></div><div class="actions"><a class="btn btn-sm btn-quiet" href="#/record">Grades →</a></div></div>
         ${!courses.length ? `<div class="empty"><h2>No study days yet.</h2><p>Streaks and rates appear once a course is running.</p></div>` : `
         <div class="grid-2" style="grid-template-columns:repeat(2,minmax(0,1fr))"><div class="tile"><div class="tile-n">${st.streak}<span class="small muted" style="font-size:14px;font-weight:500"> day${st.streak === 1 ? '' : 's'}</span></div><div class="tile-l">Current streak</div></div><div class="tile"><div class="tile-n">${st.longest}</div><div class="tile-l">Longest streak</div></div><div class="tile"><div class="tile-n">${pct(st.completionRate)}</div><div class="tile-l">Chunks done</div></div><div class="tile"><div class="tile-n">${pct(st.onTimeRate)}</div><div class="tile-l">Done on the day</div></div></div>
         <div class="section"><div class="section-head"><h2>Minutes studied · last 8 weeks</h2><span class="small muted">${st.days.perfect} perfect · ${st.days.partial} partial · ${st.days.missed} missed days</span></div><div class="card"><div class="card-body"><svg viewBox="0 0 ${W} ${H}" width="100%" class="chart" role="img" aria-label="Minutes studied per week">${bars}</svg></div></div></div>
@@ -3303,7 +3326,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
       const s = L.S.student; const g = R().gpa();
       const courses = R().courses('all');
       return `<div class="page">
-        <div class="page-head"><div><h1 class="display">Grades</h1></div><div class="actions"><button class="btn btn-sm" data-act="verify-ledger">Verify record</button><button class="btn btn-sm" data-act="print">Print</button></div></div>
+        <div class="page-head is-row"><div><h1 class="display">Grades</h1></div><div class="actions"><button class="btn btn-sm" data-act="verify-ledger">Verify record</button><button class="btn btn-sm" data-act="print">Print</button></div></div>
         <div class="transcript">
           <div class="transcript-head"><div><div class="label">Student</div><div style="font-size:20px;font-weight:700">${esc(s.name)}</div><div class="mono small muted">${esc(s.id)} · since ${L.fmt.date(s.createdAt)}</div></div><div class="seal-lg">L</div></div>
           <div class="table-wrap"><table class="table"><thead><tr><th>Code</th><th>Course</th><th class="num">Credits</th><th>Term</th><th class="num">Mark</th><th class="num">Grade</th></tr></thead><tbody>
@@ -3330,7 +3353,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
       const off = L.S.clock.offsetMs || 0;
       const models = L.faculty.MODELS.includes(s.model) ? L.faculty.MODELS : [s.model, ...L.faculty.MODELS];
       return `<div class="page">
-        <div class="page-head"><div><h1 class="display">More</h1></div><div class="actions"><a class="btn btn-sm btn-quiet" href="#/record">Grades →</a></div></div>
+        <div class="page-head is-row"><div><h1 class="display">More</h1></div><div class="actions"><a class="btn btn-sm btn-quiet" href="#/record">Grades →</a></div></div>
         <div class="grid-2">
           <div class="stack gap-3">
             <div class="card"><div class="card-head"><h2>Faculty</h2><span class="small muted">${L.faculty.available() ? 'key set' : 'offline examiner'}</span></div><div class="card-body stack gap-2">

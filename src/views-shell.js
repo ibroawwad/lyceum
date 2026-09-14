@@ -47,10 +47,12 @@
   };
   L.tilesGrid = (c) => {
     const today = L.date.iso(L.today());
-    const start = L.date.parse(c.term.start), end = L.date.parse(c.term.end);
+    const start = L.date.parse(c.term.start);
+    const cols = Math.max(12, c.term.weeks); // a fixed horizon keeps short courses from looking like three fat columns
+    const end = L.date.addDays(start, cols * 7 - 1);
     const out = [];
-    for (let d = start; d <= end; d = L.date.addDays(d, 1)) { const iso = L.date.iso(d); out.push(`<i data-v="${L.tileState(c, iso)}"${iso === today ? ' class="is-today"' : ''} title="${iso}"></i>`); }
-    return `<div class="tiles-wrap"><div class="tiles" style="--ch:${L.cc(c)};--cols:${c.term.weeks}">${out.join('')}</div></div>`;
+    for (let d = start; d <= end; d = L.date.addDays(d, 1)) { const iso = L.date.iso(d); const v = iso > c.term.end ? 'off' : L.tileState(c, iso); out.push(`<i data-v="${v}"${iso === today ? ' class="is-today"' : ''} title="${iso}"></i>`); }
+    return `<div class="tiles-wrap"><div class="tiles" style="--ch:${L.cc(c)};--cols:${cols}">${out.join('')}</div></div>`;
   };
   L.tilesRow = (c, days = 14) => {
     const today = L.today();
@@ -87,6 +89,23 @@
       </div>`;
   }
 
+  // tile grids get an explicit pixel size from their container so they never spill out of a card (Safari
+  // sizes aspect-ratio grid items unreliably); long terms scroll to the most recent weeks
+  L.sizeTiles = (root = document) => {
+    root.querySelectorAll('.tiles').forEach((g) => {
+      const wrap = g.parentElement; const cols = Number(g.style.getPropertyValue('--cols')) || 12;
+      const w = wrap.clientWidth || 300;
+      g.style.setProperty('--tile', `${L.clamp(Math.floor((w - (cols - 1) * 3) / cols), 7, 24)}px`);
+      wrap.scrollLeft = wrap.scrollWidth;
+    });
+    root.querySelectorAll('.tiles-row').forEach((g) => {
+      const n = g.children.length || 14; const w = g.parentElement.clientWidth || 300;
+      g.style.setProperty('--tile', `${L.clamp(Math.floor((w - (n - 1) * 3) / n), 6, 14)}px`);
+    });
+  };
+  let resizeTimer = null;
+  window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => L.sizeTiles(), 120); });
+
   // ---------- render ----------
   let current = null;
   L.render = () => {
@@ -104,7 +123,7 @@
     try { main.innerHTML = view.render(route.params, route.query); }
     catch (e) { console.error(e); main.innerHTML = `<div class="page"><div class="empty"><h2>This page could not be drawn.</h2><p class="mono small">${esc(e.message)}</p><p><a class="btn mt-2" href="#/today">Back to Today</a></p></div></div>`; return; }
     if (busy) main.prepend(busy);
-    main.querySelectorAll('.tiles-wrap').forEach((w) => { w.scrollLeft = w.scrollWidth; }); // long terms: show the recent weeks
+    L.sizeTiles(main);
     if (view.mount) { try { const r = view.mount(main, route.params, route.query); if (r && r.catch) r.catch((e) => { console.error(e); L.ui.toast(e.message || 'Something went wrong.', 'bad'); }); } catch (e) { console.error(e); } }
     L.S.ui.lastRoute = location.hash;
     window.scrollTo(0, 0);
@@ -226,7 +245,7 @@
       const gpa = R().gpa();
       const row = (c, a, when, action) => `<div class="row"><span class="icon-sq is-sm" style="--ch:${L.cc(c)}">${esc(c.subjectCode.slice(0, 2))}</span><div class="t"><b>${esc(a.title)}</b><span>${esc(c.code)} · ${when}</span></div>${action}</div>`;
       return `<div class="page">
-        <div class="page-head"><div><span class="eyebrow">${esc(eyebrow)}</span><h1 class="display">${greeting()}, ${esc(firstName())}.</h1></div><div class="actions"><a class="btn btn-icon" href="#/enrol" aria-label="Add a course" title="Add a course">+</a></div></div>
+        <div class="page-head is-row"><div><span class="eyebrow">${esc(eyebrow)}</span><h1 class="display">${greeting()}, ${esc(firstName())}.</h1></div><div class="actions"><a class="btn btn-icon" href="#/enrol" aria-label="Add a course" title="Add a course">+</a></div></div>
         ${notices.length ? `<div class="stack gap-1 mb-3">${notices.join('')}</div>` : ''}
         <div class="today-grid stack gap-2">
           ${sessions.length ? sessions.map(({ course: c, session: s }) => L.studyBlock(c, s, { today: true })).join('') : `<div class="card quiet"><div class="card-body"><b>No study block today.</b><div class="small muted mt-1">${nd ? `${esc(nd.assessment.title)} for ${esc(nd.course.code)} is due ${L.fmt.rel(nd.at - now)}.` : 'Nothing is due in the coming days.'}</div></div></div>`}
