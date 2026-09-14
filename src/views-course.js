@@ -16,16 +16,13 @@
       if (!all.length) return `<div class="page"><div class="page-head"><div><h1 class="display">Courses</h1></div><div class="actions"><a class="btn btn-primary" href="#/enrol">Add a course</a></div></div><div class="empty"><h2>No courses yet.</h2><p>Add material and choose a pace. Dates, weights and exams are fixed from that moment.</p><div class="cols mt-3"><a class="btn btn-primary" href="#/enrol">Add a course</a><button class="btn" data-act="load-sample">Try the sample</button></div></div></div>`;
       const rows = all.map((c) => {
         const st = R().courseState(c); const s = R().standing(c); const wk = R().currentWeek(c);
-        const todayS = c.sessions.find((x) => x.date === L.date.iso(L.today()));
-        const doneToday = todayS ? todayS.chunks.filter((k) => k.done).length : 0;
-        const canWithdraw = c.state === 'enrolled' && st !== 'completed' && L.date.iso(L.today()) < c.policy.withdrawBefore;
-        return `<div class="course-card" style="--ch:${L.cc(c)}">
-          <div class="head"><a class="icon-sq" href="#/course/${c.id}" aria-label="${esc(c.code)}">${esc(c.subjectCode.slice(0, 2))}</a><div class="t"><a href="#/course/${c.id}" style="color:inherit"><b>${esc(c.title)}</b></a><span>${esc(c.code)} · ${st === 'running' ? `week ${wk} of ${c.term.weeks}` : st === 'upcoming' ? `starts ${L.fmt.date(c.term.start)}` : st}${c.plan.paceLabel ? ` · ${esc(c.plan.paceLabel.toLowerCase())}` : ''}</span></div><div class="right"><div class="letter">${c.final ? c.final.letter : (s.letter || '·')}</div><div class="small muted num">${c.final ? (c.final.pct == null ? 'W' : L.fmt.pct(c.final.pct)) : (s.current == null ? '' : L.fmt.pct(s.current))}</div></div></div>
+        const sub = st === 'running' ? `week ${wk} of ${c.term.weeks}` : st === 'upcoming' ? `starts ${L.fmt.date(c.term.start)}` : st === 'withdrawn' ? 'withdrawn' : `completed · ${c.final ? c.final.letter : ''}`;
+        return `<a class="course-card" href="#/course/${c.id}" style="--ch:${L.cc(c)}">
+          <div class="head"><span class="icon-sq">${esc(c.subjectCode.slice(0, 2))}</span><div class="t"><b>${esc(c.title)}</b><span>${esc(c.code)} · ${sub}</span></div><div class="letter">${c.final ? c.final.letter : (s.letter || '')}</div></div>
           ${L.tilesGrid(c)}
-          <div class="foot"><span>${todayS ? `Today: ${doneToday}/${todayS.chunks.length} chunks` : st === 'running' ? 'No block today' : `${c.term.weeks} weeks · ${c.plan.minutesPerDay} min/day`}</span><span class="cols gap-1">${todayS ? `<a class="btn btn-sm btn-primary" href="#/course/${c.id}/day/${todayS.date}">Study</a>` : `<a class="btn btn-sm" href="#/course/${c.id}">Open</a>`}${canWithdraw ? `<button class="btn btn-quiet btn-sm" data-act="withdraw" data-course="${c.id}">Withdraw</button>` : ''}</span></div>
-        </div>`;
+        </a>`;
       });
-      return `<div class="page"><div class="page-head"><div><h1 class="display">Courses</h1><p class="lede">${all.length} on record</p></div><div class="actions"><a class="btn btn-primary" href="#/enrol">Add a course</a></div></div><div class="stack gap-2">${rows.join('')}</div></div>`;
+      return `<div class="page"><div class="page-head"><div><h1 class="display">Courses</h1></div><div class="actions"><a class="btn btn-icon" href="#/enrol" aria-label="Add a course" title="Add a course">+</a></div></div><div class="stack gap-2">${rows.join('')}</div></div>`;
     },
   };
   L.actions.withdraw = async (el) => {
@@ -43,10 +40,9 @@
     const slot = c.plan.slot; const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     const h = Math.floor(slot.start / 60), m = slot.start % 60;
     const canWithdraw = c.state === 'enrolled' && st !== 'completed' && L.date.iso(L.today()) < c.policy.withdrawBefore;
-    return `<div class="page-head" style="--ch:${L.cc(c)}"><div><div class="course-lockup"><span class="icon-sq">${esc(c.subjectCode.slice(0, 2))}</span><div><span class="code">${esc(c.code)}</span> ${courseChip(st)}<div class="small muted">${esc(c.subject)} · ${esc(c.level)} · ${c.credits} credit${c.credits === 1 ? '' : 's'}</div></div></div><h1 class="display mt-2">${esc(c.title)}</h1>
-      <div class="mt-2">${L.tilesGrid(c)}</div>
-      <div class="course-meta"><span class="mono">${L.fmt.date(c.term.start)} – ${L.fmt.date(c.term.end)}</span><span><b>${c.term.weeks}</b> weeks${st === 'running' ? ` · week <b>${wk}</b>` : ''}</span><span><b>${c.plan.hoursPerWeek}</b> h/week</span><span>${esc(c.plan.paceLabel || 'Standard')} pace · ${slot.days.length === 7 ? 'daily' : slot.days.map((d) => dayNames[d]).join('/')} ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')} · ${c.plan.minutesPerDay} min/day</span><span class="small muted">Faculty: ${c.analysis.source === 'llm' ? esc(c.analysis.model || 'model') : 'offline registrar'}</span></div></div>
-      <div class="actions">${c.certificate ? `<a class="btn" href="#/certificate/${c.id}">Certificate</a>` : ''}${c.contract ? `<a class="btn btn-quiet" href="#/contract/${c.id}">Contract</a>` : ''}${canWithdraw ? `<button class="btn btn-quiet" data-act="withdraw" data-course="${c.id}">Withdraw</button>` : ''}${wk >= 1 && wk <= c.term.weeks ? `<a class="btn btn-primary" href="#/course/${c.id}/day/${nextBlockDate(c)}">${c.sessions.some((s) => s.date === L.date.iso(L.today())) ? "Today's block" : 'Next block'}</a>` : ''}</div></div>`;
+    return `<div class="page-head" style="--ch:${L.cc(c)}"><div><div class="course-lockup"><span class="icon-sq">${esc(c.subjectCode.slice(0, 2))}</span><div><h1 class="display" style="font-size:22px">${esc(c.title)}</h1><div class="small muted">${esc(c.code)} · ${st === 'running' ? `week ${wk} of ${c.term.weeks}` : st === 'upcoming' ? `starts ${L.fmt.date(c.term.start)}` : st} · ${esc((c.plan.paceLabel || 'standard').toLowerCase())} · ${c.plan.minutesPerDay} min/day · ${c.credits} cr</div></div></div>
+      <div class="mt-2">${L.tilesGrid(c)}</div></div>
+      <div class="actions">${wk >= 1 && wk <= c.term.weeks ? `<a class="btn btn-primary" href="#/course/${c.id}/day/${nextBlockDate(c)}">${c.sessions.some((s) => s.date === L.date.iso(L.today())) ? "Today's block" : 'Next block'}</a>` : ''}${c.certificate ? `<a class="btn" href="#/certificate/${c.id}">Certificate</a>` : ''}${c.contract ? `<a class="btn btn-quiet" href="#/contract/${c.id}">Contract</a>` : ''}${canWithdraw ? `<button class="btn btn-quiet" data-act="withdraw" data-course="${c.id}">Withdraw</button>` : ''}</div></div>`;
   }
   const nextBlockDate = (c) => { const t = L.date.iso(L.today()); const s = c.sessions.find((x) => x.date >= t) || c.sessions[c.sessions.length - 1]; return s ? s.date : c.term.start; };
   const tabs = (c, tab) => `<nav class="tabs">${['plan', 'syllabus', 'assessments', 'grades', 'materials'].map((t) => `<a href="#/course/${c.id}?tab=${t}"${t === tab ? ' aria-current="page"' : ''}>${t.charAt(0).toUpperCase() + t.slice(1)}</a>`).join('')}</nav>`;
@@ -130,7 +126,7 @@
       const mode = q.view === 'text' ? 'text' : 'pages';
       const src = active && c.material.sources.find((x) => x.id === active.source);
       const canPages = !!(src && src.hasFile);
-      return `<div class="page"><div class="page-head" style="--ch:${L.cc(c)}"><div><span class="eyebrow"><a href="#/course/${c.id}" class="code">${esc(c.code)}</a> · week ${s.week} · ${L.fmt.dateLong(s.date)}</span><h1 class="display">${esc(s.topic)}</h1><p class="lede">${L.fmt.dur(s.minutes)} · ${s.chunks.length} chunks${w ? ` · ${esc(w.title)}` : ''}</p></div>
+      return `<div class="page is-wide"><div class="page-head" style="--ch:${L.cc(c)}"><div><span class="eyebrow"><a href="#/course/${c.id}" class="code">${esc(c.code)}</a> · week ${s.week} · ${L.fmt.dateLong(s.date)}</span><h1 class="display">${esc(s.topic)}</h1><p class="lede">${L.fmt.dur(s.minutes)} · ${s.chunks.length} chunks${w ? ` · ${esc(w.title)}` : ''}</p></div>
         <div class="actions">${prev ? `<a class="btn btn-quiet" href="#/course/${c.id}/day/${prev.date}">← ${L.fmt.date(prev.date)}</a>` : ''}${next ? `<a class="btn btn-quiet" href="#/course/${c.id}/day/${next.date}">${L.fmt.date(next.date)} →</a>` : ''}</div></div>
         <div class="reading-layout">
           <div>

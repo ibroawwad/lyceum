@@ -104,6 +104,7 @@
     try { main.innerHTML = view.render(route.params, route.query); }
     catch (e) { console.error(e); main.innerHTML = `<div class="page"><div class="empty"><h2>This page could not be drawn.</h2><p class="mono small">${esc(e.message)}</p><p><a class="btn mt-2" href="#/today">Back to Today</a></p></div></div>`; return; }
     if (busy) main.prepend(busy);
+    main.querySelectorAll('.tiles-wrap').forEach((w) => { w.scrollLeft = w.scrollWidth; }); // long terms: show the recent weeks
     if (view.mount) { try { const r = view.mount(main, route.params, route.query); if (r && r.catch) r.catch((e) => { console.error(e); L.ui.toast(e.message || 'Something went wrong.', 'bad'); }); } catch (e) { console.error(e); } }
     L.S.ui.lastRoute = location.hash;
     window.scrollTo(0, 0);
@@ -223,30 +224,16 @@
       missed.slice(-3).forEach(({ c, a }) => notices.push(`<div class="notice" data-kind="bad"><span>${esc(a.title)} for ${esc(c.code)} was missed and is recorded as 0.</span></div>`));
       openNow.filter((x) => x.st === 'late').forEach(({ c, a }) => notices.push(`<div class="notice"><span>${esc(a.title)} for ${esc(c.code)} is past due. Late submissions lose ${c.policy.late.perDayPct}% per day until ${L.fmt.dt(a.closesAt)}.</span></div>`));
       const gpa = R().gpa();
+      const row = (c, a, when, action) => `<div class="row"><span class="icon-sq is-sm" style="--ch:${L.cc(c)}">${esc(c.subjectCode.slice(0, 2))}</span><div class="t"><b>${esc(a.title)}</b><span>${esc(c.code)} · ${when}</span></div>${action}</div>`;
       return `<div class="page">
-        <div class="page-head"><div><span class="eyebrow">${esc(eyebrow)}</span><h1 class="display">${greeting()}, ${esc(firstName())}.</h1><p class="lede">${lede}</p></div>
-          <div class="actions"><a class="btn" href="#/enrol">Add a course</a></div></div>
-        <div class="today-grid">
-          <div>
-            <div class="section" style="margin-top:0"><div class="section-head"><h2>Today's study</h2><span class="small muted">${esc(L.fmt.date(now))}${todayChunks.length ? ` · ${todayDone}/${todayChunks.length}` : ''}</span></div>
-              ${sessions.length ? sessions.map(({ course: c, session: s }) => L.studyBlock(c, s, { today: true })).join('') : `<p class="muted">No study block today. ${nd ? 'Use the time on what is due next.' : ''}</p>`}
-              ${overdue.length ? `<div class="mt-3"><span class="label">Catch up · ${overdue.length} chunk${overdue.length === 1 ? '' : 's'} from earlier days</span><div class="chunks mt-1">${overdue.slice(0, 6).map(({ c, s, k }) => L.chunkRow(c, s, k)).join('')}${overdue.length > 6 ? `<p class="small muted">… and ${overdue.length - 6} more in the course plans.</p>` : ''}</div></div>` : ''}
-            </div>
-            <div class="section"><div class="section-head"><h2>Open now</h2></div>
-              ${openNow.length ? `<div class="agenda">${openNow.map(({ c, a, st }) => `<div class="agenda-item"><div class="time">${st === 'in_progress' ? `<span data-countdown="${R().deadline(c, a)}">${L.fmt.rel(R().deadline(c, a) - now)}</span>` : st === 'late' ? `closes ${L.fmt.rel(L.date.parse(a.closesAt) - now)}` : `due ${L.fmt.rel(L.date.parse(a.dueAt) - now)}`}</div><div class="who"><span class="dot" style="--ch:${L.cc(c)}"></span><span class="code" style="--ch:${L.cc(c)}">${esc(c.code)}</span></div><div class="what"><div class="t">${esc(a.title)} ${stateChip(st)}</div><div class="s">${a.durationMin ? L.fmt.dur(a.durationMin) + ' · ' : ''}${esc(R().KIND_TITLE[a.kind])} · closes ${L.fmt.dt(a.closesAt)}</div></div><div class="action">${L.actionFor(c, a)}</div></div>`).join('')}</div>` : '<p class="muted">Nothing is open at the moment.</p>'}
-            </div>
-            <div class="section"><div class="section-head"><h2>Due in the next 7 days</h2></div>
-              ${due.length ? `<div class="agenda due-list">${due.map(({ course: c, assessment: a, at }) => `<div class="agenda-item"><div class="time">${L.fmt.dt(at)}</div><div class="who"><span class="dot" style="--ch:${L.cc(c)}"></span><span class="code" style="--ch:${L.cc(c)}">${esc(c.code)}</span></div><div class="what"><div class="t">${esc(a.title)}</div><div class="s">${esc(R().KIND_TITLE[a.kind])}${a.durationMin ? ` · ${L.fmt.dur(a.durationMin)}` : ''} · opens ${L.fmt.dt(a.opensAt)}</div></div><div class="action">${L.actionFor(c, a)}</div></div>`).join('')}</div>` : '<p class="muted">Nothing due this week.</p>'}
-            </div>
-          </div>
-          <div class="stack gap-3">
-            <div class="card"><div class="card-head"><h2>Standing</h2><span class="small muted">${gpa.completed ? `${gpa.completed} completed` : 'no completed courses'}</span></div><div class="card-body">
-              <div class="cols gap-2"><div class="tile" style="flex:1"><div class="tile-n">${gpa.gpa == null ? '—' : gpa.gpa.toFixed(2)}</div><div class="tile-l">GPA · ${gpa.credits} credit${gpa.credits === 1 ? '' : 's'} earned</div></div></div>
-              <div class="mt-2">${courses.length ? courses.map((c) => { const s = R().standing(c); const st = R().courseState(c); return `<div class="standing-row"><div style="min-width:0"><a class="code" style="--ch:${L.cc(c)}" href="#/course/${c.id}">${esc(c.code)}</a> <span class="small muted">· ${st === 'upcoming' ? `starts ${L.fmt.date(c.term.start)}` : `week ${R().currentWeek(c)} of ${c.term.weeks}`}</span><div class="small truncate">${esc(c.title)}</div><div class="mt-1">${L.tilesRow(c)}</div></div><div class="num mono small">${s.current == null ? '—' : L.fmt.pct(s.current)}</div><div class="letter">${s.letter || '·'}</div></div>`; }).join('') : '<p class="muted small">No active courses.</p>'}</div>
-            </div></div>
-            <div class="card"><div class="card-head"><h2>This week's load</h2><span class="small muted num">${load.hours} / ${load.budget} h</span></div><div class="card-body"><div class="progress${load.hours > load.budget ? ' is-over' : ''}"><i style="width:${Math.min(100, (load.hours / load.budget) * 100)}%"></i></div><p class="small muted mt-2">${courses.map((c) => `${esc(c.code)} ${c.plan.hoursPerWeek} h`).join(' · ') || 'No committed hours.'}</p></div></div>
-            ${notices.length ? `<div class="stack gap-1"><span class="label">Notices</span>${notices.join('')}</div>` : ''}
-          </div>
+        <div class="page-head"><div><span class="eyebrow">${esc(eyebrow)}</span><h1 class="display">${greeting()}, ${esc(firstName())}.</h1></div><div class="actions"><a class="btn btn-icon" href="#/enrol" aria-label="Add a course" title="Add a course">+</a></div></div>
+        ${notices.length ? `<div class="stack gap-1 mb-3">${notices.join('')}</div>` : ''}
+        <div class="today-grid stack gap-2">
+          ${sessions.length ? sessions.map(({ course: c, session: s }) => L.studyBlock(c, s, { today: true })).join('') : `<div class="card quiet"><div class="card-body"><b>No study block today.</b><div class="small muted mt-1">${nd ? `${esc(nd.assessment.title)} for ${esc(nd.course.code)} is due ${L.fmt.rel(nd.at - now)}.` : 'Nothing is due in the coming days.'}</div></div></div>`}
+          ${overdue.length ? `<div class="card"><div class="card-head"><h3>Catch up</h3><span class="small muted">${overdue.length} from earlier days</span></div><div class="card-body pt-0"><div class="chunks">${overdue.slice(0, 6).map(({ c, s, k }) => L.chunkRow(c, s, k)).join('')}</div>${overdue.length > 6 ? `<p class="small muted mt-1">… and ${overdue.length - 6} more in the course plans.</p>` : ''}</div></div>` : ''}
+          ${openNow.length ? `<div class="card"><div class="card-head"><h3>Open now</h3></div><div class="card-body pt-0 rows">${openNow.map(({ c, a, st }) => row(c, a, st === 'in_progress' ? `<span data-countdown="${R().deadline(c, a)}">${L.fmt.rel(R().deadline(c, a) - now)}</span> left` : st === 'late' ? `late · closes ${L.fmt.dt(a.closesAt)}` : `due ${L.fmt.dt(a.dueAt)}`, `<a class="btn btn-sm ${st === 'in_progress' ? '' : 'btn-primary'}" href="#/assess/${c.id}/${a.id}">${st === 'in_progress' ? 'Resume' : st === 'late' ? 'Submit late' : 'Begin'}</a>`)).join('')}</div></div>` : ''}
+          ${due.length ? `<div class="card"><div class="card-head"><h3>Due soon</h3><span class="small muted">next 7 days</span></div><div class="card-body pt-0 rows">${due.map(({ course: c, assessment: a, at }) => row(c, a, L.fmt.dt(at), `<a class="btn btn-sm btn-quiet" href="#/assess/${c.id}/${a.id}">Details</a>`)).join('')}</div></div>` : ''}
+          ${courses.length ? `<div class="card"><div class="card-head"><h3>Standing</h3><span class="small muted">${gpa.completed ? `GPA ${gpa.gpa.toFixed(2)} · ${gpa.credits} cr` : `${load.hours} / ${load.budget} h this week`}</span></div><div class="card-body pt-0 rows">${courses.map((c) => { const st = R().standing(c); const cs = R().courseState(c); return `<a class="row" href="#/course/${c.id}"><span class="icon-sq is-sm" style="--ch:${L.cc(c)}">${esc(c.subjectCode.slice(0, 2))}</span><div class="t"><b>${esc(c.title)}</b><span>${cs === 'upcoming' ? `starts ${L.fmt.date(c.term.start)}` : `week ${R().currentWeek(c)} of ${c.term.weeks}`}${st.current == null ? '' : ` · ${L.fmt.pct(st.current)}`}</span></div><div class="letter">${st.letter || '·'}</div></a>`; }).join('')}</div></div>` : ''}
         </div>
       </div>`;
     },
@@ -258,16 +245,16 @@
   L.chunkRow = (c, s, k, { number, hint = false } = {}) => {
     const todayIso = L.date.iso(L.today());
     const state = k.done ? (L.date.iso(k.done) <= s.date ? 'done' : 'late') : s.date < todayIso ? 'overdue' : s.date > todayIso ? 'future' : 'due';
-    const where = k.kind === 'read' ? (k.pages ? (k.pages[0] === k.pages[1] ? `p. ${k.pages[0]}` : `pp. ${k.pages[0]}–${k.pages[1]}`) : 'text') : '';
+    const where = k.kind === 'read' ? (k.pages ? (k.pages[0] === k.pages[1] ? `p. ${k.pages[0]}` : `pp. ${k.pages[0]}–${k.pages[1]}`) : '') : '';
     const href = k.kind === 'read' ? `#/course/${c.id}/day/${s.date}?chunk=${k.id}` : `#/course/${c.id}/day/${s.date}`;
-    return `<div class="chunk" data-state="${state}" data-kind="${k.kind}"><label class="chunk-check"><input type="checkbox" data-in="chunk-done" data-course="${c.id}" data-session="${s.id}" data-chunk="${k.id}"${k.done ? ' checked disabled' : state === 'future' ? ' disabled' : ''}><span class="sr-only">Done</span></label>
-      <div class="chunk-body"><a class="chunk-title" href="${href}">${number ? `<span class="chunk-n">${number}</span>` : ''}${esc(k.title)}</a>${hint && k.hint ? `<div class="chunk-hint">${esc(k.hint)}</div>` : ''}<div class="chunk-meta"><span class="pill" data-kind="${k.kind}">${KIND_LABEL[k.kind] || k.kind}</span>${where ? ` <span>${where}</span>` : ''} <span class="num">${k.minutes} min</span>${state === 'late' ? ' <span class="chip" data-state="warn">Done late</span>' : state === 'overdue' ? ` <span class="chip" data-state="bad">Due ${L.fmt.date(s.date)}</span>` : ''}</div></div></div>`;
+    const meta = [`<span class="kind">${KIND_LABEL[k.kind] || k.kind}</span>`, where, `${k.minutes} min`, state === 'late' ? 'done late' : state === 'overdue' ? `due ${L.fmt.date(s.date)}` : ''].filter(Boolean).join(' · ');
+    return `<div class="chunk" data-state="${state}" data-kind="${k.kind}">
+      <div class="chunk-body"><a class="chunk-title" href="${href}">${esc(k.title)}</a>${hint && k.hint ? `<div class="chunk-hint">${esc(k.hint)}</div>` : ''}<div class="chunk-meta">${meta}</div></div>
+      <label class="chunk-check"><input type="checkbox" data-in="chunk-done" data-course="${c.id}" data-session="${s.id}" data-chunk="${k.id}"${k.done ? ' checked disabled' : state === 'future' ? ' disabled' : ''}><span class="sr-only">Done</span></label></div>`;
   };
   L.studyBlock = (c, s, { today = false, hints = false } = {}) => {
     const done = s.chunks.filter((k) => k.done).length;
-    const h = Math.floor(s.start / 60), m = s.start % 60;
-    return `<div class="study-block" style="--ch:${L.cc(c)}"><div class="study-head"><div><span class="code" style="--ch:${L.cc(c)}">${esc(c.code)}</span> <span class="small muted">· week ${s.week} · ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')} · ${L.fmt.dur(s.minutes)}</span><div class="study-topic">${esc(s.topic)}</div></div><div class="num small muted">${done}/${s.chunks.length}</div></div>
-      <div class="progress mb-2"><i style="width:${s.chunks.length ? (done / s.chunks.length) * 100 : 0}%"></i></div>
+    return `<div class="study-block" style="--ch:${L.cc(c)}"><div class="study-head"><a class="icon-sq" href="#/course/${c.id}" aria-label="${esc(c.code)}">${esc(c.subjectCode.slice(0, 2))}</a><div class="t"><b>${esc(c.title)}</b><span>${done}/${s.chunks.length} · ${L.fmt.dur(s.minutes)} · ${esc(s.topic)}</span></div>${today ? `<a class="btn btn-sm btn-quiet" href="#/course/${c.id}/day/${s.date}">Open</a>` : ''}</div>
       <div class="chunks">${s.chunks.map((k, i) => L.chunkRow(c, s, k, { number: i + 1, hint: hints })).join('')}</div></div>`;
   };
   L.inputs['chunk-done'] = async (el) => {

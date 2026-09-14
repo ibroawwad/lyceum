@@ -101,7 +101,7 @@
 
   // a chunk title fits on two phone lines: drop markdown hashes and long numbering, cap the length
   function shortTitle(t) {
-    t = String(t || '').replace(/^#+\s*/, '').replace(/\s+/g, ' ').trim();
+    t = String(t || '').replace(/^#+\s*/, '').replace(/\s+/g, ' ').replace(/\s*…$/, '').trim();
     if (t.length > 64) t = t.slice(0, 61).replace(/\s+\S*$/, '') + '…';
     return t;
   }
