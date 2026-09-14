@@ -166,10 +166,12 @@
     const typed = (nameEl ? nameEl.value : '').trim();
     const pad = L.papers.pad;
     const norm = (x) => x.trim().toLowerCase().replace(/\s+/g, ' ');
-    if (norm(typed) !== norm(L.S.student.name)) { W.error = `Type your name exactly as it appears on your record: ${L.S.student.name}.`; L.render(); return; }
-    if (!pad || pad.points < 20) { W.error = 'Draw your signature in the box.'; L.render(); return; }
+    // validation must not re-render: that would wipe the drawn signature and scroll away from the error
+    const fail = (msg) => { let n = document.getElementById('contract-error'); if (!n) { n = document.createElement('div'); n.id = 'contract-error'; n.className = 'notice mt-2'; n.dataset.kind = 'bad'; const btn = document.querySelector('[data-act=sign-enrol]'); btn.closest('.cols').before(n); } n.innerHTML = `<span>${esc(msg)}</span>`; n.scrollIntoView({ block: 'center', behavior: 'smooth' }); };
+    if (norm(typed) !== norm(L.S.student.name)) { fail(`Type your name exactly as it appears on your record: ${L.S.student.name}.`); if (nameEl) nameEl.focus(); return; }
+    if (!pad || pad.points < 20) { fail('Draw your signature in the box.'); return; }
     const signature = pad.dataUrl();
-    if (!signature) { W.error = 'Draw your signature in the box.'; L.render(); return; }
+    if (!signature) { fail('Draw your signature in the box.'); return; }
     W.busy = true;
     try {
       const c = await R().enrol(p, { no: W.contractNo, name: typed, signature });

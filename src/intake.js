@@ -258,7 +258,9 @@
     if (bodySegs.length) segments = bodySegs;
     const firstHead = segments.find((s) => s.title && !/^Part \d+$/.test(s.title) && s.title !== 'Front matter');
     const docTitle = (/^#\s+(.+)$/m.exec(text.slice(0, 4000)) || [])[1];
-    let title = (hint || '').trim() || (docTitle || '').trim() || (firstHead ? firstHead.title : '') || (sourceName || 'Untitled course').replace(/\.[a-z0-9]+$/i, '');
+    // the first short line of the document is usually its title (a PDF's cover, a chapter heading)
+    const firstLine = (text.split('\n').map((l) => l.trim()).find((l) => l.length >= 4 && l.length <= 90 && !/[.:;]$/.test(l)) || '').replace(/^#+\s*/, '');
+    let title = (hint || '').trim() || (docTitle || '').trim() || firstLine || (firstHead ? firstHead.title : '') || (sourceName || 'Untitled course').replace(/\.[a-z0-9]+$/i, '');
     title = title.replace(/^\d+(\.\d+)*\s+/, '');
     const probe = (title + '\n' + text.slice(0, 20000));
     let subjectCode = null, subject = 'General studies';
@@ -289,8 +291,9 @@
       const t = first.title && !/^Part \d+$/.test(first.title) ? first.title : `Unit ${k + 1}: ${topics.slice(0, 2).map(cap).join(' and ') || 'Reading'}`;
       return { title: t, segments: [g.from, g.to], topics, objectives: objectivesFor(topics, t), relativeSize: L.clamp(Math.round((g.words / maxW) * 5), 1, 5) };
     });
-    const names = units.slice(0, 3).map((u) => u.title);
-    const description = `${title} works through ${names.slice(0, -1).join(', ')}${names.length > 1 ? ' and ' : ''}${names[names.length - 1]}, with weekly quizzes and problem sets drawn directly from the material. The course is set at ${level} level and ends with a written final examination.`;
+    const names = units.slice(0, 3).map((u) => u.title).filter((n) => n.toLowerCase() !== title.toLowerCase());
+    const through = names.length ? ` works through ${names.slice(0, -1).join(', ')}${names.length > 1 ? ' and ' : ''}${names[names.length - 1]}${units.length > 3 ? ' and more' : ''}` : ` covers its material in ${units.length} unit${units.length === 1 ? '' : 's'}`;
+    const description = `${title}${through}, with weekly quizzes and problem sets drawn directly from the material. The course is set at ${level} level and ends with a written final examination.`;
     // unit ranges use original indices; non-body segments inside a range are skipped when scheduling
     return { title, subjectCode, subject, level, difficulty, description, prerequisites: [], units: repairUnits(units, allSegments.length) };
   }

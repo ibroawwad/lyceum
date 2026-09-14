@@ -147,7 +147,9 @@
     async composePaper({ course, assessment, text }) {
       const rnd = seeded(assessment.id + '|' + (course.id || course.code || ''));
       const terms = L.intake.keyTerms(text, 60).filter((t) => t.length >= 4 && t.length <= 28);
-      const sents = sentencesOf(text).filter((s) => s.length >= 60 && s.length <= 240 && !/[|{}<>]/.test(s) && (s.match(/[=∑∫^]/g) || []).length <= 3);
+      // sentences that stand on their own: drop leading connectors ("Third, …", "However, …") and anything that reads like a list item
+      const sents = sentencesOf(text).map((s) => s.replace(/^(?:first|second|third|fourth|finally|however|also|thus|hence|therefore|in words|for example|that is|note that)[,:]?\s+/i, (m) => '')).map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+        .filter((s) => s.length >= 60 && s.length <= 240 && !/[|{}<>]/.test(s) && (s.match(/[=∑∫^]/g) || []).length <= 3 && !/^(?:[A-Z]\d|[a-z]\)|\d+\))/.test(s));
       const contains = (s, t) => new RegExp('(^|[^A-Za-z])' + t.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + '([^A-Za-z]|$)', 'i').test(s);
       const pool = [];
       for (const s of sents) for (const t of terms) if (contains(s, t)) { pool.push({ s, t }); break; }
@@ -162,7 +164,9 @@
       };
       const usedTerms = new Set();
       const distractors = (term, n) => {
-        const cands = terms.filter((t) => t !== term && Math.abs(t.length - term.length) <= 6 && !term.includes(t) && !t.includes(term));
+        const shape = (t) => (/[A-Z]/.test(t.charAt(0)) ? 'cap' : 'low') + (t.includes(' ') ? 'phrase' : 'word');
+        let cands = terms.filter((t) => t !== term && Math.abs(t.length - term.length) <= 6 && !term.includes(t) && !t.includes(term) && t.length >= 5 && !/(?:ing|ed|ly)$/.test(t) && shape(t) === shape(term));
+        if (cands.length < 3) cands = terms.filter((t) => t !== term && !term.includes(t) && !t.includes(term) && t.length >= 5);
         return shuffle(cands, rnd).slice(0, n);
       };
       const qs = [];
