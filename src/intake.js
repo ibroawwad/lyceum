@@ -37,7 +37,45 @@
   function headingTitle(line) {
     return line.replace(/^#{1,6}\s*/, '').replace(/\s+#+$/, '').trim();
   }
-  function segment(text) {
+  // ---------- page-level front / back matter (PDFs) ----------
+  // A page is judged by its shape: a contents page is lines ending in page numbers, an index is short lines
+  // with comma-separated numbers, a copyright page names its ISBN. Front matter = every page up to the last
+  // such page in the opening stretch; back matter = from the first index-like page in the closing stretch.
+  function pageShape(pg) {
+    const lines = pg.split('\n').map((l) => l.trim()).filter(Boolean);
+    const w = words(pg);
+    if (w < 25) return 'blank';
+    const head = lines.slice(0, 4).join(' ');
+    if (/^(table of )?contents\b/i.test(head) || /\bcontents\b/i.test(lines[0] || '')) return 'toc';
+    if (w < 450 && /©|copyright|all rights reserved|isbn[\s:-]*[\d-]|printed in|library of congress|first (published|edition)|typeset in/i.test(pg)) return 'copyright';
+    if (/^index\b/i.test(lines[0] || '')) return 'index';
+    const ending = lines.filter((l) => /(\.{3,}|…)\s*\d{1,4}$/.test(l) || (/\s\d{1,4}$/.test(l) && l.length < 80) || /^\d{1,4}$/.test(l)).length;
+    if (lines.length >= 8 && ending / lines.length >= 0.4) return 'toc';
+    const indexy = lines.filter((l) => /\d{1,4}(\s*[,–-]\s*\d{1,4})+\s*$/.test(l) && l.length < 70).length;
+    if (lines.length >= 15 && indexy / lines.length >= 0.3) return 'index';
+    if (/^(bibliography|references|works cited|glossary|answers to|solutions to|about the author)/i.test(lines[0] || '')) return 'back';
+    return 'body';
+  }
+  // returns char ranges (in the joined text) that are front or back matter, one per source with page offsets
+  function pageRoles(sources) {
+    const ranges = [];
+    for (const src of sources || []) {
+      if (!src.pageStarts || src.pageStarts.length < 3 || !src.text) continue;
+      const n = src.pageStarts.length; const base = src.offset || 0;
+      const shapes = src.pageStarts.map((st, i) => pageShape(src.text.slice(st, i + 1 < n ? src.pageStarts[i + 1] : src.text.length)));
+      const opening = Math.max(3, Math.min(20, Math.ceil(n * 0.12)));
+      let frontEnd = -1;
+      for (let i = 0; i < opening; i++) if (['toc', 'copyright', 'blank'].includes(shapes[i])) frontEnd = i;
+      if (frontEnd >= 0 && frontEnd < n - 1) ranges.push({ role: 'front', start: base, end: base + src.pageStarts[frontEnd + 1], pages: [1, frontEnd + 1] });
+      const closing = Math.max(n - Math.max(3, Math.ceil(n * 0.15)), frontEnd + 2);
+      let backStart = -1;
+      for (let i = closing; i < n; i++) if (['index', 'back'].includes(shapes[i])) { backStart = i; break; }
+      if (backStart > 0) ranges.push({ role: 'back', start: base + src.pageStarts[backStart], end: base + src.text.length, pages: [backStart + 1, n] });
+    }
+    return ranges;
+  }
+
+  function segment(text, opts = {}) {
     text = String(text || '');
     const lines = text.split('\n');
     // char offset of each line
@@ -112,11 +150,20 @@
       if (cur) { if (segs.length && words(text.slice(cur.start, cur.end)) < 300) segs[segs.length - 1].end = cur.end; else segs.push(cur); }
       if (!segs.length) segs.push({ title: 'Part 1', start: 0, end: text.length });
     }
+    // PDF front/back matter found page by page: cut the segments at those boundaries and fix their roles
+    const forced = pageRoles(opts.sources);
+    for (const r of forced) {
+      const cut = (at) => { for (let i = 0; i < segs.length; i++) { const g = segs[i]; if (g.start < at && at < g.end) { const tail = { title: g.title, start: at, end: g.end }; g.end = at; segs.splice(i + 1, 0, tail); break; } } };
+      cut(r.start); cut(r.end);
+    }
     const out = segs.map((s, i) => ({ i, title: s.title, start: s.start, end: s.end, words: words(text.slice(s.start, s.end)) }));
     // sub-headings inside a segment name the bite-sized chunks; any detected heading that is not a segment boundary counts
     const bounds = new Set(out.map((s) => s.start));
     for (const s of out) s.subheads = heads.filter((h) => h.start > s.start && h.start < s.end && !bounds.has(h.start)).map((h) => ({ title: h.title, at: h.start }));
-    return classify(out, text);
+    classify(out, text);
+    for (const s of out) for (const r of forced) if (s.start >= r.start && s.end <= r.end) { s.role = r.role; if (r.role === 'front' && !/contents|preface|copyright|title/i.test(s.title)) s.title = s.title === 'Part 1' || /^Part \d+$/.test(s.title) ? 'Front matter' : s.title; }
+    if (!out.some((g) => g.role === 'body')) out.forEach((g) => { g.role = 'body'; });
+    return out;
   }
 
   // ---------- key terms ----------
@@ -181,7 +228,7 @@
     if (!segments.some((g) => g.role === 'body')) segments.forEach((g) => { g.role = 'body'; }); // never schedule nothing
     return segments;
   }
-  L.intake = { words, normalize, segment, classify, keyTerms, STOP };
+  L.intake = { words, normalize, segment, classify, pageShape, pageRoles, keyTerms, STOP };
 
   // ---------- offline analysis ----------
   const SUBJECTS = [

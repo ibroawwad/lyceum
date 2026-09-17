@@ -138,7 +138,7 @@
       const text = W.sources.map((s) => s.text).join('\n\n');
       const words = L.intake.words(text);
       log(`Reading ${W.sources.length} source${W.sources.length === 1 ? '' : 's'} · ${L.fmt.num(words)} words`);
-      const segments = L.intake.segment(text);
+      const segments = L.intake.segment(text, { sources: W.sources });
       log(`${segments.length} segment${segments.length === 1 ? '' : 's'} found`);
       const t0 = Date.now();
       if (L.faculty.available()) log('Consulting faculty…');

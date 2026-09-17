@@ -95,12 +95,15 @@
     root.querySelectorAll('.tiles').forEach((g) => {
       const wrap = g.parentElement; const cols = Number(g.style.getPropertyValue('--cols')) || 12;
       const w = wrap.clientWidth || 300;
-      g.style.setProperty('--tile', `${L.clamp(Math.floor((w - (cols - 1) * 3) / cols), 7, 24)}px`);
+      const gap = w / cols > 18 ? 4 : 3;
+      const tile = L.clamp(Math.floor((w - (cols - 1) * gap) / cols), 7, 22);
+      g.style.setProperty('--tile', `${tile}px`); g.style.setProperty('--gap', `${gap}px`);
       wrap.scrollLeft = wrap.scrollWidth;
     });
     root.querySelectorAll('.tiles-row').forEach((g) => {
       const n = g.children.length || 14; const w = g.parentElement.clientWidth || 300;
-      g.style.setProperty('--tile', `${L.clamp(Math.floor((w - (n - 1) * 3) / n), 6, 14)}px`);
+      const gap = 3; g.style.setProperty('--gap', `${gap}px`);
+      g.style.setProperty('--tile', `${L.clamp(Math.floor((w - (n - 1) * gap) / n), 6, 14)}px`);
     });
   };
   let resizeTimer = null;
@@ -247,7 +250,7 @@
       return `<div class="page">
         <div class="page-head is-row"><div><span class="eyebrow">${esc(eyebrow)}</span><h1 class="display">${greeting()}, ${esc(firstName())}.</h1></div><div class="actions"><a class="btn btn-icon" href="#/enrol" aria-label="Add a course" title="Add a course">+</a></div></div>
         ${notices.length ? `<div class="stack gap-1 mb-3">${notices.join('')}</div>` : ''}
-        <div class="today-grid stack gap-2">
+        <div class="today-grid stack gap-2 stagger">
           ${sessions.length ? sessions.map(({ course: c, session: s }) => L.studyBlock(c, s, { today: true })).join('') : `<div class="card quiet"><div class="card-body"><b>No study block today.</b><div class="small muted mt-1">${nd ? `${esc(nd.assessment.title)} for ${esc(nd.course.code)} is due ${L.fmt.rel(nd.at - now)}.` : 'Nothing is due in the coming days.'}</div></div></div>`}
           ${overdue.length ? `<div class="card"><div class="card-head"><h3>Catch up</h3><span class="small muted">${overdue.length} from earlier days</span></div><div class="card-body pt-0"><div class="chunks">${overdue.slice(0, 6).map(({ c, s, k }) => L.chunkRow(c, s, k)).join('')}</div>${overdue.length > 6 ? `<p class="small muted mt-1">… and ${overdue.length - 6} more in the course plans.</p>` : ''}</div></div>` : ''}
           ${openNow.length ? `<div class="card"><div class="card-head"><h3>Open now</h3></div><div class="card-body pt-0 rows">${openNow.map(({ c, a, st }) => row(c, a, st === 'in_progress' ? `<span data-countdown="${R().deadline(c, a)}">${L.fmt.rel(R().deadline(c, a) - now)}</span> left` : st === 'late' ? `late · closes ${L.fmt.dt(a.closesAt)}` : `due ${L.fmt.dt(a.dueAt)}`, `<a class="btn btn-sm ${st === 'in_progress' ? '' : 'btn-primary'}" href="#/assess/${c.id}/${a.id}">${st === 'in_progress' ? 'Resume' : st === 'late' ? 'Submit late' : 'Begin'}</a>`)).join('')}</div></div>` : ''}

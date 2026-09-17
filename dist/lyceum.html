@@ -91,6 +91,28 @@ button { cursor: pointer; }
 ::selection { background: var(--accent-soft); }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+/* ---------- motion ---------- */
+.main > .page, .main > .welcome { animation: page-in 260ms cubic-bezier(.2,.8,.2,1) both; }
+@keyframes page-in { from { opacity: 0; transform: translateY(8px); } }
+.stagger > * { animation: rise-in 360ms cubic-bezier(.2,.8,.2,1) both; }
+.stagger > :nth-child(1) { animation-delay: 0ms; } .stagger > :nth-child(2) { animation-delay: 40ms; } .stagger > :nth-child(3) { animation-delay: 80ms; } .stagger > :nth-child(4) { animation-delay: 120ms; } .stagger > :nth-child(5) { animation-delay: 160ms; } .stagger > :nth-child(n+6) { animation-delay: 200ms; }
+@keyframes rise-in { from { opacity: 0; transform: translateY(10px); } }
+.pressable, .course-card, .btn, .chunk-check, .rail-nav a, .pace-card, .row { transition: transform 140ms cubic-bezier(.2,.8,.2,1), background-color 160ms, color 160ms, box-shadow 160ms, opacity 160ms; }
+.course-card:active, .pace-card:active { transform: scale(0.985); }
+.chunk-check:active { transform: scale(0.9); }
+.rail-nav a:active svg { transform: scale(0.88); }
+.rail-nav a svg { transition: transform 160ms cubic-bezier(.2,.8,.2,1); }
+.rail-nav a[aria-current="page"] svg { transform: translateY(-1px); }
+.progress > i { transition: width 600ms cubic-bezier(.2,.8,.2,1); }
+.tile-n { animation: count-in 500ms cubic-bezier(.2,.8,.2,1) both; }
+@keyframes count-in { from { opacity: 0; transform: translateY(6px); } }
+.tabs a { transition: background-color 180ms, color 180ms; }
+.modal { animation: sheet-up 260ms cubic-bezier(.2,.8,.2,1); } .modal-backdrop { animation: fade-in 200ms; }
+@keyframes sheet-up { from { transform: translateY(24px); opacity: 0; } } @keyframes fade-in { from { opacity: 0; } }
+.chunk[data-state="done"] .chunk-check::after, .chunk[data-state="late"] .chunk-check::after { animation: check-draw 260ms cubic-bezier(.2,.9,.3,1.3) both; }
+@keyframes check-draw { from { transform: rotate(-45deg) translate(1px, -1px) scale(0.3); opacity: 0; } }
+.chart rect { transform-origin: bottom; animation: bar-up 600ms cubic-bezier(.2,.8,.2,1) both; }
+@keyframes bar-up { from { transform: scaleY(0); } }
 
 /* ---------- type ---------- */
 .display { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; }
@@ -258,18 +280,21 @@ body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: 
 .icon-sq.is-sm { width: 34px; height: 34px; border-radius: 10px; font-size: 12px; }
 
 /* ---------- study tiles (the signature grid) ---------- */
-.tiles { display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, var(--tile, 12px)); grid-auto-columns: var(--tile, 12px); gap: 3px; width: max-content; }
-.tiles i { display: block; width: var(--tile, 12px); height: var(--tile, 12px); border-radius: var(--r-tile); background: var(--card-2); }
-.tiles i[data-v="full"] { background: var(--ch); }
-.tiles i[data-v="part"] { background: var(--ch); opacity: 0.45; }
-.tiles i[data-v="future"] { background: var(--card-2); opacity: 0.55; }
-.tiles i[data-v="off"] { background: var(--card-2); opacity: 0.35; }
-.tiles i.is-today { box-shadow: 0 0 0 1.5px var(--text); }
-.tiles-wrap { max-width: 100%; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
-.tiles-row { display: grid; grid-auto-flow: column; grid-auto-columns: var(--tile, 12px); gap: 3px; width: max-content; max-width: 100%; overflow: hidden; }
-.tiles-row i { display: block; width: var(--tile, 12px); height: var(--tile, 12px); border-radius: 3px; background: var(--card-2); }
-.tiles-row i[data-v="full"] { background: var(--ch); } .tiles-row i[data-v="part"] { background: var(--ch); opacity: 0.45; } .tiles-row i[data-v="future"] { background: var(--card-2); opacity: 0.55; } .tiles-row i[data-v="off"] { background: var(--card-2); opacity: 0.35; }
-.tiles-row i.is-today { box-shadow: 0 0 0 1.5px var(--text); }
+.tiles-wrap { max-width: 100%; overflow: hidden; }
+.tiles { display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, var(--tile, 12px)); grid-auto-columns: var(--tile, 12px); gap: var(--gap, 3px); width: max-content; }
+.tiles i, .tiles-row i { display: block; width: var(--tile, 12px); height: var(--tile, 12px); border-radius: max(2px, calc(var(--tile, 12px) * 0.28)); background: var(--card-3); transition: background-color 400ms ease, transform 300ms cubic-bezier(.2,.8,.2,1), opacity 300ms; }
+.tiles i[data-v="full"], .tiles-row i[data-v="full"] { background: var(--ch); }
+.tiles i[data-v="part"], .tiles-row i[data-v="part"] { background: color-mix(in srgb, var(--ch) 45%, var(--card-3)); }
+.tiles i[data-v="none"], .tiles-row i[data-v="none"] { background: color-mix(in srgb, var(--bad) 22%, var(--card-3)); }
+.tiles i[data-v="future"], .tiles-row i[data-v="future"] { background: var(--card-3); opacity: 0.8; }
+.tiles i[data-v="off"], .tiles-row i[data-v="off"] { background: var(--card-2); opacity: 0.55; }
+.tiles i.is-today, .tiles-row i.is-today { box-shadow: 0 0 0 2px var(--card), 0 0 0 3.5px var(--ch); }
+.tiles i.is-today[data-v="full"] { animation: tile-pop 420ms cubic-bezier(.2,.9,.3,1.4); }
+.tiles-row { display: grid; grid-auto-flow: column; grid-auto-columns: var(--tile, 12px); gap: var(--gap, 3px); width: max-content; max-width: 100%; overflow: hidden; }
+@keyframes tile-pop { 0% { transform: scale(0.6); } 100% { transform: scale(1); } }
+.tiles-legend { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); margin-top: 8px; justify-content: flex-end; }
+.tiles-legend i { width: 9px; height: 9px; border-radius: 2.5px; display: inline-block; background: var(--card-3); }
+.tiles-legend i[data-v="part"] { background: color-mix(in srgb, var(--ch) 45%, var(--card-3)); } .tiles-legend i[data-v="full"] { background: var(--ch); }
 
 /* ---------- course cards ---------- */
 .course-card { display: flex; flex-direction: column; gap: 14px; background: var(--card); border-radius: var(--r-card); padding: 16px 18px 18px; color: var(--text); }
@@ -1047,7 +1072,45 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
   function headingTitle(line) {
     return line.replace(/^#{1,6}\s*/, '').replace(/\s+#+$/, '').trim();
   }
-  function segment(text) {
+  // ---------- page-level front / back matter (PDFs) ----------
+  // A page is judged by its shape: a contents page is lines ending in page numbers, an index is short lines
+  // with comma-separated numbers, a copyright page names its ISBN. Front matter = every page up to the last
+  // such page in the opening stretch; back matter = from the first index-like page in the closing stretch.
+  function pageShape(pg) {
+    const lines = pg.split('\n').map((l) => l.trim()).filter(Boolean);
+    const w = words(pg);
+    if (w < 25) return 'blank';
+    const head = lines.slice(0, 4).join(' ');
+    if (/^(table of )?contents\b/i.test(head) || /\bcontents\b/i.test(lines[0] || '')) return 'toc';
+    if (w < 450 && /©|copyright|all rights reserved|isbn[\s:-]*[\d-]|printed in|library of congress|first (published|edition)|typeset in/i.test(pg)) return 'copyright';
+    if (/^index\b/i.test(lines[0] || '')) return 'index';
+    const ending = lines.filter((l) => /(\.{3,}|…)\s*\d{1,4}$/.test(l) || (/\s\d{1,4}$/.test(l) && l.length < 80) || /^\d{1,4}$/.test(l)).length;
+    if (lines.length >= 8 && ending / lines.length >= 0.4) return 'toc';
+    const indexy = lines.filter((l) => /\d{1,4}(\s*[,–-]\s*\d{1,4})+\s*$/.test(l) && l.length < 70).length;
+    if (lines.length >= 15 && indexy / lines.length >= 0.3) return 'index';
+    if (/^(bibliography|references|works cited|glossary|answers to|solutions to|about the author)/i.test(lines[0] || '')) return 'back';
+    return 'body';
+  }
+  // returns char ranges (in the joined text) that are front or back matter, one per source with page offsets
+  function pageRoles(sources) {
+    const ranges = [];
+    for (const src of sources || []) {
+      if (!src.pageStarts || src.pageStarts.length < 3 || !src.text) continue;
+      const n = src.pageStarts.length; const base = src.offset || 0;
+      const shapes = src.pageStarts.map((st, i) => pageShape(src.text.slice(st, i + 1 < n ? src.pageStarts[i + 1] : src.text.length)));
+      const opening = Math.max(3, Math.min(20, Math.ceil(n * 0.12)));
+      let frontEnd = -1;
+      for (let i = 0; i < opening; i++) if (['toc', 'copyright', 'blank'].includes(shapes[i])) frontEnd = i;
+      if (frontEnd >= 0 && frontEnd < n - 1) ranges.push({ role: 'front', start: base, end: base + src.pageStarts[frontEnd + 1], pages: [1, frontEnd + 1] });
+      const closing = Math.max(n - Math.max(3, Math.ceil(n * 0.15)), frontEnd + 2);
+      let backStart = -1;
+      for (let i = closing; i < n; i++) if (['index', 'back'].includes(shapes[i])) { backStart = i; break; }
+      if (backStart > 0) ranges.push({ role: 'back', start: base + src.pageStarts[backStart], end: base + src.text.length, pages: [backStart + 1, n] });
+    }
+    return ranges;
+  }
+
+  function segment(text, opts = {}) {
     text = String(text || '');
     const lines = text.split('\n');
     // char offset of each line
@@ -1122,11 +1185,20 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
       if (cur) { if (segs.length && words(text.slice(cur.start, cur.end)) < 300) segs[segs.length - 1].end = cur.end; else segs.push(cur); }
       if (!segs.length) segs.push({ title: 'Part 1', start: 0, end: text.length });
     }
+    // PDF front/back matter found page by page: cut the segments at those boundaries and fix their roles
+    const forced = pageRoles(opts.sources);
+    for (const r of forced) {
+      const cut = (at) => { for (let i = 0; i < segs.length; i++) { const g = segs[i]; if (g.start < at && at < g.end) { const tail = { title: g.title, start: at, end: g.end }; g.end = at; segs.splice(i + 1, 0, tail); break; } } };
+      cut(r.start); cut(r.end);
+    }
     const out = segs.map((s, i) => ({ i, title: s.title, start: s.start, end: s.end, words: words(text.slice(s.start, s.end)) }));
     // sub-headings inside a segment name the bite-sized chunks; any detected heading that is not a segment boundary counts
     const bounds = new Set(out.map((s) => s.start));
     for (const s of out) s.subheads = heads.filter((h) => h.start > s.start && h.start < s.end && !bounds.has(h.start)).map((h) => ({ title: h.title, at: h.start }));
-    return classify(out, text);
+    classify(out, text);
+    for (const s of out) for (const r of forced) if (s.start >= r.start && s.end <= r.end) { s.role = r.role; if (r.role === 'front' && !/contents|preface|copyright|title/i.test(s.title)) s.title = s.title === 'Part 1' || /^Part \d+$/.test(s.title) ? 'Front matter' : s.title; }
+    if (!out.some((g) => g.role === 'body')) out.forEach((g) => { g.role = 'body'; });
+    return out;
   }
 
   // ---------- key terms ----------
@@ -1191,7 +1263,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
     if (!segments.some((g) => g.role === 'body')) segments.forEach((g) => { g.role = 'body'; }); // never schedule nothing
     return segments;
   }
-  L.intake = { words, normalize, segment, classify, keyTerms, STOP };
+  L.intake = { words, normalize, segment, classify, pageShape, pageRoles, keyTerms, STOP };
 
   // ---------- offline analysis ----------
   const SUBJECTS = [
@@ -1686,7 +1758,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
     if (!available()) return { analysis: fallback(), source: 'offline', note: 'No faculty key set — the course was analysed offline.' };
     const excerpt = segments.length > 60 ? 220 : 500;
     const list = segments.map((s) => `[${s.i}] "${s.title}" (${s.words} words${(s.role || 'body') !== 'body' ? `, ${s.role} matter — not taught, use for structure only` : ''}) — ${text.slice(s.start, s.start + excerpt).replace(/\s+/g, ' ').trim()}`).join('\n');
-    const user = `${hint ? `Working title from the student: ${hint}\n` : ''}Material: ${L.fmt.num(words)} words in ${segments.length} segments.\n\nSegments:\n${list}\n\nDesign the course. Return JSON:\n{"title": string, "subjectCode": 2-4 uppercase letters, "subject": string, "level": "introductory"|"intermediate"|"advanced", "difficulty": 1-5, "description": "two sentences", "prerequisites": [string], "units": [{"title": string, "segments": [from, to], "topics": [3-6 strings], "objectives": [2-4 measurable objectives with Bloom verbs], "relativeSize": 1-5}]}\nUnits must be contiguous, in order, and together cover every segment index from 0 to ${segments.length - 1}.`;
+    const user = `${hint ? `Working title from the student: ${hint}\n` : ''}Material: ${L.fmt.num(words)} words in ${segments.length} segments.\n\nSegments:\n${list}\n\nDesign the course. Return JSON:\n{"title": string, "subjectCode": 2-4 uppercase letters, "subject": string, "level": "introductory"|"intermediate"|"advanced", "difficulty": 1-5, "description": "two sentences", "prerequisites": [string], "units": [{"title": string, "segments": [from, to], "topics": [3-6 strings], "objectives": [2-4 measurable objectives with Bloom verbs], "relativeSize": 1-5}]}\nUnits must be contiguous, in order, and together cover every segment index from 0 to ${segments.length - 1}. Segments marked front matter or back matter (contents, preface, copyright, index, glossary, bibliography) are NOT study material: never build a unit around them, never list them as topics, and never let them decide a unit's title — they may only sit inside a unit's index range so the ranges stay contiguous.`;
     try {
       const r = await call({ task: 'analyze', system: SYS_ANALYZE, user, maxTokens: 6000 });
       const d = r.data || {};
@@ -2705,12 +2777,15 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
     root.querySelectorAll('.tiles').forEach((g) => {
       const wrap = g.parentElement; const cols = Number(g.style.getPropertyValue('--cols')) || 12;
       const w = wrap.clientWidth || 300;
-      g.style.setProperty('--tile', `${L.clamp(Math.floor((w - (cols - 1) * 3) / cols), 7, 24)}px`);
+      const gap = w / cols > 18 ? 4 : 3;
+      const tile = L.clamp(Math.floor((w - (cols - 1) * gap) / cols), 7, 22);
+      g.style.setProperty('--tile', `${tile}px`); g.style.setProperty('--gap', `${gap}px`);
       wrap.scrollLeft = wrap.scrollWidth;
     });
     root.querySelectorAll('.tiles-row').forEach((g) => {
       const n = g.children.length || 14; const w = g.parentElement.clientWidth || 300;
-      g.style.setProperty('--tile', `${L.clamp(Math.floor((w - (n - 1) * 3) / n), 6, 14)}px`);
+      const gap = 3; g.style.setProperty('--gap', `${gap}px`);
+      g.style.setProperty('--tile', `${L.clamp(Math.floor((w - (n - 1) * gap) / n), 6, 14)}px`);
     });
   };
   let resizeTimer = null;
@@ -2857,7 +2932,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
       return `<div class="page">
         <div class="page-head is-row"><div><span class="eyebrow">${esc(eyebrow)}</span><h1 class="display">${greeting()}, ${esc(firstName())}.</h1></div><div class="actions"><a class="btn btn-icon" href="#/enrol" aria-label="Add a course" title="Add a course">+</a></div></div>
         ${notices.length ? `<div class="stack gap-1 mb-3">${notices.join('')}</div>` : ''}
-        <div class="today-grid stack gap-2">
+        <div class="today-grid stack gap-2 stagger">
           ${sessions.length ? sessions.map(({ course: c, session: s }) => L.studyBlock(c, s, { today: true })).join('') : `<div class="card quiet"><div class="card-body"><b>No study block today.</b><div class="small muted mt-1">${nd ? `${esc(nd.assessment.title)} for ${esc(nd.course.code)} is due ${L.fmt.rel(nd.at - now)}.` : 'Nothing is due in the coming days.'}</div></div></div>`}
           ${overdue.length ? `<div class="card"><div class="card-head"><h3>Catch up</h3><span class="small muted">${overdue.length} from earlier days</span></div><div class="card-body pt-0"><div class="chunks">${overdue.slice(0, 6).map(({ c, s, k }) => L.chunkRow(c, s, k)).join('')}</div>${overdue.length > 6 ? `<p class="small muted mt-1">… and ${overdue.length - 6} more in the course plans.</p>` : ''}</div></div>` : ''}
           ${openNow.length ? `<div class="card"><div class="card-head"><h3>Open now</h3></div><div class="card-body pt-0 rows">${openNow.map(({ c, a, st }) => row(c, a, st === 'in_progress' ? `<span data-countdown="${R().deadline(c, a)}">${L.fmt.rel(R().deadline(c, a) - now)}</span> left` : st === 'late' ? `late · closes ${L.fmt.dt(a.closesAt)}` : `due ${L.fmt.dt(a.dueAt)}`, `<a class="btn btn-sm ${st === 'in_progress' ? '' : 'btn-primary'}" href="#/assess/${c.id}/${a.id}">${st === 'in_progress' ? 'Resume' : st === 'late' ? 'Submit late' : 'Begin'}</a>`)).join('')}</div></div>` : ''}
@@ -2919,10 +2994,10 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
         const sub = st === 'running' ? `week ${wk} of ${c.term.weeks}` : st === 'upcoming' ? `starts ${L.fmt.date(c.term.start)}` : st === 'withdrawn' ? 'withdrawn' : `completed · ${c.final ? c.final.letter : ''}`;
         return `<a class="course-card" href="#/course/${c.id}" style="--ch:${L.cc(c)}">
           <div class="head"><span class="icon-sq">${esc(c.subjectCode.slice(0, 2))}</span><div class="t"><b>${esc(c.title)}</b><span>${esc(c.code)} · ${sub}</span></div><div class="letter">${c.final ? c.final.letter : (s.letter || '')}</div></div>
-          ${L.tilesGrid(c)}
+          ${L.tilesGrid(c)}<div class="tiles-legend" style="--ch:${L.cc(c)}">less <i></i><i data-v="part"></i><i data-v="full"></i> more</div>
         </a>`;
       });
-      return `<div class="page"><div class="page-head is-row"><div><h1 class="display">Courses</h1></div><div class="actions"><a class="btn btn-icon" href="#/enrol" aria-label="Add a course" title="Add a course">+</a></div></div><div class="stack gap-2">${rows.join('')}</div></div>`;
+      return `<div class="page"><div class="page-head is-row"><div><h1 class="display">Courses</h1></div><div class="actions"><a class="btn btn-icon" href="#/enrol" aria-label="Add a course" title="Add a course">+</a></div></div><div class="stack gap-2 stagger">${rows.join('')}</div></div>`;
     },
   };
   L.actions.withdraw = async (el) => {
@@ -3580,7 +3655,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
       const text = W.sources.map((s) => s.text).join('\n\n');
       const words = L.intake.words(text);
       log(`Reading ${W.sources.length} source${W.sources.length === 1 ? '' : 's'} · ${L.fmt.num(words)} words`);
-      const segments = L.intake.segment(text);
+      const segments = L.intake.segment(text, { sources: W.sources });
       log(`${segments.length} segment${segments.length === 1 ? '' : 's'} found`);
       const t0 = Date.now();
       if (L.faculty.available()) log('Consulting faculty…');

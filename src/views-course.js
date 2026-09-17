@@ -19,10 +19,10 @@
         const sub = st === 'running' ? `week ${wk} of ${c.term.weeks}` : st === 'upcoming' ? `starts ${L.fmt.date(c.term.start)}` : st === 'withdrawn' ? 'withdrawn' : `completed · ${c.final ? c.final.letter : ''}`;
         return `<a class="course-card" href="#/course/${c.id}" style="--ch:${L.cc(c)}">
           <div class="head"><span class="icon-sq">${esc(c.subjectCode.slice(0, 2))}</span><div class="t"><b>${esc(c.title)}</b><span>${esc(c.code)} · ${sub}</span></div><div class="letter">${c.final ? c.final.letter : (s.letter || '')}</div></div>
-          ${L.tilesGrid(c)}
+          ${L.tilesGrid(c)}<div class="tiles-legend" style="--ch:${L.cc(c)}">less <i></i><i data-v="part"></i><i data-v="full"></i> more</div>
         </a>`;
       });
-      return `<div class="page"><div class="page-head is-row"><div><h1 class="display">Courses</h1></div><div class="actions"><a class="btn btn-icon" href="#/enrol" aria-label="Add a course" title="Add a course">+</a></div></div><div class="stack gap-2">${rows.join('')}</div></div>`;
+      return `<div class="page"><div class="page-head is-row"><div><h1 class="display">Courses</h1></div><div class="actions"><a class="btn btn-icon" href="#/enrol" aria-label="Add a course" title="Add a course">+</a></div></div><div class="stack gap-2 stagger">${rows.join('')}</div></div>`;
     },
   };
   L.actions.withdraw = async (el) => {

@@ -444,6 +444,9 @@ const local = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.
   const after = await m.evaluate(async (id) => { const c = L.S.courses[0]; const mat = await L.db.getMaterial(id); const f = await L.db.getFile(c.material.sources[0].id); return { same: c.id === id, mat: !!(mat && mat.length > 100000), file: !!(f && f.bytes && f.bytes.byteLength > 100000), pages: c.material.sources[0].pageStarts.length, chunks: c.sessions.reduce((n, s) => n + s.chunks.length, 0), weeks: c.term.weeks }; }, bookId);
   assert(after.same && after.mat && after.file, 'after a reload the course, its text and its PDF are all still there');
   assert(after.pages === 600, `600 page offsets recorded (${after.pages})`);
+  const roles = await m.evaluate(() => { const c = L.S.courses[0]; const segs = c.material.segments; const reads = c.sessions.flatMap((s) => s.chunks.filter((k) => k.kind === 'read')); return { front: segs.filter((g) => g.role === 'front').length, back: segs.filter((g) => g.role === 'back').length, firstPage: Math.min(...reads.map((k) => k.pages ? k.pages[0] : 999)), lastPage: Math.max(...reads.map((k) => k.pages ? k.pages[1] : 0)), titles: reads.map((k) => k.title).filter((t) => /contents|index|copyright/i.test(t)).length }; });
+  assert(roles.front >= 1 && roles.back >= 1, `title, copyright, contents and index pages are classified (${roles.front} front, ${roles.back} back)`);
+  assert(roles.firstPage >= 5 && roles.lastPage <= 597 && roles.titles === 0, `no study chunk covers the contents or index pages (reading spans pp. ${roles.firstPage}–${roles.lastPage})`);
   console.log(`   ${after.weeks} weeks · ${after.chunks} chunks`);
   const book = await m.evaluate(() => L.S.courses[0]);
   const firstDay = book.sessions[0];
