@@ -560,7 +560,7 @@ body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: 
 .sheet-table tr:last-child td, .sheet-table tr:last-child th { border-bottom: 0; }
 .sheet-dim { color: var(--dim); font-size: 12.5px; }
 .sheet-cols { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 24px; align-items: start; }
-.sheet-clauses { margin: 0; padding-left: 22px; font-size: 14.5px; } .sheet-clauses li { margin-bottom: 6px; }
+.sheet-clauses { margin: 16px 0 0; padding-left: 22px; font-size: 14px; } .sheet-clauses li { margin-bottom: 4px; }
 .sheet-sign { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 30px; padding-top: 18px; border-top: 2px solid var(--gold); }
 .sign-label { font-family: Inter, system-ui, sans-serif; font-size: 10.5px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--dim); margin-bottom: 8px; }
 .pad-wrap { position: relative; height: 120px; border: 1px solid var(--rule); border-radius: 4px; background: #fff; display: flex; align-items: center; justify-content: center; overflow: hidden; }
@@ -2551,31 +2551,33 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
     return lines.join('\n');
   }
   const CLAUSES = [
-    'The dates, weights and examinations in Schedules A and B are fixed at signature and cannot be changed by either party.',
-    'Each assessment may be attempted once, within its window. A paper not submitted by its close is recorded as zero.',
-    'The Student will complete every paper without assistance from other people and without material other than that permitted by the paper.',
-    'Every action on this course is entered in a permanent, tamper-evident record kept on the Student’s device. Grades stand once recorded.',
-    'The Student may withdraw only before the withdrawal deadline in Schedule A; after it the final grade stands on the transcript.',
+    'Dates, weights and examinations are fixed at signature.',
+    'One attempt per paper, within its window; an unsubmitted paper is a zero.',
+    'Every paper is the Student\u2019s own work; the record is permanent; withdrawal only before the deadline above.',
   ];
   function contractSheet(p, student, { no, signedAt, signature, name, forSigning = false } = {}) {
     const date = signedAt ? new Date(signedAt) : new Date(L.now());
-    const weights = Object.entries(p.policy.weights).map(([k, w]) => `<tr><td>${esc(KIND[k] || k)}</td><td class="num">${w}%</td></tr>`).join('');
+    const count = (k) => p.assessments.filter((a) => a.kind === k).length;
+    const exam = (k) => { const a = p.assessments.find((x) => x.kind === k); return a ? `${L.fmt.date(a.opensAt)} ${L.fmt.time(a.opensAt)}–${L.fmt.time(a.dueAt)}` : null; };
+    const papers = [
+      count('quiz') ? `${count('quiz')} quizzes (Fri–Sun, weekly)` : null,
+      count('pset') ? `${count('pset')} problem sets (Mon–Sun, fortnightly, late −${p.policy.late.perDayPct}%/day up to ${p.policy.late.maxDays} days)` : null,
+      exam('midterm') ? `midterm ${exam('midterm')} (75 min)` : null,
+      count('project') ? `term project due ${L.fmt.date(p.assessments.find((a) => a.kind === 'project').dueAt)}` : null,
+      `final ${exam('final')} (120 min)`,
+    ].filter(Boolean);
+    const weights = Object.entries(p.policy.weights).map(([k, w]) => `${(KIND[k] || k).toLowerCase()} ${w}%`).join(' · ');
     return `<article class="sheet contract" id="sheet">
-      <header class="sheet-head"><div class="sheet-seal">${L.SEAL(96, { id: 'c' })}</div><div class="sheet-brand"><div class="sheet-name">Lyceum</div><div class="sheet-office">Office of the Registrar</div></div><div class="sheet-no"><div>Contract no.</div><b>${esc(no || contractNo())}</b><div>${L.fmt.dateLong(date)}</div></div></header>
+      <header class="sheet-head"><div class="sheet-seal">${L.SEAL(84, { id: 'c' })}</div><div class="sheet-brand"><div class="sheet-name">Lyceum</div><div class="sheet-office">Office of the Registrar</div></div><div class="sheet-no"><div>Contract</div><b>${esc(no || contractNo())}</b><div>${L.fmt.date(date)} ${date.getFullYear()}</div></div></header>
       <h1 class="sheet-title">Registration Contract</h1>
-      <p class="sheet-intro">This contract is made on ${L.fmt.dateLong(date)} between <b>${esc(student.name)}</b>, student no. ${esc(student.id)}, hereafter the Student, and the Office of the Registrar of Lyceum, hereafter the Registrar, for enrolment in the course described in Schedule A on the terms below.</p>
-      <h2>Schedule A · The course</h2>
+      <p class="sheet-intro"><b>${esc(student.name)}</b> (${esc(student.id)}) enrols in <b>${esc(p.code)} ${esc(p.title)}</b> on the terms below.</p>
       <table class="sheet-table"><tbody>
-        <tr><th>Course</th><td><b>${esc(p.code)}</b> ${esc(p.title)}</td></tr>
-        <tr><th>Term</th><td>${L.fmt.dateLong(p.term.start)} to ${L.fmt.dateLong(p.term.end)} · ${p.term.weeks} weeks</td></tr>
-        <tr><th>Pace</th><td>${esc(p.plan.paceLabel)} · ${p.plan.minutesPerDay} minutes a day, ${DAYS_LABEL(p)} · ${p.plan.hoursPerWeek} hours a week</td></tr>
-        <tr><th>Credits</th><td>${p.credits}</td></tr>
-        <tr><th>Withdrawal</th><td>Permitted until ${L.fmt.dateLong(L.date.addDays(L.date.parse(p.policy.withdrawBefore), -1))}</td></tr>
+        <tr><th>Term</th><td>${L.fmt.date(p.term.start)} – ${L.fmt.date(p.term.end)} ${new Date(p.term.end + 'T00:00:00').getFullYear()} · ${p.term.weeks} weeks · ${p.credits} credit${p.credits === 1 ? '' : 's'}</td></tr>
+        <tr><th>Pace</th><td>${esc(p.plan.paceLabel)} · ${p.plan.minutesPerDay} min a day, ${DAYS_LABEL(p)}</td></tr>
+        <tr><th>Papers</th><td>${papers.map(esc).join('; ')}.</td></tr>
+        <tr><th>Weights</th><td>${esc(weights)}</td></tr>
+        <tr><th>Withdraw by</th><td>${L.fmt.date(L.date.addDays(L.date.parse(p.policy.withdrawBefore), -1))}</td></tr>
       </tbody></table>
-      <h2>Schedule B · Assessment</h2>
-      <div class="sheet-cols"><table class="sheet-table"><thead><tr><th>Paper</th><th>Opens</th><th>Due</th></tr></thead><tbody>${p.assessments.map((a) => `<tr><td>${esc(a.title)}${a.durationMin ? ` <span class="sheet-dim">${L.fmt.dur(a.durationMin)}</span>` : ''}</td><td>${L.fmt.dt(a.opensAt)}</td><td>${L.fmt.dt(a.dueAt)}${a.lateAllowed ? ` <span class="sheet-dim">late to ${L.fmt.date(a.closesAt)}</span>` : ''}</td></tr>`).join('')}</tbody></table>
-      <table class="sheet-table sheet-weights"><thead><tr><th>Weight</th><th></th></tr></thead><tbody>${weights}<tr><td class="sheet-dim" colspan="2">Late work loses ${p.policy.late.perDayPct}% per day for at most ${p.policy.late.maxDays} days. Examinations have no late window.</td></tr></tbody></table></div>
-      <h2>Undertakings</h2>
       <ol class="sheet-clauses">${CLAUSES.map((c) => `<li>${esc(c)}</li>`).join('')}</ol>
       <div class="sheet-sign">
         <div class="sign-block">
@@ -2588,7 +2590,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
         </div>
         <div class="sign-block">
           <div class="sign-label">The Registrar</div>
-          <div class="pad-wrap is-registrar">${L.SEAL(120, { id: 'c2' })}<span class="registrar-script">The Registrar</span></div>
+          <div class="pad-wrap is-registrar">${L.SEAL(100, { id: 'c2' })}<span class="registrar-script">The Registrar</span></div>
           <div class="sign-name is-signed">Office of the Registrar, Lyceum</div>
           <div class="sign-date">${signedAt ? `Countersigned ${L.fmt.dt(signedAt)}` : 'Countersigned on enrolment'}</div>
         </div>
@@ -2646,35 +2648,31 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
   // the certificate is one SVG so it displays, prints and exports identically
   function certificateSvg(c) {
     const cert = c.certificate; const s = L.S.student;
-    const W = 1200, H = 850;
+    const W = 1200, H = 800;
     const F = 'font-family="EB Garamond, Georgia, Times New Roman, serif"';
     const S = 'font-family="Inter, Helvetica, Arial, sans-serif"';
     const gold = '#b08d2f', ink = '#161616', dim = '#6b6355', green = '#2b3d5c';
-    const days = DAYS_LABEL(c);
-    const rows = cert.breakdown.map((b, i) => `<g transform="translate(${180 + i * (840 / Math.max(1, cert.breakdown.length))} 612)"><text ${S} font-size="11" fill="${dim}" letter-spacing="1.5">${esc((KIND[b.kind] || b.kind).toUpperCase())}</text><text ${F} font-size="22" fill="${ink}" y="28">${b.avg.toFixed(1)}%</text><text ${S} font-size="10" fill="${dim}" y="44">weight ${b.weight}%</text></g>`).join('');
+    const line = cert.breakdown.map((b) => `${(KIND[b.kind] || b.kind)} ${b.avg.toFixed(0)}%`).join('  ·  ');
     return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 ${W} ${H}" class="cert-svg" role="img" aria-label="Certificate of Completion for ${esc(s.name)}">
       <rect width="${W}" height="${H}" fill="#fbfaf6"/>
       <rect x="28" y="28" width="${W - 56}" height="${H - 56}" fill="none" stroke="${gold}" stroke-width="3"/>
       <rect x="40" y="40" width="${W - 80}" height="${H - 80}" fill="none" stroke="${gold}" stroke-width="1"/>
-      <g style="color:${gold}">${L.SEAL_G(W / 2 - 62, 62, 124, { year: new Date(cert.issuedAt).getFullYear(), id: 'cert' })}</g>
-      <text x="${W / 2}" y="222" text-anchor="middle" ${S} font-size="13" font-weight="700" letter-spacing="5" fill="${green}">LYCEUM · OFFICE OF THE REGISTRAR</text>
-      <text x="${W / 2}" y="278" text-anchor="middle" ${F} font-size="46" fill="${ink}">Certificate of Completion</text>
-      <text x="${W / 2}" y="326" text-anchor="middle" ${F} font-size="18" font-style="italic" fill="${dim}">This is to certify that</text>
-      <text x="${W / 2}" y="384" text-anchor="middle" ${F} font-size="50" font-style="italic" font-weight="500" fill="${ink}">${esc(s.name)}</text>
-      <line x1="300" y1="400" x2="900" y2="400" stroke="${gold}" stroke-width="1"/>
-      <text x="${W / 2}" y="434" text-anchor="middle" ${F} font-size="18" font-style="italic" fill="${dim}">has satisfactorily completed the course</text>
-      <text x="${W / 2}" y="478" text-anchor="middle" ${F} font-size="30" font-weight="500" fill="${ink}">${esc(c.title)}</text>
-      <text x="${W / 2}" y="506" text-anchor="middle" ${S} font-size="13" letter-spacing="2" fill="${dim}">${esc(c.code)} · ${L.fmt.date(c.term.start).toUpperCase()} – ${L.fmt.date(c.term.end).toUpperCase()} ${new Date(c.term.end + 'T00:00:00').getFullYear()} · ${esc((c.plan.paceLabel || 'standard').toUpperCase())} PACE, ${esc(days.toUpperCase())} · ${c.credits} CREDIT${c.credits === 1 ? '' : 'S'}</text>
-      <text x="${W / 2}" y="548" text-anchor="middle" ${F} font-size="18" font-style="italic" fill="${dim}">and was awarded the grade</text>
-      <text x="${W / 2}" y="596" text-anchor="middle" ${F} font-size="44" font-weight="600" fill="${green}">${esc(cert.letter)}  <tspan font-size="20" font-weight="400" fill="${dim}">${cert.pct.toFixed(1)}%</tspan></text>
-      <g transform="translate(0 20)">${rows}</g>
-      ${c.contract && c.contract.signature ? `<image href="${c.contract.signature}" x="190" y="684" width="220" height="66" preserveAspectRatio="xMidYMid meet"/>` : ''}
-      <line x1="150" y1="758" x2="450" y2="758" stroke="${ink}" stroke-width="1"/>
-      <text x="300" y="776" text-anchor="middle" ${S} font-size="11" letter-spacing="2" fill="${dim}">STUDENT</text>
-      <text x="900" y="744" text-anchor="middle" ${F} font-size="26" font-style="italic" fill="${green}">The Registrar</text>
-      <line x1="750" y1="758" x2="1050" y2="758" stroke="${ink}" stroke-width="1"/>
-      <text x="900" y="776" text-anchor="middle" ${S} font-size="11" letter-spacing="2" fill="${dim}">REGISTRAR</text>
-      <text x="${W / 2}" y="806" text-anchor="middle" ${S} font-size="10.5" letter-spacing="1" fill="${dim}">CERTIFICATE ${esc(cert.no)} · VERIFICATION ${esc(cert.code)} · ISSUED ${L.fmt.date(cert.issuedAt).toUpperCase()} ${new Date(cert.issuedAt).getFullYear()}</text>
+      <g style="color:${gold}">${L.SEAL_G(W / 2 - 60, 70, 120, { year: new Date(cert.issuedAt).getFullYear(), id: 'cert' })}</g>
+      <text x="${W / 2}" y="226" text-anchor="middle" ${S} font-size="12" font-weight="700" letter-spacing="5" fill="${green}">LYCEUM · OFFICE OF THE REGISTRAR</text>
+      <text x="${W / 2}" y="286" text-anchor="middle" ${F} font-size="48" fill="${ink}">Certificate of Completion</text>
+      <text x="${W / 2}" y="378" text-anchor="middle" ${F} font-size="54" font-style="italic" font-weight="500" fill="${ink}">${esc(s.name)}</text>
+      <line x1="320" y1="396" x2="880" y2="396" stroke="${gold}" stroke-width="1"/>
+      <text x="${W / 2}" y="446" text-anchor="middle" ${F} font-size="30" font-weight="500" fill="${ink}">${esc(c.title)}</text>
+      <text x="${W / 2}" y="474" text-anchor="middle" ${S} font-size="12.5" letter-spacing="2" fill="${dim}">${esc(c.code)} · ${L.fmt.date(c.term.start).toUpperCase()} – ${L.fmt.date(c.term.end).toUpperCase()} ${new Date(c.term.end + 'T00:00:00').getFullYear()} · ${c.credits} CREDIT${c.credits === 1 ? '' : 'S'}</text>
+      <text x="${W / 2}" y="560" text-anchor="middle" ${F} font-size="60" font-weight="600" fill="${green}">${esc(cert.letter)}<tspan font-size="22" font-weight="400" fill="${dim}" dx="14" dy="-2">${cert.pct.toFixed(1)}%</tspan></text>
+      <text x="${W / 2}" y="600" text-anchor="middle" ${S} font-size="12" letter-spacing="1" fill="${dim}">${esc(line.toUpperCase())}</text>
+      ${c.contract && c.contract.signature ? `<image href="${c.contract.signature}" x="190" y="646" width="220" height="60" preserveAspectRatio="xMidYMid meet"/>` : ''}
+      <line x1="150" y1="712" x2="450" y2="712" stroke="${ink}" stroke-width="1"/>
+      <text x="300" y="730" text-anchor="middle" ${S} font-size="11" letter-spacing="2" fill="${dim}">STUDENT</text>
+      <text x="900" y="700" text-anchor="middle" ${F} font-size="26" font-style="italic" fill="${green}">The Registrar</text>
+      <line x1="750" y1="712" x2="1050" y2="712" stroke="${ink}" stroke-width="1"/>
+      <text x="900" y="730" text-anchor="middle" ${S} font-size="11" letter-spacing="2" fill="${dim}">REGISTRAR</text>
+      <text x="${W / 2}" y="760" text-anchor="middle" ${S} font-size="10.5" letter-spacing="1" fill="${dim}">${esc(cert.no)} · ${esc(cert.code)} · ${L.fmt.date(cert.issuedAt).toUpperCase()} ${new Date(cert.issuedAt).getFullYear()}</text>
     </svg>`;
   }
 
@@ -2685,8 +2683,8 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
     try {
       const img = new Image();
       await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
-      const canvas = document.createElement('canvas'); canvas.width = 2400; canvas.height = 1700;
-      const ctx = canvas.getContext('2d'); ctx.fillStyle = '#fbfaf6'; ctx.fillRect(0, 0, 2400, 1700); ctx.drawImage(img, 0, 0, 2400, 1700);
+      const canvas = document.createElement('canvas'); canvas.width = 2400; canvas.height = 1600;
+      const ctx = canvas.getContext('2d'); ctx.fillStyle = '#fbfaf6'; ctx.fillRect(0, 0, 2400, 1600); ctx.drawImage(img, 0, 0, 2400, 1600);
       return await new Promise((res) => canvas.toBlob(res, 'image/png'));
     } finally { URL.revokeObjectURL(url); }
   }
