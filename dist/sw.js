@@ -1,6 +1,6 @@
 // Lyceum service worker: cache the app shell so the installed app opens offline.
 // The app is one file; fonts and CDN libraries are cached on first use.
-const CACHE = 'lyceum-shell-v3';
+const CACHE = 'lyceum-shell-v5';
 const SHELL = ['./', './lyceum.html', './index.html', './icon-512.png', './icon-180.png'];
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL).catch(() => null)).then(() => self.skipWaiting()));
