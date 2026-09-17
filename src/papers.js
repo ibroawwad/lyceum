@@ -134,7 +134,7 @@
     const W = 1200, H = 850;
     const F = 'font-family="EB Garamond, Georgia, Times New Roman, serif"';
     const S = 'font-family="Inter, Helvetica, Arial, sans-serif"';
-    const gold = '#b08d2f', ink = '#161616', dim = '#6b6355', green = '#14532d';
+    const gold = '#b08d2f', ink = '#161616', dim = '#6b6355', green = '#2b3d5c';
     const days = DAYS_LABEL(c);
     const rows = cert.breakdown.map((b, i) => `<g transform="translate(${180 + i * (840 / Math.max(1, cert.breakdown.length))} 612)"><text ${S} font-size="11" fill="${dim}" letter-spacing="1.5">${esc((KIND[b.kind] || b.kind).toUpperCase())}</text><text ${F} font-size="22" fill="${ink}" y="28">${b.avg.toFixed(1)}%</text><text ${S} font-size="10" fill="${dim}" y="44">weight ${b.weight}%</text></g>`).join('');
     return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 ${W} ${H}" class="cert-svg" role="img" aria-label="Certificate of Completion for ${esc(s.name)}">

@@ -14,7 +14,7 @@ window.L = window.L || {};
     const f = typeof key === 'function' ? key : (o) => o[key];
     return (a, b) => { const x = f(a), y = f(b); return x < y ? -1 : x > y ? 1 : 0; };
   };
-  L.cc = (c) => (c && c.color) || '#4ade80'; // a course's colour, HabitKit-style
+  L.cc = (c) => (c && c.color) || '#8ec5e8'; // a course's colour, HabitKit-style
   L.groupBy = (arr, fn) => arr.reduce((m, x) => { const k = typeof fn === 'function' ? fn(x) : x[fn]; (m[k] = m[k] || []).push(x); return m; }, {});
   L.uid = (prefix = 'x') => {
     const b = new Uint8Array(6); crypto.getRandomValues(b);

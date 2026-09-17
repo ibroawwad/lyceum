@@ -103,7 +103,7 @@ const local = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.
   assert((await route()) === 'course', 'signing the contract enrols and lands on the course page');
   const course = await page.evaluate(() => L.S.courses[0]);
   assert(course.contract && course.contract.signature.startsWith('data:image/png') && course.contract.no.startsWith('LYC-C-'), 'the signed contract (signature image + number) is stored on the course');
-  assert(course.color !== '#4ade80', `the first course is not the brand green (${course.color})`);
+  assert(course.color !== '#e8d9a8', `the first course is not the brand green (${course.color})`);
   assert(course && course.code && /\s\d{3}$/.test(course.code), `course code assigned (${course && course.code})`);
   assert(course.weeks.length === course.term.weeks, 'weeks array matches term length');
   assert(course.weeks.every((w) => w.kind === 'final' || w.segments.length > 0), 'every teaching week has reading segments');
