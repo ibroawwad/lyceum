@@ -114,7 +114,8 @@ button { cursor: pointer; }
 /* ---------- logo ---------- */
 .logo { display: inline-flex; align-items: center; gap: 10px; color: var(--text); font-weight: 700; font-size: 18px; letter-spacing: -0.01em; }
 .logo svg { width: 30px; height: 30px; flex: none; color: var(--text); }
-.logo.is-big svg { width: 64px; height: 64px; }
+.logo .mark-img { width: 30px; height: 30px; border-radius: 8px; flex: none; box-shadow: 0 1px 2px rgba(0,0,0,0.35); }
+.logo.is-big .mark-img { width: 72px; height: 72px; border-radius: 18px; }
 
 /* ---------- layout: phone-first, tab bar; desktop gets a slim rail ---------- */
 @media (max-width: 1023px) { html, body { overflow-x: hidden; } }

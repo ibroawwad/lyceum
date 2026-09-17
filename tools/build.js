@@ -20,5 +20,6 @@ fs.mkdirSync(path.join(root, 'dist'), { recursive: true });
 fs.writeFileSync(path.join(root, 'dist', 'lyceum.html'), html);
 fs.writeFileSync(path.join(root, 'dist', 'index.html'), html); // hosting + Capacitor expect index.html
 if (fs.existsSync(path.join(root, 'sw.js'))) fs.copyFileSync(path.join(root, 'sw.js'), path.join(root, 'dist', 'sw.js'));
+for (const f of ['icon-512.png', 'icon-180.png']) if (fs.existsSync(src(f))) fs.copyFileSync(src(f), path.join(root, 'dist', f));
 const missing = ORDER.filter((f) => !fs.existsSync(src(f)));
 console.log(`built dist/lyceum.html (${(html.length / 1024).toFixed(0)} KB)` + (missing.length ? ` — missing modules: ${missing.join(', ')}` : ''));
