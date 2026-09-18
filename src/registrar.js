@@ -3,7 +3,7 @@
 
   const D = L.date;
   const DAY = 86400000;
-  const COLORS = ['#8ec5e8', '#e2b86a', '#f0a0a0', '#b9a7e6', '#9ecbb3', '#e8a6c9', '#f0b98a', '#c9d98a']; // muted sky/stone set that sits on the slate ground
+  const COLORS = ['#22d3ee', '#f5b12b', '#fb7185', '#a78bfa', '#60a5fa', '#f472b6', '#fb923c', '#a3e635']; // never the brand green
   const SCALE = [[93, 'A', 4.0], [90, 'A−', 3.7], [87, 'B+', 3.3], [83, 'B', 3.0], [80, 'B−', 2.7], [77, 'C+', 2.3], [73, 'C', 2.0], [70, 'C−', 1.7], [67, 'D+', 1.3], [63, 'D', 1.0], [60, 'D−', 0.7], [-Infinity, 'F', 0]];
   const KIND_TITLE = { quiz: 'Quiz', pset: 'Problem set', midterm: 'Midterm examination', final: 'Final examination', project: 'Term project' };
   // the registrar's three pacings, defined by daily effort; the term length follows from the material

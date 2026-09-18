@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Lyceum</title>
 <meta name="description" content="Lyceum turns any study material into a real university course with a binding term calendar, examinations and a permanent record.">
-<meta name="theme-color" content="#161d2c">
+<meta name="theme-color" content="#0a0a0b">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -36,24 +36,24 @@
    course, tile grids for daily study, a clean bold sans, no rules.
    ============================================================ */
 :root {
-  --bg: #121a29;
-  --card: #1a2436;
-  --card-2: #243046;
-  --card-3: #2f3d56;
-  --line: #27334a;
-  --text: #ece7db;
-  --text-2: #c3bfb3;
-  --muted: #8b95a8;
-  --accent: #e8d9a8;
-  --accent-ink: #1a2436;
-  --accent-soft: rgba(232, 217, 168, 0.14);
-  --good: #7fd6a4;
-  --warn: #f0c36b;
-  --bad: #f08a8a;
-  --focus: #9ec1ff;
+  --bg: #0a0a0b;
+  --card: #161719;
+  --card-2: #212226;
+  --card-3: #2a2b30;
+  --line: #232428;
+  --text: #f2f3f4;
+  --text-2: #c8ccd0;
+  --muted: #8b9097;
+  --accent: #4ade80;
+  --accent-ink: #052e16;
+  --accent-soft: rgba(74, 222, 128, 0.14);
+  --good: #4ade80;
+  --warn: #f5b12b;
+  --bad: #fb7185;
+  --focus: #60a5fa;
   --ch: #22d3ee;
-  --k-practise: #e2b86a; --k-review: #b9a7e6;
-  --a-quiz: #8ec5e8; --a-pset: #e2b86a; --a-midterm: #f0a0a0; --a-final: #b9a7e6; --a-project: #9ecbb3;
+  --k-practise: #f5b12b; --k-review: #a78bfa;
+  --a-quiz: #22d3ee; --a-pset: #f5b12b; --a-midterm: #fb7185; --a-final: #a78bfa; --a-project: #60a5fa;
   --r-card: 22px;
   --r-ctl: 14px;
   --r-tile: 3px;
@@ -68,21 +68,21 @@
 }
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
-    --bg: #eef0f3; --card: #ffffff; --card-2: #e6e9ef; --card-3: #d6dbe5; --line: #e1e5ec; --text: #16202f; --text-2: #3b4658; --muted: #6b7686;
-    --accent: #2f4a78; --accent-ink: #ffffff; --accent-soft: rgba(47, 74, 120, 0.12); --good: #1f8a5b; --warn: #a3690b; --bad: #c8414b; --focus: #2f6fd6; color-scheme: light;
+    --bg: #f4f5f7; --card: #ffffff; --card-2: #eef0f3; --card-3: #e2e5e9; --line: #e6e8eb; --text: #111316; --text-2: #3a3f45; --muted: #6b7178;
+    --accent: #16a34a; --accent-ink: #ffffff; --accent-soft: rgba(22, 163, 74, 0.12); --good: #16a34a; --warn: #b45309; --bad: #e11d48; --focus: #2563eb; color-scheme: light;
   }
 }
 :root[data-theme="light"] {
-  --bg: #eef0f3; --card: #ffffff; --card-2: #e6e9ef; --card-3: #d6dbe5; --line: #e1e5ec; --text: #16202f; --text-2: #3b4658; --muted: #6b7686;
-  --accent: #2f4a78; --accent-ink: #ffffff; --accent-soft: rgba(47, 74, 120, 0.12); --good: #1f8a5b; --warn: #a3690b; --bad: #c8414b; --focus: #2f6fd6; color-scheme: light;
+  --bg: #f4f5f7; --card: #ffffff; --card-2: #eef0f3; --card-3: #e2e5e9; --line: #e6e8eb; --text: #111316; --text-2: #3a3f45; --muted: #6b7178;
+  --accent: #16a34a; --accent-ink: #ffffff; --accent-soft: rgba(22, 163, 74, 0.12); --good: #16a34a; --warn: #b45309; --bad: #e11d48; --focus: #2563eb; color-scheme: light;
 }
 
 /* ---------- fog (the icon's sky, drifting) ---------- */
 .fog { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
 .fog i { position: absolute; width: 90vmax; height: 90vmax; border-radius: 50%; filter: blur(60px); opacity: 0.55; mix-blend-mode: screen; will-change: transform; }
-.fog i:nth-child(1) { left: -30vmax; top: -35vmax; background: radial-gradient(closest-side, rgba(120,146,190,0.55), rgba(120,146,190,0) 70%); animation: fog-a 46s ease-in-out infinite alternate; }
-.fog i:nth-child(2) { right: -35vmax; top: 10vmax; background: radial-gradient(closest-side, rgba(90,112,150,0.5), rgba(90,112,150,0) 70%); animation: fog-b 58s ease-in-out infinite alternate; }
-.fog i:nth-child(3) { left: 10vmax; bottom: -45vmax; background: radial-gradient(closest-side, rgba(150,165,190,0.35), rgba(150,165,190,0) 70%); animation: fog-c 70s ease-in-out infinite alternate; }
+.fog i:nth-child(1) { left: -30vmax; top: -35vmax; background: radial-gradient(closest-side, rgba(150,158,170,0.35), rgba(150,158,170,0) 70%); animation: fog-a 46s ease-in-out infinite alternate; }
+.fog i:nth-child(2) { right: -35vmax; top: 10vmax; background: radial-gradient(closest-side, rgba(110,118,132,0.32), rgba(110,118,132,0) 70%); animation: fog-b 58s ease-in-out infinite alternate; }
+.fog i:nth-child(3) { left: 10vmax; bottom: -45vmax; background: radial-gradient(closest-side, rgba(170,176,186,0.22), rgba(170,176,186,0) 70%); animation: fog-c 70s ease-in-out infinite alternate; }
 @keyframes fog-a { to { transform: translate(18vmax, 10vmax) scale(1.15); } }
 @keyframes fog-b { to { transform: translate(-16vmax, 14vmax) scale(0.9); } }
 @keyframes fog-c { to { transform: translate(-12vmax, -18vmax) scale(1.2); } }
@@ -542,7 +542,7 @@ body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: 
 
 /* ---------- official papers (paper-white regardless of theme) ---------- */
 .sheet-viewport { width: 100%; }
-.sheet { --paper: #fbfaf6; --ink: #161616; --dim: #6b6355; --rule: #d8d3c6; --green: #2b3d5c; --gold: #b08d2f; width: 100%; max-width: 820px; margin: 0 auto; background: var(--paper); color: var(--ink); font-family: "EB Garamond", Georgia, "Times New Roman", serif; font-size: 15px; line-height: 1.45; padding: 44px 52px; box-shadow: 0 1px 2px rgba(0,0,0,0.2), 0 12px 40px rgba(0,0,0,0.25); transform-origin: top left; }
+.sheet { --paper: #fbfaf6; --ink: #161616; --dim: #6b6355; --rule: #d8d3c6; --green: #14532d; --gold: #b08d2f; width: 100%; max-width: 820px; margin: 0 auto; background: var(--paper); color: var(--ink); font-family: "EB Garamond", Georgia, "Times New Roman", serif; font-size: 15px; line-height: 1.45; padding: 44px 52px; box-shadow: 0 1px 2px rgba(0,0,0,0.2), 0 12px 40px rgba(0,0,0,0.25); transform-origin: top left; }
 .sheet.certificate { width: 100%; padding: 0; box-shadow: 0 1px 2px rgba(0,0,0,0.2), 0 12px 40px rgba(0,0,0,0.25); }
 .sheet.certificate svg { display: block; width: 100%; height: auto; }
 .sheet-head { display: grid; grid-template-columns: auto 1fr auto; gap: 18px; align-items: center; padding-bottom: 16px; border-bottom: 2px solid var(--gold); margin-bottom: 22px; }
@@ -635,7 +635,7 @@ window.L = window.L || {};
     const f = typeof key === 'function' ? key : (o) => o[key];
     return (a, b) => { const x = f(a), y = f(b); return x < y ? -1 : x > y ? 1 : 0; };
   };
-  L.cc = (c) => (c && c.color) || '#8ec5e8'; // a course's colour, HabitKit-style
+  L.cc = (c) => (c && c.color) || '#22d3ee'; // a course's colour, HabitKit-style
   L.groupBy = (arr, fn) => arr.reduce((m, x) => { const k = typeof fn === 'function' ? fn(x) : x[fn]; (m[k] = m[k] || []).push(x); return m; }, {});
   L.uid = (prefix = 'x') => {
     const b = new Uint8Array(6); crypto.getRandomValues(b);
@@ -1890,7 +1890,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
 
   const D = L.date;
   const DAY = 86400000;
-  const COLORS = ['#8ec5e8', '#e2b86a', '#f0a0a0', '#b9a7e6', '#9ecbb3', '#e8a6c9', '#f0b98a', '#c9d98a']; // muted sky/stone set that sits on the slate ground
+  const COLORS = ['#22d3ee', '#f5b12b', '#fb7185', '#a78bfa', '#60a5fa', '#f472b6', '#fb923c', '#a3e635']; // never the brand green
   const SCALE = [[93, 'A', 4.0], [90, 'A−', 3.7], [87, 'B+', 3.3], [83, 'B', 3.0], [80, 'B−', 2.7], [77, 'C+', 2.3], [73, 'C', 2.0], [70, 'C−', 1.7], [67, 'D+', 1.3], [63, 'D', 1.0], [60, 'D−', 0.7], [-Infinity, 'F', 0]];
   const KIND_TITLE = { quiz: 'Quiz', pset: 'Problem set', midterm: 'Midterm examination', final: 'Final examination', project: 'Term project' };
   // the registrar's three pacings, defined by daily effort; the term length follows from the material
@@ -2651,7 +2651,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
     const W = 1200, H = 800;
     const F = 'font-family="EB Garamond, Georgia, Times New Roman, serif"';
     const S = 'font-family="Inter, Helvetica, Arial, sans-serif"';
-    const gold = '#b08d2f', ink = '#161616', dim = '#6b6355', green = '#2b3d5c';
+    const gold = '#b08d2f', ink = '#161616', dim = '#6b6355', green = '#14532d';
     const line = cert.breakdown.map((b) => `${(KIND[b.kind] || b.kind)} ${b.avg.toFixed(0)}%`).join('  ·  ');
     return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 ${W} ${H}" class="cert-svg" role="img" aria-label="Certificate of Completion for ${esc(s.name)}">
       <rect width="${W}" height="${H}" fill="#fbfaf6"/>
