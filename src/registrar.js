@@ -273,7 +273,7 @@
     return {
       code, title: analysis.title, subject: analysis.subject, subjectCode: analysis.subjectCode, level: analysis.level, difficulty: analysis.difficulty,
       description: analysis.description, prerequisites: analysis.prerequisites || [], credits, color,
-      material: { sources: sources.map((s) => ({ id: s.id, name: s.name, kind: s.kind, words: s.words, chars: s.chars, pages: s.pages, url: s.url, offset: s.offset || 0, pageStarts: s.pageStarts, hasFile: !!s.file, outlined: !!s.outline })), words, chars: text.length, segments: segments.map((g) => ({ i: g.i, title: g.title, start: g.start, end: g.end, words: g.words, role: g.role || 'body' })) },
+      material: { sources: sources.map((s) => ({ id: s.id, name: s.name, kind: s.kind, words: s.words, chars: s.chars, pages: s.pages, url: s.url, offset: s.offset || 0, pageStarts: s.pageStarts, hasFile: !!s.file, outlined: !!s.outline, library: s.library || null, attribution: s.attribution || null })), words, chars: text.length, segments: segments.map((g) => ({ i: g.i, title: g.title, start: g.start, end: g.end, words: g.words, role: g.role || 'body' })) },
       analysis: { source: analysis.source || 'offline', model: analysis.model, note: analysis.note, units },
       term, plan: { pace: paceKey, paceLabel: pace.label, hoursPerWeek, totalHours: Math.round(totalHours * 10) / 10, slot, studyDays, minutesPerDay, sessionsPerWeek: studyDays.length, reduced },
       weeks: weeksOut, sessions, assessments, policy, notes: {},

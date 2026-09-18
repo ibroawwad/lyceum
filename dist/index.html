@@ -1713,6 +1713,24 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
     return Object.assign({ id: L.uid('src'), name, kind, text, words: words(text), chars: text.length }, extra);
   }
   const MAX_PAGES = 1500;
+  // a PDF as page texts (from pdf.js here, or pre-extracted by the Lyceum server for Library titles)
+  function fromPages(name, pages, numPages, outline, extra = {}) {
+    if (pages.join('').replace(/\s+/g, '').length < 200) throw new Error('That PDF has no extractable text (it may be scanned). Try a text export.');
+    // normalise the whole document once (running headers repeat across pages), then recover page offsets from the separators
+    const norm = normalize(pages.join('\n\n' + PAGE + '\n\n'));
+    const pieces = norm.split(PAGE);
+    const pageStarts = []; const parts = []; let pos = 0;
+    for (const piece of pieces) { const t = piece.replace(/^\n+/, '').replace(/\n+$/, ''); pageStarts.push(pos); parts.push(t); pos += t.length + 2; }
+    return make(name, 'pdf', parts.join('\n\n'), Object.assign({ pages: numPages, pageStarts, outline: outline && outline.length >= 3 ? outline : null }, extra), true);
+  }
+  // a Library pack from the server: { kind:'pdf', pages:[...], outline } or { kind:'text', text }, plus attribution
+  function fromPack(pack, title) {
+    let src;
+    if (pack.kind === 'pdf') src = fromPages(title, pack.pages, pack.pages.length, pack.outline || [], { library: pack.id });
+    else { src = make(title, 'text', pack.text || ''); src.library = pack.id; }
+    src.attribution = pack.attribution || null;
+    return src;
+  }
   async function fromFile(file, onProgress) {
     const name = file.name || 'file';
     const ext = (name.split('.').pop() || '').toLowerCase();
@@ -1748,14 +1766,8 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
         await walk(raw, 0);
       } catch (e) { outline = []; }
       pdf.destroy();
-      if (pages.join('').replace(/\s+/g, '').length < 200) throw new Error('That PDF has no extractable text (it may be scanned). Try a text export.');
       progress('Cleaning up the text…');
-      // normalise the whole document once (running headers repeat across pages), then recover page offsets from the separators
-      const norm = normalize(pages.join('\n\n' + PAGE + '\n\n'));
-      const pieces = norm.split(PAGE);
-      const pageStarts = []; const parts = []; let pos = 0;
-      for (const piece of pieces) { const t = piece.replace(/^\n+/, '').replace(/\n+$/, ''); pageStarts.push(pos); parts.push(t); pos += t.length + 2; }
-      const src = make(name, 'pdf', parts.join('\n\n'), { pages: numPages, pageStarts, outline: outline.length >= 3 ? outline : null }, true);
+      const src = fromPages(name, pages, numPages, outline);
       src.file = { kind: 'pdf', name, bytes };
       return src;
     }
@@ -1805,7 +1817,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
       throw new Error('Could not fetch that page (blocked by the site or offline). Save it as PDF or paste the text.');
     }
   }
-  L.intake.fromFile = fromFile;
+  L.intake.fromFile = fromFile; L.intake.fromPack = fromPack; L.intake.fromPages = fromPages;
   L.intake.fromUrl = fromUrl;
   L.intake.fromText = (text, name = 'Pasted text') => make(name, /^\s*#/.test(text) ? 'markdown' : 'text', text);
   L.intake.htmlToText = htmlToText;
@@ -1831,7 +1843,14 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
 
   // the faculty is reachable with the student's own key, or through the Lyceum server (proxy) when configured
   const apiBase = () => (L.S?.settings?.apiBase || L.API_BASE || '').trim().replace(/\/$/, '');
-  const available = () => !!(L.S?.settings?.apiKey || '').trim() || !!apiBase();
+  // the server says at boot whether its faculty is configured, so the app never sends work it will refuse
+  L.serverHealth = null;
+  async function probe() {
+    if (!apiBase()) { L.serverHealth = null; return null; }
+    try { const r = await fetch(apiBase() + '/health', { cache: 'no-store' }); L.serverHealth = r.ok ? await r.json() : { ok: false }; } catch (e) { L.serverHealth = { ok: false }; }
+    return L.serverHealth;
+  }
+  const available = () => !!(L.S?.settings?.apiKey || '').trim() || (!!apiBase() && !!(L.serverHealth && L.serverHealth.faculty));
   L.currentCourseToken = null; // set by the registrar around a course's faculty work (entitlement for the proxy)
   async function callProxy({ system, user, maxTokens, json, temperature, onModel, model }) {
     if (onModel) onModel('lyceum server');
@@ -2194,7 +2213,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
     }
   }
 
-  L.faculty = { apiBase, MODELS, FacultyError, available, chain, call, test, extractJson, analyze, composePaper, grade, notes, offline, MIX };
+  L.faculty = { apiBase, probe, MODELS, FacultyError, available, chain, call, test, extractJson, analyze, composePaper, grade, notes, offline, MIX };
 })(window.L);
 
 
@@ -2474,7 +2493,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
     return {
       code, title: analysis.title, subject: analysis.subject, subjectCode: analysis.subjectCode, level: analysis.level, difficulty: analysis.difficulty,
       description: analysis.description, prerequisites: analysis.prerequisites || [], credits, color,
-      material: { sources: sources.map((s) => ({ id: s.id, name: s.name, kind: s.kind, words: s.words, chars: s.chars, pages: s.pages, url: s.url, offset: s.offset || 0, pageStarts: s.pageStarts, hasFile: !!s.file, outlined: !!s.outline })), words, chars: text.length, segments: segments.map((g) => ({ i: g.i, title: g.title, start: g.start, end: g.end, words: g.words, role: g.role || 'body' })) },
+      material: { sources: sources.map((s) => ({ id: s.id, name: s.name, kind: s.kind, words: s.words, chars: s.chars, pages: s.pages, url: s.url, offset: s.offset || 0, pageStarts: s.pageStarts, hasFile: !!s.file, outlined: !!s.outline, library: s.library || null, attribution: s.attribution || null })), words, chars: text.length, segments: segments.map((g) => ({ i: g.i, title: g.title, start: g.start, end: g.end, words: g.words, role: g.role || 'body' })) },
       analysis: { source: analysis.source || 'offline', model: analysis.model, note: analysis.note, units },
       term, plan: { pace: paceKey, paceLabel: pace.label, hoursPerWeek, totalHours: Math.round(totalHours * 10) / 10, slot, studyDays, minutesPerDay, sessionsPerWeek: studyDays.length, reduced },
       weeks: weeksOut, sessions, assessments, policy, notes: {},
@@ -3019,6 +3038,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
       <text x="${W / 2}" y="474" text-anchor="middle" ${S} font-size="12.5" letter-spacing="2" fill="${dim}">${esc(c.code)} · ${L.fmt.date(c.term.start).toUpperCase()} – ${L.fmt.date(c.term.end).toUpperCase()} ${new Date(c.term.end + 'T00:00:00').getFullYear()} · ${c.credits} CREDIT${c.credits === 1 ? '' : 'S'}</text>
       <text x="${W / 2}" y="560" text-anchor="middle" ${F} font-size="60" font-weight="600" fill="${green}">${esc(cert.letter)}<tspan font-size="22" font-weight="400" fill="${dim}" dx="14" dy="-2">${cert.pct.toFixed(1)}%</tspan></text>
       <text x="${W / 2}" y="600" text-anchor="middle" ${S} font-size="12" letter-spacing="1" fill="${dim}">${esc(line.toUpperCase())}</text>
+      ${(() => { const a = (c.material.sources.find((x) => x.attribution) || {}).attribution; return a ? `<text x="${W / 2}" y="622" text-anchor="middle" ${S} font-size="10" letter-spacing="0.5" fill="${dim}">MATERIAL: ${esc((a.title + (a.author ? ', ' + a.author : '') + ' · ' + a.license).toUpperCase())}</text>` : ''; })()}
       ${c.contract && c.contract.signature ? `<image href="${c.contract.signature}" x="190" y="646" width="220" height="60" preserveAspectRatio="xMidYMid meet"/>` : ''}
       <line x1="150" y1="712" x2="450" y2="712" stroke="${ink}" stroke-width="1"/>
       <text x="300" y="730" text-anchor="middle" ${S} font-size="11" letter-spacing="2" fill="${dim}">STUDENT</text>
@@ -3194,7 +3214,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
     let tick = 0;
     L.on('tick', () => { if (++tick % 30 === 0 && !document.querySelector('.exam')) renderRail(); });
     (L.native ? L.native.restore().then(() => L.native.boot()) : Promise.resolve()).catch((e) => console.error(e))
-      .then(() => R().sweep()).then(() => L.render()).catch((e) => { console.error(e); L.render(); });
+      .then(() => L.faculty.probe()).then(() => R().sweep()).then(() => L.render()).catch((e) => { console.error(e); L.render(); });
   };
 
   // ---------- welcome ----------
@@ -3261,7 +3281,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
           <div class="empty">
             <h2>Start with what you want to learn.</h2>
             <p>Drop in a PDF, a chapter, notes or a web page. You get three pacings; choose one and every study day, quiz and exam is fixed.</p>
-            <div class="cols mt-3"><a class="btn btn-primary" href="#/enrol">Add a course</a><button class="btn" data-act="load-sample">Try the sample</button></div>
+            <div class="cols mt-3"><a class="btn btn-primary" href="#/enrol">Add a course</a><a class="btn" href="#/library">Library</a><button class="btn btn-quiet" data-act="load-sample">Try the sample</button></div>
             <p class="small muted mt-2">The sample is six short lectures on probability.</p>
           </div>
         </div>`;
@@ -3448,6 +3468,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
   function materials(c) {
     return `<div class="grid-2"><div class="card"><div class="card-head"><h3>Sources</h3><span class="small muted num">${L.fmt.num(c.material.words)} words</span></div><div class="card-body"><table class="table"><tbody>${c.material.sources.map((s) => `<tr><td><span class="pill">${esc(s.kind)}</span></td><td>${esc(s.name)}${s.url ? `<div class="small muted truncate">${esc(s.url)}</div>` : ''}</td><td class="num small">${L.fmt.num(s.words)} w${s.pages ? ` · ${s.pages} pp` : ''}</td></tr>`).join('')}</tbody></table>
       <p class="small muted mt-2">Analysed by ${c.analysis.source === 'llm' ? `faculty (${esc(c.analysis.model || 'model')})` : 'the offline registrar'}.${c.analysis.note ? ' ' + esc(c.analysis.note) : ''}</p>
+      ${(() => { const a = c.material.sources.find((x) => x.attribution); return a ? `<p class="small muted mt-1"><b>Material</b>: ${esc(a.attribution.title)}${a.attribution.author ? `, ${esc(a.attribution.author)}` : ''} (${esc(a.attribution.publisher || '')}) · <a href="${esc(a.attribution.licenseUrl)}" target="_blank" rel="noopener">${esc(a.attribution.license)}</a> · <a href="${esc(a.attribution.url)}" target="_blank" rel="noopener">source</a></p>` : ''; })()}
       ${(() => { const skipped = c.material.segments.filter((g) => g.role && g.role !== 'body'); if (!skipped.length) return ''; return `<p class="small muted mt-1"><b>Not scheduled</b> (front and back matter): ${skipped.map((g) => { const loc = R().locate(c, g.start, g.end); return esc(g.title) + (loc.pages ? ` (pp. ${loc.pages[0]}–${loc.pages[1]})` : ''); }).join(', ')}.</p>`; })()}</div></div>
       <div class="card"><div class="card-head"><h3>Units</h3><span class="small muted">${c.analysis.units.length}</span></div><div class="card-body stack gap-2">${c.analysis.units.map((u, i) => `<div><div style="font-weight:500">${i + 1}. ${esc(u.title)}</div><div class="small muted">${u.topics.map(esc).join(' · ')}</div></div>`).join('')}</div></div></div>
       <div class="section"><div class="section-head"><h2>About this course</h2></div><p style="max-width:70ch">${esc(c.description)}</p>${c.prerequisites.length ? `<p class="small muted">Assumed: ${c.prerequisites.map(esc).join('; ')}.</p>` : ''}</div>`;
@@ -3484,7 +3505,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
       const notes = c.notes && c.notes[s.week];
       const mode = q.view === 'text' ? 'text' : 'pages';
       const src = active && c.material.sources.find((x) => x.id === active.source);
-      const canPages = !!(src && src.hasFile);
+      const canPages = !!(src && (src.hasFile || src.library));
       return `<div class="page is-wide"><div class="page-head" style="--ch:${L.cc(c)}"><div><span class="eyebrow"><a href="#/course/${c.id}" class="code">${esc(c.code)}</a> · week ${s.week} · ${L.fmt.dateLong(s.date)}</span><h1 class="display">${esc(s.topic)}</h1><p class="lede">${L.fmt.dur(s.minutes)} · ${s.chunks.length} chunks</p></div>
         <div class="actions">${prev ? `<a class="btn btn-quiet" href="#/course/${c.id}/day/${prev.date}">← ${L.fmt.date(prev.date)}</a>` : ''}${next ? `<a class="btn btn-quiet" href="#/course/${c.id}/day/${next.date}">${L.fmt.date(next.date)} →</a>` : ''}</div></div>
         <div class="reading-layout">
@@ -3510,8 +3531,12 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
       if (!active || !body) return;
       const token = ++pageRenderToken;
       const src = c.material.sources.find((x) => x.id === active.source);
-      const wantPages = src && src.hasFile && q.view !== 'text';
-      const file = wantPages ? await L.db.getFile(src.id) : null;
+      const wantPages = src && (src.hasFile || src.library) && q.view !== 'text';
+      let file = wantPages && src.hasFile ? await L.db.getFile(src.id) : null;
+      if (wantPages && !file && src.library && active.pages && window.pdfjsLib) {
+        try { const bytes = await L.library.pageSlice(src.library, active.pages[0], active.pages[1]); if (token !== pageRenderToken) return; await renderPdfPages(body, bytes, [1, active.pages[1] - active.pages[0] + 1], token, active.pages[0]); return; }
+        catch (e) { console.warn('library pages unavailable, falling back to text', e); }
+      }
       if (token !== pageRenderToken) return;
       if (file && file.kind === 'pdf' && active.pages && window.pdfjsLib) {
         try { await renderPdfPages(body, file.bytes, active.pages, token); return; }
@@ -3531,7 +3556,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
     },
     unmount() { pageRenderToken++; },
   };
-  async function renderPdfPages(body, bytes, [from, to], token) {
+  async function renderPdfPages(body, bytes, [from, to], token, labelOffset = 0) {
     const pdf = await window.pdfjsLib.getDocument({ data: bytes.slice(0) }).promise;
     if (token !== pageRenderToken) return;
     body.className = 'pages';
@@ -3547,7 +3572,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
       const wrap = document.createElement('figure'); wrap.className = 'pdf-page';
       const canvas = document.createElement('canvas');
       canvas.width = vp.width; canvas.height = vp.height; canvas.style.width = `${vp.width / dpr}px`; canvas.style.height = `${vp.height / dpr}px`;
-      const cap = document.createElement('figcaption'); cap.className = 'mono small muted'; cap.textContent = `Page ${n} of ${pdf.numPages}`;
+      const cap = document.createElement('figcaption'); cap.className = 'mono small muted'; cap.textContent = labelOffset ? `Page ${labelOffset + n - 1}` : `Page ${n} of ${pdf.numPages}`;
       wrap.append(canvas, cap); body.appendChild(wrap);
       await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
     }
@@ -3882,7 +3907,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
     },
   };
   L.inputs['api-key'] = (el) => { L.S.settings.apiKey = el.value.trim(); L.save(); };
-  L.inputs['api-base'] = (el) => { L.S.settings.apiBase = el.value.trim().replace(/\/$/, ''); L.save(); };
+  L.inputs['api-base'] = (el) => { L.S.settings.apiBase = el.value.trim().replace(/\/$/, ''); L.save(); L.faculty.probe().then(() => L.render()); };
   L.inputs.model = (el) => { L.S.settings.model = el.value.trim(); L.save(); };
   L.inputs['weekly-hours'] = (el) => { const v = L.clamp(Math.round(Number(el.value) || 12), 4, 40); L.S.settings.weeklyHours = v; L.save(); };
   L.actions.theme = (el) => { L.theme.set(el.dataset.theme); L.render(); };
@@ -3957,7 +3982,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
     return `<div class="prospectus" style="--ch:${L.cc(p)}">
       <div class="prospectus-head"><div><div class="course-lockup"><span class="icon-sq">${esc(p.subjectCode.slice(0, 2))}</span><div><span class="code">${esc(p.code)}</span><div class="small muted">${esc(p.subject)} · ${esc(p.level)} · ${p.credits} credit${p.credits === 1 ? '' : 's'}</div></div></div><h2>${esc(p.title)}</h2><p class="lede mt-1">${esc(p.description)}</p></div></div>
       <div class="prospectus-body">
-        <dl class="kv"><dt>Term</dt><dd class="mono">${L.fmt.date(p.term.start)} – ${L.fmt.date(p.term.end)} · ${p.term.weeks} weeks</dd><dt>Pace</dt><dd>${esc(p.plan.paceLabel)} · <b>${p.plan.minutesPerDay} min</b> ${days} at ${hm(slot.start)}</dd><dt>Material</dt><dd>${p.material.sources.length} source${p.material.sources.length === 1 ? '' : 's'} · ${L.fmt.num(p.material.words)} words</dd><dt>Faculty</dt><dd>${p.analysis.source === 'llm' ? esc(p.analysis.model) : 'offline registrar'}</dd><dt>Withdraw by</dt><dd class="mono">${L.fmt.date(L.date.addDays(L.date.parse(p.policy.withdrawBefore), -1))}</dd></dl>
+        <dl class="kv"><dt>Term</dt><dd class="mono">${L.fmt.date(p.term.start)} – ${L.fmt.date(p.term.end)} · ${p.term.weeks} weeks</dd><dt>Pace</dt><dd>${esc(p.plan.paceLabel)} · <b>${p.plan.minutesPerDay} min</b> ${days} at ${hm(slot.start)}</dd><dt>Material</dt><dd>${p.material.sources.length} source${p.material.sources.length === 1 ? '' : 's'} · ${L.fmt.num(p.material.words)} words</dd><dt>Faculty</dt><dd>${p.analysis.source === 'llm' ? esc(p.analysis.model) : 'offline registrar'}</dd>${(() => { const a = (p.material.sources.find((x) => x.attribution) || {}).attribution; return a ? `<dt>Material</dt><dd>${esc(a.title)}${a.author ? `, ${esc(a.author)}` : ''} · ${esc(a.license)}</dd>` : ''; })()}<dt>Withdraw by</dt><dd class="mono">${L.fmt.date(L.date.addDays(L.date.parse(p.policy.withdrawBefore), -1))}</dd></dl>
         <div><span class="label">Weights</span><div class="weights mt-1">${weightRows}</div></div>
         <details><summary>Week by week (${p.weeks.length})</summary><div class="syllabus mt-2">${p.weeks.map((w) => `<div class="week-row"><div class="wk">Week<b>${w.n}</b></div><div><div class="topic">${esc(w.title)}</div><div class="parts">${L.fmt.date(w.start)} · ${w.parts.map((x) => esc(x.label)).join(' · ')}</div></div></div>`).join('')}</div></details>
         <details><summary>Assessments (${p.assessments.length})</summary><div class="table-wrap mt-2"><table class="table"><thead><tr><th>Assessment</th><th>Opens</th><th>Due</th><th class="num">Weight</th></tr></thead><tbody>${p.assessments.map((a) => { const n = p.assessments.filter((x) => x.kind === a.kind).length; return `<tr><td>${esc(a.title)}<div class="small muted">${a.durationMin ? L.fmt.dur(a.durationMin) : 'untimed'}${a.lateAllowed ? ' · late window' : ''}</div></td><td class="mono small nowrap">${L.fmt.dt(a.opensAt)}</td><td class="mono small nowrap">${L.fmt.dt(a.dueAt)}</td><td class="num">${((p.policy.weights[a.kind] || 0) / n).toFixed(1)}%</td></tr>`; }).join('')}</tbody></table></div></details>
@@ -3994,6 +4019,21 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
     async mount(root, p, q) {
       if (W.step === 4) L.papers.mountPad(root);
       window.__prospectus = W.prospectus || null;
+      if (q.lib && !W.sampleLoaded && !W.busy) {
+        W.sampleLoaded = true;
+        history.replaceState(null, '', location.pathname + location.search + '#/enrol');
+        const busy = L.ui.busy('Fetching the title from the Lyceum library…');
+        try {
+          const t = await L.library.title(q.lib);
+          const pack = await L.library.pack(q.lib, (m) => busy.update(m));
+          W.sources = [L.intake.fromPack(pack, t ? t.title : q.lib)];
+          W.hint = t ? t.title : '';
+          L.ui.toast(`${W.sources[0].name} · ${L.fmt.num(W.sources[0].words)} words · ${W.sources[0].attribution ? W.sources[0].attribution.license : ''}`, 'good', 4000);
+          await L.actions['submit-registrar']();
+        } catch (e) { W.error = e.message; L.render(); }
+        finally { busy.done(); }
+        return;
+      }
       if (q.sample === '1' && !W.sampleLoaded && !W.busy) {
         W.sampleLoaded = true;
         W.sources = [Object.assign(L.intake.fromText(L.SAMPLE.text, L.SAMPLE.name), { kind: 'markdown' })];
@@ -4040,7 +4080,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
   L.actions['clear-sources'] = () => { W.sources = []; W.error = null; L.render(); };
   L.inputs.hint = (el) => { W.hint = el.value; };
   L.actions['enrol-back'] = () => { W.step = 1; W.plans = null; W.prospectus = null; W.error = null; W.log = []; L.render(); };
-  L.actions['enrol-discard'] = () => { W.step = 1; W.plans = null; W.prospectus = null; W.log = []; W.error = null; L.render(); L.ui.toast('Prospectus discarded. Nothing was recorded.'); };
+  L.actions['enrol-discard'] = () => { W.step = 1; W.sources = []; W.hint = ''; W.plans = null; W.prospectus = null; W.log = []; W.error = null; W.sampleLoaded = false; L.render(); L.ui.toast('Prospectus discarded. Nothing was recorded.'); };
   L.actions['choose-pace'] = (el) => { const p = W.plans && W.plans[el.dataset.pace]; if (!p || p.unavailable) return; W.prospectus = p; W.step = 3; L.render(); };
   L.actions['enrol-paces'] = () => { W.prospectus = null; W.step = 2; L.render(); };
 
@@ -4098,6 +4138,51 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
       L.go(`/course/${c.id}`);
     } catch (e) { W.error = e.message; L.render(); }
     finally { W.busy = false; }
+  };
+})(window.L);
+
+
+/* ---- library.js ---- */
+(function (L) {
+  'use strict';
+  // The Library: open-access titles served by the Lyceum server as compact packs. Needs More → Lyceum server.
+  const base = () => L.faculty.apiBase();
+  let cat = null;
+  async function catalogue() {
+    if (cat) return cat;
+    if (!base()) throw new Error('The Library needs the Lyceum server. Set it under More.');
+    const r = await fetch(base() + '/v1/library'); if (!r.ok) throw new Error('The Library is not reachable right now.');
+    cat = (await r.json()).titles || []; return cat;
+  }
+  const title = async (id) => (await catalogue()).find((t) => t.id === id) || null;
+  async function pack(id, progress = () => {}) {
+    progress('Downloading the text…');
+    const r = await fetch(base() + `/v1/library/${id}/pack`); if (!r.ok) throw new Error(`Could not fetch this title (${r.status}).`);
+    return r.json();
+  }
+  // original pages for a library course: a small PDF slice, cached on the device
+  async function pageSlice(id, from, to) {
+    const key = `lib:${id}:${from}-${to}`;
+    const hit = await L.db.getFile(key); if (hit && hit.bytes) return hit.bytes;
+    const r = await fetch(base() + `/v1/library/${id}/pages/${from}-${to}`); if (!r.ok) throw new Error('Pages unavailable.');
+    const bytes = await r.arrayBuffer();
+    L.db.putFile(key, { kind: 'pdf', name: `${id} pp. ${from}-${to}`, bytes: bytes.slice(0) }).catch(() => null);
+    return bytes;
+  }
+  L.library = { catalogue, title, pack, pageSlice };
+
+  L.views.library = {
+    title: 'Library',
+    render() {
+      return `<div class="page"><div class="page-head is-row"><div><h1 class="display">Library</h1><p class="lede">Open-access books, ready to become courses.</p></div></div><div id="library-body"><p class="muted small">Loading the catalogue…</p></div></div>`;
+    },
+    async mount(root) {
+      const host = root.querySelector('#library-body'); if (!host) return;
+      let titles;
+      try { titles = await catalogue(); } catch (e) { host.innerHTML = `<div class="empty"><h2>Library unavailable.</h2><p>${L.esc(e.message)}</p>${base() ? '' : '<p><a class="btn mt-2" href="#/settings">Open More</a></p>'}</div>`; return; }
+      const groups = L.groupBy(titles, 'subject');
+      host.innerHTML = Object.keys(groups).sort().map((subj) => `<div class="section"><div class="section-head"><h2>${L.esc(subj)}</h2></div><div class="stack gap-2 stagger">${groups[subj].map((t) => `<div class="card"><div class="card-body cols" style="justify-content:space-between;align-items:flex-start"><div style="min-width:0;flex:1"><div style="font-weight:600">${L.esc(t.title)}</div><div class="small muted">${L.esc(t.author)} · ${L.esc(t.level)} · ${L.esc(t.license)}</div></div><a class="btn btn-sm btn-primary" href="#/enrol?lib=${L.esc(t.id)}">Plan course</a></div></div>`).join('')}</div></div>`).join('') + `<p class="small muted mt-3">Titles are used under their stated licences; attribution appears on the prospectus and the certificate.</p>`;
+    },
   };
 })(window.L);
 

@@ -39,7 +39,7 @@
     return `<div class="prospectus" style="--ch:${L.cc(p)}">
       <div class="prospectus-head"><div><div class="course-lockup"><span class="icon-sq">${esc(p.subjectCode.slice(0, 2))}</span><div><span class="code">${esc(p.code)}</span><div class="small muted">${esc(p.subject)} · ${esc(p.level)} · ${p.credits} credit${p.credits === 1 ? '' : 's'}</div></div></div><h2>${esc(p.title)}</h2><p class="lede mt-1">${esc(p.description)}</p></div></div>
       <div class="prospectus-body">
-        <dl class="kv"><dt>Term</dt><dd class="mono">${L.fmt.date(p.term.start)} – ${L.fmt.date(p.term.end)} · ${p.term.weeks} weeks</dd><dt>Pace</dt><dd>${esc(p.plan.paceLabel)} · <b>${p.plan.minutesPerDay} min</b> ${days} at ${hm(slot.start)}</dd><dt>Material</dt><dd>${p.material.sources.length} source${p.material.sources.length === 1 ? '' : 's'} · ${L.fmt.num(p.material.words)} words</dd><dt>Faculty</dt><dd>${p.analysis.source === 'llm' ? esc(p.analysis.model) : 'offline registrar'}</dd><dt>Withdraw by</dt><dd class="mono">${L.fmt.date(L.date.addDays(L.date.parse(p.policy.withdrawBefore), -1))}</dd></dl>
+        <dl class="kv"><dt>Term</dt><dd class="mono">${L.fmt.date(p.term.start)} – ${L.fmt.date(p.term.end)} · ${p.term.weeks} weeks</dd><dt>Pace</dt><dd>${esc(p.plan.paceLabel)} · <b>${p.plan.minutesPerDay} min</b> ${days} at ${hm(slot.start)}</dd><dt>Material</dt><dd>${p.material.sources.length} source${p.material.sources.length === 1 ? '' : 's'} · ${L.fmt.num(p.material.words)} words</dd><dt>Faculty</dt><dd>${p.analysis.source === 'llm' ? esc(p.analysis.model) : 'offline registrar'}</dd>${(() => { const a = (p.material.sources.find((x) => x.attribution) || {}).attribution; return a ? `<dt>Material</dt><dd>${esc(a.title)}${a.author ? `, ${esc(a.author)}` : ''} · ${esc(a.license)}</dd>` : ''; })()}<dt>Withdraw by</dt><dd class="mono">${L.fmt.date(L.date.addDays(L.date.parse(p.policy.withdrawBefore), -1))}</dd></dl>
         <div><span class="label">Weights</span><div class="weights mt-1">${weightRows}</div></div>
         <details><summary>Week by week (${p.weeks.length})</summary><div class="syllabus mt-2">${p.weeks.map((w) => `<div class="week-row"><div class="wk">Week<b>${w.n}</b></div><div><div class="topic">${esc(w.title)}</div><div class="parts">${L.fmt.date(w.start)} · ${w.parts.map((x) => esc(x.label)).join(' · ')}</div></div></div>`).join('')}</div></details>
         <details><summary>Assessments (${p.assessments.length})</summary><div class="table-wrap mt-2"><table class="table"><thead><tr><th>Assessment</th><th>Opens</th><th>Due</th><th class="num">Weight</th></tr></thead><tbody>${p.assessments.map((a) => { const n = p.assessments.filter((x) => x.kind === a.kind).length; return `<tr><td>${esc(a.title)}<div class="small muted">${a.durationMin ? L.fmt.dur(a.durationMin) : 'untimed'}${a.lateAllowed ? ' · late window' : ''}</div></td><td class="mono small nowrap">${L.fmt.dt(a.opensAt)}</td><td class="mono small nowrap">${L.fmt.dt(a.dueAt)}</td><td class="num">${((p.policy.weights[a.kind] || 0) / n).toFixed(1)}%</td></tr>`; }).join('')}</tbody></table></div></details>
@@ -76,6 +76,21 @@
     async mount(root, p, q) {
       if (W.step === 4) L.papers.mountPad(root);
       window.__prospectus = W.prospectus || null;
+      if (q.lib && !W.sampleLoaded && !W.busy) {
+        W.sampleLoaded = true;
+        history.replaceState(null, '', location.pathname + location.search + '#/enrol');
+        const busy = L.ui.busy('Fetching the title from the Lyceum library…');
+        try {
+          const t = await L.library.title(q.lib);
+          const pack = await L.library.pack(q.lib, (m) => busy.update(m));
+          W.sources = [L.intake.fromPack(pack, t ? t.title : q.lib)];
+          W.hint = t ? t.title : '';
+          L.ui.toast(`${W.sources[0].name} · ${L.fmt.num(W.sources[0].words)} words · ${W.sources[0].attribution ? W.sources[0].attribution.license : ''}`, 'good', 4000);
+          await L.actions['submit-registrar']();
+        } catch (e) { W.error = e.message; L.render(); }
+        finally { busy.done(); }
+        return;
+      }
       if (q.sample === '1' && !W.sampleLoaded && !W.busy) {
         W.sampleLoaded = true;
         W.sources = [Object.assign(L.intake.fromText(L.SAMPLE.text, L.SAMPLE.name), { kind: 'markdown' })];
@@ -122,7 +137,7 @@
   L.actions['clear-sources'] = () => { W.sources = []; W.error = null; L.render(); };
   L.inputs.hint = (el) => { W.hint = el.value; };
   L.actions['enrol-back'] = () => { W.step = 1; W.plans = null; W.prospectus = null; W.error = null; W.log = []; L.render(); };
-  L.actions['enrol-discard'] = () => { W.step = 1; W.plans = null; W.prospectus = null; W.log = []; W.error = null; L.render(); L.ui.toast('Prospectus discarded. Nothing was recorded.'); };
+  L.actions['enrol-discard'] = () => { W.step = 1; W.sources = []; W.hint = ''; W.plans = null; W.prospectus = null; W.log = []; W.error = null; W.sampleLoaded = false; L.render(); L.ui.toast('Prospectus discarded. Nothing was recorded.'); };
   L.actions['choose-pace'] = (el) => { const p = W.plans && W.plans[el.dataset.pace]; if (!p || p.unavailable) return; W.prospectus = p; W.step = 3; L.render(); };
   L.actions['enrol-paces'] = () => { W.prospectus = null; W.step = 2; L.render(); };
 

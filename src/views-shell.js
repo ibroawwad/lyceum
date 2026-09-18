@@ -144,7 +144,7 @@
     let tick = 0;
     L.on('tick', () => { if (++tick % 30 === 0 && !document.querySelector('.exam')) renderRail(); });
     (L.native ? L.native.restore().then(() => L.native.boot()) : Promise.resolve()).catch((e) => console.error(e))
-      .then(() => R().sweep()).then(() => L.render()).catch((e) => { console.error(e); L.render(); });
+      .then(() => L.faculty.probe()).then(() => R().sweep()).then(() => L.render()).catch((e) => { console.error(e); L.render(); });
   };
 
   // ---------- welcome ----------
@@ -211,7 +211,7 @@
           <div class="empty">
             <h2>Start with what you want to learn.</h2>
             <p>Drop in a PDF, a chapter, notes or a web page. You get three pacings; choose one and every study day, quiz and exam is fixed.</p>
-            <div class="cols mt-3"><a class="btn btn-primary" href="#/enrol">Add a course</a><button class="btn" data-act="load-sample">Try the sample</button></div>
+            <div class="cols mt-3"><a class="btn btn-primary" href="#/enrol">Add a course</a><a class="btn" href="#/library">Library</a><button class="btn btn-quiet" data-act="load-sample">Try the sample</button></div>
             <p class="small muted mt-2">The sample is six short lectures on probability.</p>
           </div>
         </div>`;

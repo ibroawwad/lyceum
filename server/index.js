@@ -6,6 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const db = require('./db');
 const iap = require('./iap');
+const lib = require('./library');
 
 const PORT = Number(process.env.PORT || 4700);
 const SECRET = process.env.TOKEN_SECRET || '';
@@ -121,8 +122,18 @@ function verifyPage(res, code, wantJson) {
 }
 
 // ---------- library ----------
-const libraryPath = path.join(__dirname, 'library.json');
-function library(res) { try { const body = fs.readFileSync(libraryPath, 'utf8'); res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=3600' }); res.end(body); } catch (e) { json(res, 200, { titles: [] }); } }
+function library(res) { json(res, 200, lib.publicList(), { 'Cache-Control': 'public, max-age=3600' }); }
+async function libraryPack(req, res, id) {
+  if (!lib.byId(id)) return json(res, 404, { error: 'unknown title' });
+  if (!rateLimit('pack:' + ip(req), 30, 3600e3)) return json(res, 429, { error: 'Too many downloads this hour.' });
+  const body = await lib.pack(id);
+  res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=86400' }); res.end(body);
+}
+async function libraryPages(req, res, id, from, to) {
+  const bytes = await lib.pageSlice(id, Number(from), Number(to));
+  if (!bytes) return json(res, 404, { error: 'no such pages' });
+  res.writeHead(200, { 'Content-Type': 'application/pdf', 'Cache-Control': 'public, max-age=86400', 'Content-Length': bytes.length }); res.end(bytes);
+}
 
 // ---------- server ----------
 const server = http.createServer(async (req, res) => {
@@ -137,6 +148,8 @@ const server = http.createServer(async (req, res) => {
   try {
     if (url.pathname === '/health') return json(res, 200, { ok: true, faculty: !!OPENROUTER_KEY, entitlements: !!SECRET, apple: !!process.env.APPLE_SHARED_SECRET, google: !!process.env.GOOGLE_SERVICE_ACCOUNT_JSON, free: FREE_FACULTY });
     if (req.method === 'GET' && url.pathname === '/v1/library') return library(res);
+    const lp = url.pathname.match(/^\/v1\/library\/([a-z0-9-]+)\/pack$/); if (req.method === 'GET' && lp) return libraryPack(req, res, lp[1]);
+    const lg = url.pathname.match(/^\/v1\/library\/([a-z0-9-]+)\/pages\/(\d+)-(\d+)$/); if (req.method === 'GET' && lg) return libraryPages(req, res, lg[1], lg[2], lg[3]);
     const m = url.pathname.match(/^\/(?:verify|v1\/certificates)\/([0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4})$/);
     if (req.method === 'GET' && m) return verifyPage(res, m[1], url.pathname.startsWith('/v1/'));
     if (req.method === 'POST') {

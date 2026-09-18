@@ -373,6 +373,33 @@ const local = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.
   const types = await page.evaluate(() => L.S.ledger.map((e) => e.type));
   assert(types.includes('clock_override') && types.includes('clock_reset'), 'clock overrides and reset are in the ledger');
 
+  console.log('11b. the Library through a local Lyceum server');
+  const { spawn } = require('child_process');
+  const api = spawn(process.execPath, ['index.js'], { cwd: path.join(root, 'server'), env: Object.assign({}, process.env, { TOKEN_SECRET: 'smoke', PORT: '4791', DB_PATH: path.join(root, 'server', 'data-smoke', 'l.sqlite'), LIBRARY_DIR: path.join(root, 'server', 'data-smoke', 'lib'), FREE_FACULTY: '1' }), stdio: 'ignore' });
+  await sleep(900);
+  await ctx.unroute(/^https?:\/\//);
+  await ctx.route(/^https?:\/\//, (r) => (r.request().url().startsWith('http://127.0.0.1:4791/') ? r.continue() : r.abort()));
+  await page.evaluate(() => { L.S.settings.apiBase = 'http://127.0.0.1:4791'; L.saveNow(); });
+  await page.goto(file + '?debug=1#/library');
+  await page.waitForSelector('a[href="#/enrol?lib=pg-meditations"]', { timeout: 30000 });
+  const nTitles = await page.evaluate(() => document.querySelectorAll('#library-body .card').length);
+  assert(nTitles >= 20, `library lists the catalogue (${nTitles} titles)`);
+  await shot('11b-library');
+  await page.click('a[href="#/enrol?lib=pg-meditations"]');
+  await page.waitForSelector('.paces', { timeout: 120000 });
+  const libPro = await page.evaluate(() => { const p = Object.values(window.__W || {}); return null; });
+  await page.click('[data-act=choose-pace][data-pace=condensed]');
+  await page.waitForSelector('.prospectus', { timeout: 10000 });
+  const attr = await page.evaluate(() => window.__prospectus.material.sources[0].attribution);
+  assert(attr && /Public domain/.test(attr.license) && /Marcus Aurelius/.test(attr.author), `library title carries attribution (${attr && attr.license}, ${attr && attr.author})`);
+  assert(await page.evaluate(() => /Material/.test(document.querySelector('.prospectus').innerText) && /Public domain/.test(document.querySelector('.prospectus').innerText)), 'prospectus shows the material and licence');
+  const cover = await page.evaluate(() => { const p = window.__prospectus; const t = p.sourcesText; return { words: p.material.words, hasLicenceText: /START OF THE PROJECT GUTENBERG/.test(t), segs: p.material.segments.length }; });
+  assert(cover.words > 30000 && !cover.hasLicenceText && cover.segs >= 5, `Gutenberg header stripped, text segmented (${cover.words} words, ${cover.segs} segments)`);
+  await page.click('[data-act=enrol-discard]');
+  await ctx.unroute(/^https?:\/\//); await ctx.route(/^https?:\/\//, (r) => r.abort());
+  await page.evaluate(() => { L.S.settings.apiBase = ''; L.saveNow(); });
+  api.kill(); fs.rmSync(path.join(root, 'server', 'data-smoke'), { recursive: true, force: true });
+
   console.log('12. a PDF through the wizard: original pages');
   await page.goto(file + '?debug=1#/enrol');
   await page.waitForSelector('#file-input', { state: 'attached', timeout: 5000 });

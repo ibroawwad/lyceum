@@ -89,6 +89,7 @@
   function materials(c) {
     return `<div class="grid-2"><div class="card"><div class="card-head"><h3>Sources</h3><span class="small muted num">${L.fmt.num(c.material.words)} words</span></div><div class="card-body"><table class="table"><tbody>${c.material.sources.map((s) => `<tr><td><span class="pill">${esc(s.kind)}</span></td><td>${esc(s.name)}${s.url ? `<div class="small muted truncate">${esc(s.url)}</div>` : ''}</td><td class="num small">${L.fmt.num(s.words)} w${s.pages ? ` · ${s.pages} pp` : ''}</td></tr>`).join('')}</tbody></table>
       <p class="small muted mt-2">Analysed by ${c.analysis.source === 'llm' ? `faculty (${esc(c.analysis.model || 'model')})` : 'the offline registrar'}.${c.analysis.note ? ' ' + esc(c.analysis.note) : ''}</p>
+      ${(() => { const a = c.material.sources.find((x) => x.attribution); return a ? `<p class="small muted mt-1"><b>Material</b>: ${esc(a.attribution.title)}${a.attribution.author ? `, ${esc(a.attribution.author)}` : ''} (${esc(a.attribution.publisher || '')}) · <a href="${esc(a.attribution.licenseUrl)}" target="_blank" rel="noopener">${esc(a.attribution.license)}</a> · <a href="${esc(a.attribution.url)}" target="_blank" rel="noopener">source</a></p>` : ''; })()}
       ${(() => { const skipped = c.material.segments.filter((g) => g.role && g.role !== 'body'); if (!skipped.length) return ''; return `<p class="small muted mt-1"><b>Not scheduled</b> (front and back matter): ${skipped.map((g) => { const loc = R().locate(c, g.start, g.end); return esc(g.title) + (loc.pages ? ` (pp. ${loc.pages[0]}–${loc.pages[1]})` : ''); }).join(', ')}.</p>`; })()}</div></div>
       <div class="card"><div class="card-head"><h3>Units</h3><span class="small muted">${c.analysis.units.length}</span></div><div class="card-body stack gap-2">${c.analysis.units.map((u, i) => `<div><div style="font-weight:500">${i + 1}. ${esc(u.title)}</div><div class="small muted">${u.topics.map(esc).join(' · ')}</div></div>`).join('')}</div></div></div>
       <div class="section"><div class="section-head"><h2>About this course</h2></div><p style="max-width:70ch">${esc(c.description)}</p>${c.prerequisites.length ? `<p class="small muted">Assumed: ${c.prerequisites.map(esc).join('; ')}.</p>` : ''}</div>`;
@@ -125,7 +126,7 @@
       const notes = c.notes && c.notes[s.week];
       const mode = q.view === 'text' ? 'text' : 'pages';
       const src = active && c.material.sources.find((x) => x.id === active.source);
-      const canPages = !!(src && src.hasFile);
+      const canPages = !!(src && (src.hasFile || src.library));
       return `<div class="page is-wide"><div class="page-head" style="--ch:${L.cc(c)}"><div><span class="eyebrow"><a href="#/course/${c.id}" class="code">${esc(c.code)}</a> · week ${s.week} · ${L.fmt.dateLong(s.date)}</span><h1 class="display">${esc(s.topic)}</h1><p class="lede">${L.fmt.dur(s.minutes)} · ${s.chunks.length} chunks</p></div>
         <div class="actions">${prev ? `<a class="btn btn-quiet" href="#/course/${c.id}/day/${prev.date}">← ${L.fmt.date(prev.date)}</a>` : ''}${next ? `<a class="btn btn-quiet" href="#/course/${c.id}/day/${next.date}">${L.fmt.date(next.date)} →</a>` : ''}</div></div>
         <div class="reading-layout">
@@ -151,8 +152,12 @@
       if (!active || !body) return;
       const token = ++pageRenderToken;
       const src = c.material.sources.find((x) => x.id === active.source);
-      const wantPages = src && src.hasFile && q.view !== 'text';
-      const file = wantPages ? await L.db.getFile(src.id) : null;
+      const wantPages = src && (src.hasFile || src.library) && q.view !== 'text';
+      let file = wantPages && src.hasFile ? await L.db.getFile(src.id) : null;
+      if (wantPages && !file && src.library && active.pages && window.pdfjsLib) {
+        try { const bytes = await L.library.pageSlice(src.library, active.pages[0], active.pages[1]); if (token !== pageRenderToken) return; await renderPdfPages(body, bytes, [1, active.pages[1] - active.pages[0] + 1], token, active.pages[0]); return; }
+        catch (e) { console.warn('library pages unavailable, falling back to text', e); }
+      }
       if (token !== pageRenderToken) return;
       if (file && file.kind === 'pdf' && active.pages && window.pdfjsLib) {
         try { await renderPdfPages(body, file.bytes, active.pages, token); return; }
@@ -172,7 +177,7 @@
     },
     unmount() { pageRenderToken++; },
   };
-  async function renderPdfPages(body, bytes, [from, to], token) {
+  async function renderPdfPages(body, bytes, [from, to], token, labelOffset = 0) {
     const pdf = await window.pdfjsLib.getDocument({ data: bytes.slice(0) }).promise;
     if (token !== pageRenderToken) return;
     body.className = 'pages';
@@ -188,7 +193,7 @@
       const wrap = document.createElement('figure'); wrap.className = 'pdf-page';
       const canvas = document.createElement('canvas');
       canvas.width = vp.width; canvas.height = vp.height; canvas.style.width = `${vp.width / dpr}px`; canvas.style.height = `${vp.height / dpr}px`;
-      const cap = document.createElement('figcaption'); cap.className = 'mono small muted'; cap.textContent = `Page ${n} of ${pdf.numPages}`;
+      const cap = document.createElement('figcaption'); cap.className = 'mono small muted'; cap.textContent = labelOffset ? `Page ${labelOffset + n - 1}` : `Page ${n} of ${pdf.numPages}`;
       wrap.append(canvas, cap); body.appendChild(wrap);
       await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
     }

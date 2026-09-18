@@ -175,7 +175,7 @@
     },
   };
   L.inputs['api-key'] = (el) => { L.S.settings.apiKey = el.value.trim(); L.save(); };
-  L.inputs['api-base'] = (el) => { L.S.settings.apiBase = el.value.trim().replace(/\/$/, ''); L.save(); };
+  L.inputs['api-base'] = (el) => { L.S.settings.apiBase = el.value.trim().replace(/\/$/, ''); L.save(); L.faculty.probe().then(() => L.render()); };
   L.inputs.model = (el) => { L.S.settings.model = el.value.trim(); L.save(); };
   L.inputs['weekly-hours'] = (el) => { const v = L.clamp(Math.round(Number(el.value) || 12), 4, 40); L.S.settings.weeklyHours = v; L.save(); };
   L.actions.theme = (el) => { L.theme.set(el.dataset.theme); L.render(); };

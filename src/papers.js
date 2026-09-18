@@ -165,6 +165,7 @@
       <text x="${W / 2}" y="474" text-anchor="middle" ${S} font-size="12.5" letter-spacing="2" fill="${dim}">${esc(c.code)} · ${L.fmt.date(c.term.start).toUpperCase()} – ${L.fmt.date(c.term.end).toUpperCase()} ${new Date(c.term.end + 'T00:00:00').getFullYear()} · ${c.credits} CREDIT${c.credits === 1 ? '' : 'S'}</text>
       <text x="${W / 2}" y="560" text-anchor="middle" ${F} font-size="60" font-weight="600" fill="${green}">${esc(cert.letter)}<tspan font-size="22" font-weight="400" fill="${dim}" dx="14" dy="-2">${cert.pct.toFixed(1)}%</tspan></text>
       <text x="${W / 2}" y="600" text-anchor="middle" ${S} font-size="12" letter-spacing="1" fill="${dim}">${esc(line.toUpperCase())}</text>
+      ${(() => { const a = (c.material.sources.find((x) => x.attribution) || {}).attribution; return a ? `<text x="${W / 2}" y="622" text-anchor="middle" ${S} font-size="10" letter-spacing="0.5" fill="${dim}">MATERIAL: ${esc((a.title + (a.author ? ', ' + a.author : '') + ' · ' + a.license).toUpperCase())}</text>` : ''; })()}
       ${c.contract && c.contract.signature ? `<image href="${c.contract.signature}" x="190" y="646" width="220" height="60" preserveAspectRatio="xMidYMid meet"/>` : ''}
       <line x1="150" y1="712" x2="450" y2="712" stroke="${ink}" stroke-width="1"/>
       <text x="300" y="730" text-anchor="middle" ${S} font-size="11" letter-spacing="2" fill="${dim}">STUDENT</text>

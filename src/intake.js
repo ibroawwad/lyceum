@@ -411,6 +411,24 @@
     return Object.assign({ id: L.uid('src'), name, kind, text, words: words(text), chars: text.length }, extra);
   }
   const MAX_PAGES = 1500;
+  // a PDF as page texts (from pdf.js here, or pre-extracted by the Lyceum server for Library titles)
+  function fromPages(name, pages, numPages, outline, extra = {}) {
+    if (pages.join('').replace(/\s+/g, '').length < 200) throw new Error('That PDF has no extractable text (it may be scanned). Try a text export.');
+    // normalise the whole document once (running headers repeat across pages), then recover page offsets from the separators
+    const norm = normalize(pages.join('\n\n' + PAGE + '\n\n'));
+    const pieces = norm.split(PAGE);
+    const pageStarts = []; const parts = []; let pos = 0;
+    for (const piece of pieces) { const t = piece.replace(/^\n+/, '').replace(/\n+$/, ''); pageStarts.push(pos); parts.push(t); pos += t.length + 2; }
+    return make(name, 'pdf', parts.join('\n\n'), Object.assign({ pages: numPages, pageStarts, outline: outline && outline.length >= 3 ? outline : null }, extra), true);
+  }
+  // a Library pack from the server: { kind:'pdf', pages:[...], outline } or { kind:'text', text }, plus attribution
+  function fromPack(pack, title) {
+    let src;
+    if (pack.kind === 'pdf') src = fromPages(title, pack.pages, pack.pages.length, pack.outline || [], { library: pack.id });
+    else { src = make(title, 'text', pack.text || ''); src.library = pack.id; }
+    src.attribution = pack.attribution || null;
+    return src;
+  }
   async function fromFile(file, onProgress) {
     const name = file.name || 'file';
     const ext = (name.split('.').pop() || '').toLowerCase();
@@ -446,14 +464,8 @@
         await walk(raw, 0);
       } catch (e) { outline = []; }
       pdf.destroy();
-      if (pages.join('').replace(/\s+/g, '').length < 200) throw new Error('That PDF has no extractable text (it may be scanned). Try a text export.');
       progress('Cleaning up the text…');
-      // normalise the whole document once (running headers repeat across pages), then recover page offsets from the separators
-      const norm = normalize(pages.join('\n\n' + PAGE + '\n\n'));
-      const pieces = norm.split(PAGE);
-      const pageStarts = []; const parts = []; let pos = 0;
-      for (const piece of pieces) { const t = piece.replace(/^\n+/, '').replace(/\n+$/, ''); pageStarts.push(pos); parts.push(t); pos += t.length + 2; }
-      const src = make(name, 'pdf', parts.join('\n\n'), { pages: numPages, pageStarts, outline: outline.length >= 3 ? outline : null }, true);
+      const src = fromPages(name, pages, numPages, outline);
       src.file = { kind: 'pdf', name, bytes };
       return src;
     }
@@ -503,7 +515,7 @@
       throw new Error('Could not fetch that page (blocked by the site or offline). Save it as PDF or paste the text.');
     }
   }
-  L.intake.fromFile = fromFile;
+  L.intake.fromFile = fromFile; L.intake.fromPack = fromPack; L.intake.fromPages = fromPages;
   L.intake.fromUrl = fromUrl;
   L.intake.fromText = (text, name = 'Pasted text') => make(name, /^\s*#/.test(text) ? 'markdown' : 'text', text);
   L.intake.htmlToText = htmlToText;

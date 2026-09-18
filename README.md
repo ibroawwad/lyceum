@@ -32,6 +32,13 @@ Contract: `SPEC.md`.
 `dist/`. `npm run mobile:android` opens Android Studio; `npm run mobile:ios` needs Xcode + CocoaPods
 (`pod install` in `ios/App` once Xcode is installed — this machine only had the command-line tools).
 
+## Library
+`server/library.json` is the catalogue (23 titles to start: OpenStax CC BY editions and public-domain classics from
+Project Gutenberg). Note: OpenStax's *current* editions are CC BY-NC-SA; only the CC BY editions are listed because
+courses are sold. The server turns each title into a compact pack (page text + bookmarks) once and cuts original
+pages into small PDF slices on demand, so a phone never downloads a 250 MB textbook. Attribution is printed on the
+prospectus, the Materials tab and the certificate.
+
 ## Server (`server/`)
 A dependency-free Node 24 API (faculty proxy with our key + entitlement tokens, App Store / Play purchase
 verification, public certificate verification at `/verify/<code>`, library catalogue). Deployed on its own with

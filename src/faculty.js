@@ -16,7 +16,14 @@
 
   // the faculty is reachable with the student's own key, or through the Lyceum server (proxy) when configured
   const apiBase = () => (L.S?.settings?.apiBase || L.API_BASE || '').trim().replace(/\/$/, '');
-  const available = () => !!(L.S?.settings?.apiKey || '').trim() || !!apiBase();
+  // the server says at boot whether its faculty is configured, so the app never sends work it will refuse
+  L.serverHealth = null;
+  async function probe() {
+    if (!apiBase()) { L.serverHealth = null; return null; }
+    try { const r = await fetch(apiBase() + '/health', { cache: 'no-store' }); L.serverHealth = r.ok ? await r.json() : { ok: false }; } catch (e) { L.serverHealth = { ok: false }; }
+    return L.serverHealth;
+  }
+  const available = () => !!(L.S?.settings?.apiKey || '').trim() || (!!apiBase() && !!(L.serverHealth && L.serverHealth.faculty));
   L.currentCourseToken = null; // set by the registrar around a course's faculty work (entitlement for the proxy)
   async function callProxy({ system, user, maxTokens, json, temperature, onModel, model }) {
     if (onModel) onModel('lyceum server');
@@ -379,5 +386,5 @@
     }
   }
 
-  L.faculty = { apiBase, MODELS, FacultyError, available, chain, call, test, extractJson, analyze, composePaper, grade, notes, offline, MIX };
+  L.faculty = { apiBase, probe, MODELS, FacultyError, available, chain, call, test, extractJson, analyze, composePaper, grade, notes, offline, MIX };
 })(window.L);

@@ -7,7 +7,7 @@ const src = (f) => path.join(root, 'src', f);
 const read = (f) => fs.readFileSync(src(f), 'utf8');
 
 const ORDER = ['core.js', 'native.js', 'sample.js', 'intake.js', 'faculty.js', 'registrar.js', 'papers.js',
-  'views-shell.js', 'views-course.js', 'views-misc.js', 'views-enrol.js'];
+  'views-shell.js', 'views-course.js', 'views-misc.js', 'views-enrol.js', 'library.js'];
 
 let html = read('shell.html');
 const vendor = (f) => fs.readFileSync(path.join(root, 'vendor', f), 'utf8');
