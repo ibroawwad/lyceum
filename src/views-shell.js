@@ -49,7 +49,7 @@
   L.tilesGrid = (c) => {
     const today = L.date.iso(L.today());
     const start = L.date.parse(c.term.start);
-    const cols = Math.max(12, c.term.weeks); // a fixed horizon keeps short courses from looking like three fat columns
+    const cols = Math.max(14, c.term.weeks); // a fixed horizon keeps short courses from looking like three fat columns
     const end = L.date.addDays(start, cols * 7 - 1);
     const out = [];
     for (let d = start; d <= end; d = L.date.addDays(d, 1)) { const iso = L.date.iso(d); const v = iso > c.term.end ? 'off' : L.tileState(c, iso); out.push(`<i data-v="${v}"${iso === today ? ' class="is-today"' : ''} title="${iso}"></i>`); }
@@ -92,20 +92,9 @@
 
   // tile grids get an explicit pixel size from their container so they never spill out of a card (Safari
   // sizes aspect-ratio grid items unreliably); long terms scroll to the most recent weeks
+  // tiles are one fixed size everywhere (HabitKit); a long term scrolls sideways, opened at the current weeks
   L.sizeTiles = (root = document) => {
-    root.querySelectorAll('.tiles').forEach((g) => {
-      const wrap = g.parentElement; const cols = Number(g.style.getPropertyValue('--cols')) || 12;
-      const w = wrap.clientWidth || 300;
-      const gap = w / cols > 18 ? 4 : 3;
-      const tile = L.clamp(Math.floor((w - (cols - 1) * gap) / cols), 7, 22);
-      g.style.setProperty('--tile', `${tile}px`); g.style.setProperty('--gap', `${gap}px`);
-      wrap.scrollLeft = wrap.scrollWidth;
-    });
-    root.querySelectorAll('.tiles-row').forEach((g) => {
-      const n = g.children.length || 14; const w = g.parentElement.clientWidth || 300;
-      const gap = 3; g.style.setProperty('--gap', `${gap}px`);
-      g.style.setProperty('--tile', `${L.clamp(Math.floor((w - (n - 1) * gap) / n), 6, 14)}px`);
-    });
+    root.querySelectorAll('.tiles-wrap').forEach((w) => { const t = w.querySelector('.tiles i.is-today'); if (t) w.scrollLeft = Math.max(0, t.offsetLeft - w.clientWidth * 0.7); else w.scrollLeft = 0; });
   };
   let resizeTimer = null;
   window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => L.sizeTiles(), 120); });

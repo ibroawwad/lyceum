@@ -1,6 +1,6 @@
 // Lyceum service worker: the page itself is network-first (a refresh always gets the latest deploy; the
 // cache is only the offline fallback). Fonts, CDN libraries and icons are cache-first.
-const CACHE = 'lyceum-shell-v8';
+const CACHE = 'lyceum-shell-v9';
 const SHELL = ['./', './index.html', './lyceum.html', './icon-512.png', './icon-180.png'];
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => Promise.all(SHELL.map((u) => c.add(new Request(u, { cache: 'reload' })).catch(() => null)))).then(() => self.skipWaiting()));

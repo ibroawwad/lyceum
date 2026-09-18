@@ -281,8 +281,10 @@ body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: 
 .icon-sq.is-sm { width: 34px; height: 34px; border-radius: 10px; font-size: 12px; }
 
 /* ---------- study tiles (the signature grid) ---------- */
-.tiles-wrap { max-width: 100%; overflow: hidden; }
-.tiles { display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, var(--tile, 12px)); grid-auto-columns: var(--tile, 12px); gap: var(--gap, 3px); width: max-content; }
+.tiles-wrap { max-width: 100%; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; padding: 2px 0; }
+.tiles-wrap::-webkit-scrollbar { display: none; }
+.tiles { --tile: 13px; --gap: 3px; display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, var(--tile)); grid-auto-columns: var(--tile); gap: var(--gap); width: max-content; }
+.tiles-row { --tile: 11px; --gap: 3px; }
 .tiles i, .tiles-row i { display: block; width: var(--tile, 12px); height: var(--tile, 12px); border-radius: max(2px, calc(var(--tile, 12px) * 0.28)); background: var(--card-3); transition: background-color 400ms ease, transform 300ms cubic-bezier(.2,.8,.2,1), opacity 300ms; }
 .tiles i[data-v="full"], .tiles-row i[data-v="full"] { background: var(--ch); }
 .tiles i[data-v="part"], .tiles-row i[data-v="part"] { background: color-mix(in srgb, var(--ch) 45%, var(--card-3)); }
@@ -291,7 +293,7 @@ body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: 
 .tiles i[data-v="off"], .tiles-row i[data-v="off"] { background: var(--card-2); opacity: 0.55; }
 .tiles i.is-today, .tiles-row i.is-today { box-shadow: 0 0 0 2px var(--card), 0 0 0 3.5px var(--ch); }
 .tiles i.is-today[data-v="full"] { animation: tile-pop 420ms cubic-bezier(.2,.9,.3,1.4); }
-.tiles-row { display: grid; grid-auto-flow: column; grid-auto-columns: var(--tile, 12px); gap: var(--gap, 3px); width: max-content; max-width: 100%; overflow: hidden; }
+.tiles-row { display: grid; grid-auto-flow: column; grid-auto-columns: var(--tile, 11px); gap: var(--gap, 3px); width: max-content; max-width: 100%; overflow: hidden; }
 @keyframes tile-pop { 0% { transform: scale(0.6); } 100% { transform: scale(1); } }
 .tiles-legend { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); margin-top: 8px; justify-content: flex-end; }
 .tiles-legend i { width: 9px; height: 9px; border-radius: 2.5px; display: inline-block; background: var(--card-3); }
@@ -435,7 +437,18 @@ body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: 
 .cal-nav .btn { min-height: 36px; padding: 6px 10px; font-size: 13px; border-radius: 10px; white-space: nowrap; }
 .page-head.is-row .actions { flex-wrap: nowrap; flex: none; }
 .calendar { display: none; }
+.calendar.is-shown { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-radius: var(--r-card); overflow: hidden; background: var(--line); gap: 1px; }
+.calendar.is-shown .cal-h { background: var(--card-2); padding: 6px 4px; font-size: 10px; font-weight: 600; color: var(--muted); text-align: center; }
+.calendar.is-shown .cal-day { background: var(--card); min-height: 64px; padding: 4px 3px; display: flex; flex-direction: column; gap: 2px; }
+.calendar.is-shown .cal-day .d { font-family: var(--font-mono); font-size: 11px; color: var(--text-2); }
+.calendar.is-shown .cal-day.is-other { background: var(--bg); } .calendar.is-shown .cal-day.is-other .d { color: var(--muted); }
+.calendar.is-shown .cal-day.is-today { box-shadow: inset 0 0 0 2px var(--accent); } .calendar.is-shown .cal-day.is-today .d { color: var(--accent); font-weight: 700; }
+.calendar.is-shown .cal-day .cal-ev { font-size: 0; padding: 0; height: 6px; border-radius: 3px; border-left: 0; background: var(--ch); }
+.calendar.is-shown .cal-day .cal-ev.is-exam { background: var(--text); }
+.cal-switch { margin-bottom: 14px; }
+.is-hidden { display: none !important; }
 .agenda-14 { display: block; }
+.agenda-day.is-today { box-shadow: inset 0 0 0 1.5px var(--accent); }
 .agenda-day { padding: 12px 16px; background: var(--card); border-radius: var(--r-card); display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
 .agenda-date { font-size: 12px; font-weight: 600; color: var(--muted); }
 .cal-ev { font-size: 13px; line-height: 1.3; padding: 6px 10px; border-radius: 8px; border-left: 3px solid var(--ch); background: var(--card-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); }
@@ -450,7 +463,9 @@ body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: 
   .cal-day.is-other { background: var(--bg); } .cal-day.is-other .d { color: var(--muted); }
   .cal-day.is-today { box-shadow: inset 0 0 0 2px var(--accent); } .cal-day.is-today .d { color: var(--accent); font-weight: 700; }
   .cal-day .cal-ev { font-size: 11.5px; padding: 2px 5px; }
-  .agenda-14 { display: none; }
+  .calendar.is-shown .cal-day { min-height: 104px; padding: 6px 8px; }
+  .calendar.is-shown .cal-day .cal-ev { font-size: 11.5px; padding: 2px 5px; height: auto; border-radius: 6px; border-left: 3px solid var(--ch); background: var(--card-2); }
+  .calendar.is-shown .cal-day .cal-ev.is-exam { background: var(--text); color: var(--bg); }
   .timetable { display: grid; grid-template-columns: 56px repeat(7, minmax(0, 1fr)); border-radius: var(--r-card); overflow: hidden; background: var(--card); }
   .timetable .tt-h { padding: 6px 4px; text-align: center; font-size: 11px; font-weight: 600; color: var(--muted); background: var(--card-2); }
   .timetable .tt-h.is-today { color: var(--accent); }
@@ -2730,7 +2745,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
   L.tilesGrid = (c) => {
     const today = L.date.iso(L.today());
     const start = L.date.parse(c.term.start);
-    const cols = Math.max(12, c.term.weeks); // a fixed horizon keeps short courses from looking like three fat columns
+    const cols = Math.max(14, c.term.weeks); // a fixed horizon keeps short courses from looking like three fat columns
     const end = L.date.addDays(start, cols * 7 - 1);
     const out = [];
     for (let d = start; d <= end; d = L.date.addDays(d, 1)) { const iso = L.date.iso(d); const v = iso > c.term.end ? 'off' : L.tileState(c, iso); out.push(`<i data-v="${v}"${iso === today ? ' class="is-today"' : ''} title="${iso}"></i>`); }
@@ -2773,20 +2788,9 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
 
   // tile grids get an explicit pixel size from their container so they never spill out of a card (Safari
   // sizes aspect-ratio grid items unreliably); long terms scroll to the most recent weeks
+  // tiles are one fixed size everywhere (HabitKit); a long term scrolls sideways, opened at the current weeks
   L.sizeTiles = (root = document) => {
-    root.querySelectorAll('.tiles').forEach((g) => {
-      const wrap = g.parentElement; const cols = Number(g.style.getPropertyValue('--cols')) || 12;
-      const w = wrap.clientWidth || 300;
-      const gap = w / cols > 18 ? 4 : 3;
-      const tile = L.clamp(Math.floor((w - (cols - 1) * gap) / cols), 7, 22);
-      g.style.setProperty('--tile', `${tile}px`); g.style.setProperty('--gap', `${gap}px`);
-      wrap.scrollLeft = wrap.scrollWidth;
-    });
-    root.querySelectorAll('.tiles-row').forEach((g) => {
-      const n = g.children.length || 14; const w = g.parentElement.clientWidth || 300;
-      const gap = 3; g.style.setProperty('--gap', `${gap}px`);
-      g.style.setProperty('--tile', `${L.clamp(Math.floor((w - (n - 1) * gap) / n), 6, 14)}px`);
-    });
+    root.querySelectorAll('.tiles-wrap').forEach((w) => { const t = w.querySelector('.tiles i.is-today'); if (t) w.scrollLeft = Math.max(0, t.offsetLeft - w.clientWidth * 0.7); else w.scrollLeft = 0; });
   };
   let resizeTimer = null;
   window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => L.sizeTiles(), 120); });
@@ -3363,13 +3367,23 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
       });
       const hours = []; for (let h = H0 + 1; h < H1; h++) hours.push(`<span style="top:${(h - H0) * PX}px">${String(h).padStart(2, '0')}:00</span>`);
       const active = R().courses('active');
+      const view = q.v === 'week' ? 'week' : q.v === 'month' ? 'month' : 'agenda';
+      const wk0 = /^\d{4}-\d{2}-\d{2}$/.test(q.w || '') ? D.parse(q.w) : D.addDays(today, -D.dow(today));
+      const wkPrev = D.iso(D.addDays(wk0, -7)), wkNext = D.iso(D.addDays(wk0, 7));
+      const weekDays = Array.from({ length: 7 }, (_, i) => D.addDays(wk0, i));
+      const dayList = (d) => { const sess = R().sessionsOn(d); const due = R().deadlines({ from: D.setTime(d, 0, 0), to: D.setTime(d, 23, 59, 59) }); return sess.map(({ course: c, session: s }) => `<a class="cal-ev" style="--ch:${L.cc(c)}" href="#/course/${c.id}/day/${s.date}">${hm(s.start)} ${esc(c.code)} · ${s.chunks.length} chunks · ${L.fmt.dur(s.minutes)}${s.chunks.length && s.chunks.every((k) => k.done) ? ' ✓' : ''}</a>`).join('') + due.map(({ course: c, assessment: a }) => `<a class="cal-ev is-due${a.kind === 'midterm' || a.kind === 'final' ? ' is-exam' : ''}" style="--ch:${L.cc(c)}" href="#/assess/${c.id}/${a.id}">${esc(a.title)} · ${esc(c.code)} · ${L.fmt.time(a.dueAt)}</a>`).join(''); };
+      const switcher = `<div class="switch cal-switch" role="group" aria-label="View">${[['agenda', 'Agenda'], ['week', 'Week'], ['month', 'Month']].map(([k, l]) => `<a href="#/calendar?v=${k}"${view === k ? ' class="is-on"' : ''}>${l}</a>`).join('')}</div>`;
+      const nav = view === 'month' ? `<div class="actions cal-nav"><a class="btn btn-quiet" href="#/calendar?v=month&m=${ym(prev)}">←</a><a class="btn" href="#/calendar?v=month">Today</a><a class="btn btn-quiet" href="#/calendar?v=month&m=${ym(next)}">→</a></div>`
+        : view === 'week' ? `<div class="actions cal-nav"><a class="btn btn-quiet" href="#/calendar?v=week&w=${wkPrev}">←</a><a class="btn" href="#/calendar?v=week">This week</a><a class="btn btn-quiet" href="#/calendar?v=week&w=${wkNext}">→</a></div>` : '';
+      const sub = view === 'month' ? `${D.monthName(m)} ${m.getFullYear()}` : view === 'week' ? `${L.fmt.date(wk0)} – ${L.fmt.date(D.addDays(wk0, 6))}` : 'Next two weeks';
       return `<div class="page is-wide">
-        <div class="page-head is-row"><div><h1 class="display">Calendar</h1><span class="small muted">${D.monthName(m)} ${m.getFullYear()}</span></div>
-          <div class="actions cal-nav"><a class="btn btn-quiet" href="#/calendar?m=${ym(prev)}">← ${D.monthName(prev).slice(0, 3)}</a><a class="btn" href="#/calendar">Today</a><a class="btn btn-quiet" href="#/calendar?m=${ym(next)}">${D.monthName(next).slice(0, 3)} →</a></div></div>
-        <div class="calendar">${DAYS.map((d) => `<div class="cal-h">${d}</div>`).join('')}${cells.join('')}</div>
-        <div class="agenda-14">${Array.from({ length: 14 }, (_, i) => D.addDays(today, i)).map((d, i) => { const sess = R().sessionsOn(d); const due = R().deadlines({ from: D.setTime(d, 0, 0), to: D.setTime(d, 23, 59, 59) }); if (!sess.length && !due.length) return ''; return `<div class="agenda-day"><div class="agenda-date"><b>${D.dayName(d).slice(0, 3)}</b> ${L.fmt.date(d).slice(4)}${i === 0 ? ' · today' : ''}</div>${sess.map(({ course: c, session: s }) => `<a class="cal-ev" style="--ch:${L.cc(c)}" href="#/course/${c.id}/day/${s.date}">${hm(s.start)} ${esc(c.code)} · ${s.chunks.length} chunks · ${L.fmt.dur(s.minutes)}</a>`).join('')}${due.map(({ course: c, assessment: a }) => `<a class="cal-ev is-due${a.kind === 'midterm' || a.kind === 'final' ? ' is-exam' : ''}" style="--ch:${L.cc(c)}" href="#/assess/${c.id}/${a.id}">${esc(a.title)} · ${esc(c.code)} · ${L.fmt.time(a.dueAt)}</a>`).join('')}</div>`; }).join('') || '<p class="muted small">Nothing in the next two weeks.</p>'}</div>
+        <div class="page-head is-row"><div><h1 class="display">Calendar</h1><span class="small muted">${sub}</span></div>${nav}</div>
+        ${switcher}
+        ${view === 'month' ? `<div class="calendar is-shown">${DAYS.map((d) => `<div class="cal-h">${d}</div>`).join('')}${cells.join('')}</div>` : ''}
+        ${view === 'week' ? `<div class="week-list">${weekDays.map((d) => { const iso = D.iso(d); const ev = dayList(d); return `<div class="agenda-day${iso === D.iso(today) ? ' is-today' : ''}"><div class="agenda-date"><b>${D.dayName(d).slice(0, 3)}</b> ${L.fmt.date(d).slice(4)}${iso === D.iso(today) ? ' · today' : ''}</div>${ev || '<span class="small muted">Nothing scheduled.</span>'}</div>`; }).join('')}</div>` : ''}
+        <div class="agenda-14${view === 'agenda' ? ' is-shown' : ' is-hidden'}">${Array.from({ length: 14 }, (_, i) => D.addDays(today, i)).map((d, i) => { const sess = R().sessionsOn(d); const due = R().deadlines({ from: D.setTime(d, 0, 0), to: D.setTime(d, 23, 59, 59) }); if (!sess.length && !due.length) return ''; return `<div class="agenda-day"><div class="agenda-date"><b>${D.dayName(d).slice(0, 3)}</b> ${L.fmt.date(d).slice(4)}${i === 0 ? ' · today' : ''}</div>${sess.map(({ course: c, session: s }) => `<a class="cal-ev" style="--ch:${L.cc(c)}" href="#/course/${c.id}/day/${s.date}">${hm(s.start)} ${esc(c.code)} · ${s.chunks.length} chunks · ${L.fmt.dur(s.minutes)}</a>`).join('')}${due.map(({ course: c, assessment: a }) => `<a class="cal-ev is-due${a.kind === 'midterm' || a.kind === 'final' ? ' is-exam' : ''}" style="--ch:${L.cc(c)}" href="#/assess/${c.id}/${a.id}">${esc(a.title)} · ${esc(c.code)} · ${L.fmt.time(a.dueAt)}</a>`).join('')}</div>`; }).join('') || '<p class="muted small">Nothing in the next two weeks.</p>'}</div>
         <div class="cols mt-2 small muted">${active.map((c) => `<span class="cols gap-1"><span class="dot" style="--ch:${L.cc(c)}"></span>${esc(c.code)} ${esc(c.title)}</span>`).join('') || 'No active courses.'}</div>
-        <div class="section"><div class="section-head"><h2>Timetable · week of ${L.fmt.date(weekStart)}</h2><span class="small muted">Concurrent courses never share a block</span></div>
+        <div class="section${view === 'week' ? '' : ' is-hidden'}"><div class="section-head"><h2>Timetable · week of ${L.fmt.date(weekStart)}</h2><span class="small muted">Concurrent courses never share a block</span></div>
           <div class="timetable"><div class="tt-h"></div>${DAYS.map((n, i) => `<div class="tt-h${D.iso(D.addDays(weekStart, i)) === D.iso(today) ? ' is-today' : ''}">${n} ${D.addDays(weekStart, i).getDate()}</div>`).join('')}<div class="tt-hours">${hours.join('')}</div>${cols.join('')}</div></div>
       </div>`;
     },
@@ -3452,8 +3466,10 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
       const s = L.S.settings;
       const off = L.S.clock.offsetMs || 0;
       const models = L.faculty.MODELS.includes(s.model) ? L.faculty.MODELS : [s.model, ...L.faculty.MODELS];
+      const papers = L.S.courses.filter((c) => c.contract || c.certificate);
       return `<div class="page">
         <div class="page-head is-row"><div><h1 class="display">More</h1></div><div class="actions"><a class="btn btn-sm btn-quiet" href="#/record">Grades →</a></div></div>
+        <div class="card"><div class="card-head"><h3>Papers</h3><span class="small muted">${papers.length ? `${L.S.courses.filter((c) => c.certificate).length} certificate${L.S.courses.filter((c) => c.certificate).length === 1 ? '' : 's'}` : ''}</span></div><div class="card-body rows">${papers.length ? papers.map((c) => `<div class="row"><div style="min-width:0;flex:1"><div class="truncate" style="font-weight:600">${esc(c.title)}</div><div class="small muted">${esc(c.code)}${c.certificate ? ` · ${esc(c.certificate.letter)} ${L.fmt.pct(c.certificate.pct)}` : ''}</div></div><div class="cols gap-1">${c.contract ? `<a class="btn btn-sm" href="#/contract/${c.id}">Contract</a>` : ''}${c.certificate ? `<a class="btn btn-sm btn-primary" href="#/certificate/${c.id}">Certificate</a>` : ''}</div></div>`).join('') : '<p class="small muted">Contracts appear when you enrol; certificates when a course ends at 70% or more.</p>'}</div></div>
         <div class="grid-2">
           <div class="stack gap-3">
             <div class="card"><div class="card-head"><h2>Faculty</h2><span class="small muted">${L.faculty.available() ? 'key set' : 'offline examiner'}</span></div><div class="card-body stack gap-2">

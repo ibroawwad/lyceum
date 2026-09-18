@@ -315,6 +315,12 @@ const local = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.
   await page.waitForSelector('.transcript', { timeout: 5000 });
   assert(await page.evaluate(() => /Certificates/.test(document.querySelector('#main').innerText) && !!document.querySelector('a[href^="#/certificate/"]')), 'grades page lists the certificate');
 
+  await page.goto(file + '?debug=1#/settings'); await sleep(300);
+  assert(await page.evaluate(() => !!document.querySelector('a[href^="#/certificate/"]') && !!document.querySelector('a[href^="#/contract/"]')), 'More page lists contracts and certificates');
+  for (const v of ['week', 'month']) { await page.goto(file + `?debug=1#/calendar?v=${v}`); await sleep(300); assert(await page.evaluate((v) => v === 'week' ? document.querySelectorAll('.week-list .agenda-day').length === 7 : !!document.querySelector('.calendar.is-shown .cal-day'), v), `calendar ${v} view renders`); }
+  const tileSizes = await page.evaluate(() => { document.location.hash = '#/courses'; return new Promise((r) => setTimeout(() => r(Array.from(document.querySelectorAll('.tiles i')).slice(0, 3).map((i) => i.getBoundingClientRect().width)), 400)); });
+  assert(tileSizes.every((w) => Math.abs(w - 13) < 0.5), `tiles are a fixed 13px (${tileSizes.map((w) => w.toFixed(1)).join('/')})`);
+
   console.log('8. ledger integrity');
   let v = await page.evaluate(() => L.ledger.verify());
   assert(v.ok === true, 'ledger chain verifies');

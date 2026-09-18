@@ -249,8 +249,10 @@ body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: 
 .icon-sq.is-sm { width: 34px; height: 34px; border-radius: 10px; font-size: 12px; }
 
 /* ---------- study tiles (the signature grid) ---------- */
-.tiles-wrap { max-width: 100%; overflow: hidden; }
-.tiles { display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, var(--tile, 12px)); grid-auto-columns: var(--tile, 12px); gap: var(--gap, 3px); width: max-content; }
+.tiles-wrap { max-width: 100%; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; padding: 2px 0; }
+.tiles-wrap::-webkit-scrollbar { display: none; }
+.tiles { --tile: 13px; --gap: 3px; display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, var(--tile)); grid-auto-columns: var(--tile); gap: var(--gap); width: max-content; }
+.tiles-row { --tile: 11px; --gap: 3px; }
 .tiles i, .tiles-row i { display: block; width: var(--tile, 12px); height: var(--tile, 12px); border-radius: max(2px, calc(var(--tile, 12px) * 0.28)); background: var(--card-3); transition: background-color 400ms ease, transform 300ms cubic-bezier(.2,.8,.2,1), opacity 300ms; }
 .tiles i[data-v="full"], .tiles-row i[data-v="full"] { background: var(--ch); }
 .tiles i[data-v="part"], .tiles-row i[data-v="part"] { background: color-mix(in srgb, var(--ch) 45%, var(--card-3)); }
@@ -259,7 +261,7 @@ body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: 
 .tiles i[data-v="off"], .tiles-row i[data-v="off"] { background: var(--card-2); opacity: 0.55; }
 .tiles i.is-today, .tiles-row i.is-today { box-shadow: 0 0 0 2px var(--card), 0 0 0 3.5px var(--ch); }
 .tiles i.is-today[data-v="full"] { animation: tile-pop 420ms cubic-bezier(.2,.9,.3,1.4); }
-.tiles-row { display: grid; grid-auto-flow: column; grid-auto-columns: var(--tile, 12px); gap: var(--gap, 3px); width: max-content; max-width: 100%; overflow: hidden; }
+.tiles-row { display: grid; grid-auto-flow: column; grid-auto-columns: var(--tile, 11px); gap: var(--gap, 3px); width: max-content; max-width: 100%; overflow: hidden; }
 @keyframes tile-pop { 0% { transform: scale(0.6); } 100% { transform: scale(1); } }
 .tiles-legend { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); margin-top: 8px; justify-content: flex-end; }
 .tiles-legend i { width: 9px; height: 9px; border-radius: 2.5px; display: inline-block; background: var(--card-3); }
@@ -403,7 +405,18 @@ body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: 
 .cal-nav .btn { min-height: 36px; padding: 6px 10px; font-size: 13px; border-radius: 10px; white-space: nowrap; }
 .page-head.is-row .actions { flex-wrap: nowrap; flex: none; }
 .calendar { display: none; }
+.calendar.is-shown { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-radius: var(--r-card); overflow: hidden; background: var(--line); gap: 1px; }
+.calendar.is-shown .cal-h { background: var(--card-2); padding: 6px 4px; font-size: 10px; font-weight: 600; color: var(--muted); text-align: center; }
+.calendar.is-shown .cal-day { background: var(--card); min-height: 64px; padding: 4px 3px; display: flex; flex-direction: column; gap: 2px; }
+.calendar.is-shown .cal-day .d { font-family: var(--font-mono); font-size: 11px; color: var(--text-2); }
+.calendar.is-shown .cal-day.is-other { background: var(--bg); } .calendar.is-shown .cal-day.is-other .d { color: var(--muted); }
+.calendar.is-shown .cal-day.is-today { box-shadow: inset 0 0 0 2px var(--accent); } .calendar.is-shown .cal-day.is-today .d { color: var(--accent); font-weight: 700; }
+.calendar.is-shown .cal-day .cal-ev { font-size: 0; padding: 0; height: 6px; border-radius: 3px; border-left: 0; background: var(--ch); }
+.calendar.is-shown .cal-day .cal-ev.is-exam { background: var(--text); }
+.cal-switch { margin-bottom: 14px; }
+.is-hidden { display: none !important; }
 .agenda-14 { display: block; }
+.agenda-day.is-today { box-shadow: inset 0 0 0 1.5px var(--accent); }
 .agenda-day { padding: 12px 16px; background: var(--card); border-radius: var(--r-card); display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
 .agenda-date { font-size: 12px; font-weight: 600; color: var(--muted); }
 .cal-ev { font-size: 13px; line-height: 1.3; padding: 6px 10px; border-radius: 8px; border-left: 3px solid var(--ch); background: var(--card-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); }
@@ -418,7 +431,9 @@ body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: 
   .cal-day.is-other { background: var(--bg); } .cal-day.is-other .d { color: var(--muted); }
   .cal-day.is-today { box-shadow: inset 0 0 0 2px var(--accent); } .cal-day.is-today .d { color: var(--accent); font-weight: 700; }
   .cal-day .cal-ev { font-size: 11.5px; padding: 2px 5px; }
-  .agenda-14 { display: none; }
+  .calendar.is-shown .cal-day { min-height: 104px; padding: 6px 8px; }
+  .calendar.is-shown .cal-day .cal-ev { font-size: 11.5px; padding: 2px 5px; height: auto; border-radius: 6px; border-left: 3px solid var(--ch); background: var(--card-2); }
+  .calendar.is-shown .cal-day .cal-ev.is-exam { background: var(--text); color: var(--bg); }
   .timetable { display: grid; grid-template-columns: 56px repeat(7, minmax(0, 1fr)); border-radius: var(--r-card); overflow: hidden; background: var(--card); }
   .timetable .tt-h { padding: 6px 4px; text-align: center; font-size: 11px; font-weight: 600; color: var(--muted); background: var(--card-2); }
   .timetable .tt-h.is-today { color: var(--accent); }
