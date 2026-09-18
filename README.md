@@ -21,6 +21,10 @@ grades on a 4.0 scale and keeps a hash-chained permanent record. Single HTML fil
 - **Debug clock:** open `dist/lyceum.html?debug=1` to get `+1 h / +1 day / +1 week` controls in
   Settings. Every move is written to the ledger.
 
+Everything (pdf.js, mammoth, marked, DOMPurify, Inter, EB Garamond) is bundled from `vendor/` — no CDN at runtime; the
+app works fully offline. Ticking a reading chunk requires passing a two-question quick check from that chunk.
+Legal pages live in `legal/` and are served next to the app.
+
 Build from source: `npm run build`. Test: `npm test` (headless Chrome) and `npm run check` (node checks).
 Contract: `SPEC.md`.
 

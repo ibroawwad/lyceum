@@ -75,8 +75,45 @@
     return ranges;
   }
 
+  // Segments from a PDF's own outline: one segment per top-level bookmark (depth 0, or depth 1 when the
+  // top level is just "Part I/II"), each spanning from its page to the next entry's page.
+  function segmentFromOutline(text, src) {
+    const ol = (src.outline || []).filter((o) => o.page >= 1 && o.page <= src.pageStarts.length);
+    if (ol.length < 3) return null;
+    const top = ol.filter((o) => o.depth === 0);
+    const useDepth = top.length >= 3 && top.length <= 80 ? 0 : 1;
+    const entries = ol.filter((o) => o.depth === useDepth).filter((o, i, a) => i === 0 || o.page > a[i - 1].page);
+    if (entries.length < 3 || entries.length > 120) return null;
+    const base = src.offset || 0;
+    const at = (page) => base + src.pageStarts[page - 1];
+    const segs = [];
+    if (entries[0].page > 1) segs.push({ title: 'Front matter', start: base, end: at(entries[0].page) });
+    entries.forEach((e, i) => segs.push({ title: e.title, start: at(e.page), end: i + 1 < entries.length ? at(entries[i + 1].page) : base + src.text.length }));
+    // sub-entries become the chunk sub-headings
+    const subs = ol.filter((o) => o.depth === useDepth + 1);
+    const out = segs.map((g, i) => ({ i, title: g.title, start: g.start, end: g.end, words: words(text.slice(g.start, g.end)), subheads: subs.filter((o) => at(o.page) > g.start && at(o.page) < g.end).map((o) => ({ title: o.title, at: at(o.page) })), fromOutline: true }));
+    return out.filter((g) => g.end > g.start);
+  }
+
   function segment(text, opts = {}) {
     text = String(text || '');
+    // a single PDF with a usable outline is segmented by it; everything else by heading detection
+    const srcs = opts.sources || [];
+    if (srcs.length === 1 && srcs[0].outline && srcs[0].pageStarts) {
+      const out = segmentFromOutline(text, srcs[0]);
+      if (out) {
+        // merge tiny outline entries (a two-page preface) into their neighbour, then classify
+        for (let i = out.length - 1; i > 0; i--) if (out[i].words < 80) { out[i - 1].end = out[i].end; out[i - 1].words += out[i].words; out.splice(i, 1); }
+        // page-shape detection still cuts off an index or contents run hiding inside a bookmarked chapter
+        const forced = pageRoles(srcs);
+        for (const r of forced) for (const at of [r.start, r.end]) { const g = out.find((x) => x.start < at && at < x.end); if (g) { const tail = Object.assign({}, g, { start: at, end: g.end, subheads: g.subheads.filter((h) => h.at >= at) }); g.end = at; g.subheads = g.subheads.filter((h) => h.at < at); out.splice(out.indexOf(g) + 1, 0, tail); } }
+        out.forEach((g, i) => { g.i = i; g.words = words(text.slice(g.start, g.end)); });
+        classify(out, text);
+        for (const g of out) for (const r of forced) if (g.start >= r.start && g.end <= r.end) { g.role = r.role; if (r.role === 'back' && !BACK.test(g.title)) g.title = 'Back matter'; }
+        if (!out.some((g) => g.role === 'body')) out.forEach((g) => { g.role = 'body'; });
+        return out;
+      }
+    }
     const lines = text.split('\n');
     // char offset of each line
     const offsets = []; let pos = 0;
@@ -401,6 +438,13 @@
         pages.push(buf.join('\n'));
         page.cleanup();
       }
+      // bookmarks, when the publisher included them, give exact chapter boundaries
+      let outline = [];
+      try {
+        const raw = await pdf.getOutline();
+        const walk = async (items, depth) => { for (const it of items || []) { let pageIndex = null; try { const dest = typeof it.dest === 'string' ? await pdf.getDestination(it.dest) : it.dest; if (dest && dest[0]) pageIndex = await pdf.getPageIndex(dest[0]); } catch (e) { /* unresolvable */ } if (pageIndex != null && it.title) outline.push({ title: it.title.replace(/\s+/g, ' ').trim(), page: pageIndex + 1, depth }); if (it.items && it.items.length && depth < 2) await walk(it.items, depth + 1); } };
+        await walk(raw, 0);
+      } catch (e) { outline = []; }
       pdf.destroy();
       if (pages.join('').replace(/\s+/g, '').length < 200) throw new Error('That PDF has no extractable text (it may be scanned). Try a text export.');
       progress('Cleaning up the text…');
@@ -409,7 +453,7 @@
       const pieces = norm.split(PAGE);
       const pageStarts = []; const parts = []; let pos = 0;
       for (const piece of pieces) { const t = piece.replace(/^\n+/, '').replace(/\n+$/, ''); pageStarts.push(pos); parts.push(t); pos += t.length + 2; }
-      const src = make(name, 'pdf', parts.join('\n\n'), { pages: numPages, pageStarts }, true);
+      const src = make(name, 'pdf', parts.join('\n\n'), { pages: numPages, pageStarts, outline: outline.length >= 3 ? outline : null }, true);
       src.file = { kind: 'pdf', name, bytes };
       return src;
     }

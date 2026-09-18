@@ -34,7 +34,13 @@ for (const lines of pages) {
 const pagesId = objs.length + pages.length + 1;
 pageIds.forEach((_, i) => { pageIds[i] = add(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ${font} 0 R >> >> /Contents ${contentIds[i]} 0 R >>`); });
 add(`<< /Type /Pages /Kids [${pageIds.map((id) => id + ' 0 R').join(' ')}] /Count ${pageIds.length} >>`);
-const catalog = add(`<< /Type /Catalog /Pages ${pagesId} 0 R >>`);
+// bookmarks: one per chapter (every 10 pages in the big fixture, every page in the small one), skipping front/back matter
+const chapterPages = want ? [4, ...Array.from({ length: Math.floor((want - 4) / 10) - 1 }, (_, k) => 10 + k * 10)] : pages.map((_, i) => i);
+const chapterTitle = (pg) => (want && pg === 4 ? `Chapter 1 ${TOPICS[0]}` : pages[pg][0]);
+const outlineId = objs.length + 1; const itemIds = chapterPages.map((_, k) => outlineId + 1 + k);
+add(`<< /Type /Outlines /First ${itemIds[0]} 0 R /Last ${itemIds[itemIds.length - 1]} 0 R /Count ${itemIds.length} >>`);
+chapterPages.forEach((pg, k) => add(`<< /Title (${chapterTitle(pg).replace(/[()\\]/g, '\\$&')}) /Parent ${outlineId} 0 R${k ? ` /Prev ${itemIds[k - 1]} 0 R` : ''}${k + 1 < itemIds.length ? ` /Next ${itemIds[k + 1]} 0 R` : ''} /Dest [${pageIds[pg]} 0 R /XYZ 0 792 0] >>`));
+const catalog = add(`<< /Type /Catalog /Pages ${pagesId} 0 R /Outlines ${outlineId} 0 R /PageMode /UseOutlines >>`);
 let out = '%PDF-1.4\n%\xe2\xe3\xcf\xd3\n';
 const offsets = [];
 objs.forEach((o, i) => { offsets.push(Buffer.byteLength(out, 'latin1')); out += `${i + 1} 0 obj\n${o}\nendobj\n`; });

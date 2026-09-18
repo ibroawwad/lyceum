@@ -273,7 +273,7 @@
     return {
       code, title: analysis.title, subject: analysis.subject, subjectCode: analysis.subjectCode, level: analysis.level, difficulty: analysis.difficulty,
       description: analysis.description, prerequisites: analysis.prerequisites || [], credits, color,
-      material: { sources: sources.map((s) => ({ id: s.id, name: s.name, kind: s.kind, words: s.words, chars: s.chars, pages: s.pages, url: s.url, offset: s.offset || 0, pageStarts: s.pageStarts, hasFile: !!s.file })), words, chars: text.length, segments: segments.map((g) => ({ i: g.i, title: g.title, start: g.start, end: g.end, words: g.words, role: g.role || 'body' })) },
+      material: { sources: sources.map((s) => ({ id: s.id, name: s.name, kind: s.kind, words: s.words, chars: s.chars, pages: s.pages, url: s.url, offset: s.offset || 0, pageStarts: s.pageStarts, hasFile: !!s.file, outlined: !!s.outline })), words, chars: text.length, segments: segments.map((g) => ({ i: g.i, title: g.title, start: g.start, end: g.end, words: g.words, role: g.role || 'body' })) },
       analysis: { source: analysis.source || 'offline', model: analysis.model, note: analysis.note, units },
       term, plan: { pace: paceKey, paceLabel: pace.label, hoursPerWeek, totalHours: Math.round(totalHours * 10) / 10, slot, studyDays, minutesPerDay, sessionsPerWeek: studyDays.length, reduced },
       weeks: weeksOut, sessions, assessments, policy, notes: {},
@@ -460,10 +460,32 @@
     if (ch.done) return 'already';
     const today = D.iso(L.today());
     if (today < s.date) return 'not_yet';
+    if (ch.kind === 'read' && !ch.checked) return 'needs_check'; // the tick is earned by the quick check (§8.8)
     ch.done = new Date(L.now()).toISOString();
     await L.ledger.append('chunk_completed', { courseId: c.id, ref: s.id, chunk: ch.id, week: s.week, onTime: today === s.date, title: ch.title });
     L.save();
     return today === s.date ? 'done' : 'late';
+  }
+  // ---------- quick check: two questions from the chunk itself; pass = both right ----------
+  async function checkPaper(courseId, sessionId, chunkId) {
+    const c = course(courseId); const s = c.sessions.find((x) => x.id === sessionId); const ch = s.chunks.find((x) => x.id === chunkId);
+    if (ch.check) return ch.check;
+    const text = ((await L.db.getMaterial(c.id)) || '').slice(ch.from, ch.to);
+    const { paper, source } = await L.faculty.composePaper({ course: c, assessment: { id: 'chk_' + ch.id, kind: 'check', title: `Check · ${ch.title}`, coversWeeks: [s.week] }, text });
+    ch.check = { questions: paper.questions.filter((q) => q.type === 'mcq').slice(0, 2).map((q) => ({ id: q.id, prompt: q.prompt, options: q.options, answer: q.answer })), source, attempts: 0 };
+    L.save();
+    return ch.check;
+  }
+  async function submitCheck(courseId, sessionId, chunkId, answers) {
+    const c = course(courseId); const s = c.sessions.find((x) => x.id === sessionId); const ch = s.chunks.find((x) => x.id === chunkId);
+    if (!ch.check) throw new Error('No check to submit.');
+    ch.check.attempts++;
+    const right = ch.check.questions.filter((q) => Number(answers[q.id]) === q.answer).length;
+    const passed = right === ch.check.questions.length;
+    await L.ledger.append('chunk_checked', { courseId: c.id, ref: s.id, chunk: ch.id, right, of: ch.check.questions.length, attempt: ch.check.attempts, passed });
+    if (passed) { ch.checked = new Date(L.now()).toISOString(); L.save(); return { passed, right, result: await complete(courseId, sessionId, chunkId) }; }
+    L.save();
+    return { passed, right };
   }
   // which page range of which source a char range of the material falls on
   function locate(c, from, to) {
@@ -621,5 +643,5 @@
     return { streak, longest, days: { perfect, partial, missed }, weekMinutes, completionRate: dueAll ? doneAll / dueAll : null, onTimeRate: doneAll ? onAll / doneAll : null, minutes: L.sum(dates.map((d) => byDay[d].minutes)), perCourse };
   }
 
-  L.registrar = { RegistrarError, KIND_TITLE, SCALE, PACES, stats, budget, plan, plans, enrol, withdraw, course, courses, courseState, currentWeek, week, sessionsOn, deadlines, nextDeadline, load, assessmentState, deadline, standing, letter, points, gpa, complete, locate, begin, answer, submit, sweep, materialFor };
+  L.registrar = { RegistrarError, KIND_TITLE, SCALE, PACES, stats, budget, plan, plans, enrol, withdraw, course, courses, courseState, currentWeek, week, sessionsOn, deadlines, nextDeadline, load, assessmentState, deadline, standing, letter, points, gpa, complete, checkPaper, submitCheck, locate, begin, answer, submit, sweep, materialFor };
 })(window.L);

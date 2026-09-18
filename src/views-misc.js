@@ -84,7 +84,7 @@
   };
 
   // ---------- record ----------
-  const LEDGER_LABEL = { matriculated: 'Matriculated', enrolled: 'Enrolled', withdrawn: 'Withdrew', session_attended: 'Attended session', chunk_completed: 'Chunk done', contract_signed: 'Contract signed', certificate_issued: 'Certificate issued', assessment_started: 'Began paper', assessment_submitted: 'Submitted paper', assessment_graded: 'Graded', assessment_missed: 'Missed', course_completed: 'Course completed', clock_override: 'Clock moved', clock_reset: 'Clock reset', settings_changed: 'Settings changed', data_imported: 'Record imported' };
+  const LEDGER_LABEL = { matriculated: 'Matriculated', enrolled: 'Enrolled', withdrawn: 'Withdrew', session_attended: 'Attended session', chunk_completed: 'Chunk done', chunk_checked: 'Quick check', contract_signed: 'Contract signed', certificate_issued: 'Certificate issued', assessment_started: 'Began paper', assessment_submitted: 'Submitted paper', assessment_graded: 'Graded', assessment_missed: 'Missed', course_completed: 'Course completed', clock_override: 'Clock moved', clock_reset: 'Clock reset', settings_changed: 'Settings changed', data_imported: 'Record imported' };
   function ledgerDetail(e) {
     const c = e.courseId && R().course(e.courseId);
     const code = c ? c.code : (e.detail.code || '');
@@ -96,6 +96,7 @@
       case 'withdrawn': return `${code} in week ${d.week}`;
       case 'session_attended': return `${code} · week ${d.week} ${d.kind}`;
       case 'chunk_completed': return `${code} · ${d.title}${d.onTime ? '' : ' · late'}`;
+      case 'chunk_checked': return `${code} · ${d.right}/${d.of} · ${d.passed ? 'passed' : 'try again'}`;
       case 'contract_signed': return `${code} · ${d.no} · signed by ${d.name}`;
       case 'certificate_issued': return `${code} · ${d.no} · ${d.letter} (${L.fmt.pct(d.pct)}) · ${d.code}`;
       case 'assessment_started': return `${code} · ${a ? a.title : d.kind} · seal ${String(d.seal || '').slice(0, 8)}`;
@@ -144,6 +145,7 @@
       const papers = L.S.courses.filter((c) => c.contract || c.certificate);
       return `<div class="page">
         <div class="page-head is-row"><div><h1 class="display">More</h1></div><div class="actions"><a class="btn btn-sm btn-quiet" href="#/record">Grades →</a></div></div>
+        <p class="small muted" style="margin:-6px 0 8px"><a href="privacy.html" target="_blank" rel="noopener">Privacy</a> · <a href="terms.html" target="_blank" rel="noopener">Terms</a> · Lyceum is an independent study tool, not an accredited institution.</p>
         <div class="card"><div class="card-head"><h3>Papers</h3><span class="small muted">${papers.length ? `${L.S.courses.filter((c) => c.certificate).length} certificate${L.S.courses.filter((c) => c.certificate).length === 1 ? '' : 's'}` : ''}</span></div><div class="card-body rows">${papers.length ? papers.map((c) => `<div class="row"><div style="min-width:0;flex:1"><div class="truncate" style="font-weight:600">${esc(c.title)}</div><div class="small muted">${esc(c.code)}${c.certificate ? ` · ${esc(c.certificate.letter)} ${L.fmt.pct(c.certificate.pct)}` : ''}</div></div><div class="cols gap-1">${c.contract ? `<a class="btn btn-sm" href="#/contract/${c.id}">Contract</a>` : ''}${c.certificate ? `<a class="btn btn-sm btn-primary" href="#/certificate/${c.id}">Certificate</a>` : ''}</div></div>`).join('') : '<p class="small muted">Contracts appear when you enrol; certificates when a course ends at 70% or more.</p>'}</div></div>
         <div class="grid-2">
           <div class="stack gap-3">

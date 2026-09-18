@@ -22,6 +22,7 @@ const local = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.
 (async () => {
   const browser = await chromium.launch({ channel: 'chrome', headless: true });
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: 'en-GB', timezoneId: 'Europe/London' });
+  await ctx.route(/^https?:\/\//, (r) => r.abort()); // offline: nothing may be fetched from the network
   const page = await ctx.newPage();
   page.on('console', (m) => { if (m.type() === 'error') consoleErrors.push(m.text()); });
   page.on('pageerror', (e) => consoleErrors.push('pageerror: ' + e.message));
@@ -58,6 +59,10 @@ const local = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.
   const student = await page.evaluate(() => L.S.student);
   assert(student && student.name === 'Ada Lovelace' && /^LYC-\d{2}-\d{4}$/.test(student.id), 'student record created with LYC id');
   await shot('01-today-empty');
+
+  const fontsOk = await page.evaluate(async () => { await document.fonts.load('16px Inter'); await document.fonts.load('16px "EB Garamond"'); return document.fonts.check('16px Inter') && document.fonts.check('16px "EB Garamond"'); });
+  assert(fontsOk, 'bundled fonts load with the network blocked');
+  assert(await page.evaluate(() => !!(window.pdfjsLib && window.mammoth && window.marked && window.DOMPurify && pdfjsLib.GlobalWorkerOptions.workerSrc.startsWith('blob:'))), 'pdf.js, mammoth, marked, DOMPurify are bundled; worker is a blob');
 
   console.log('2. sample course → prospectus');
   await page.click('[data-act=load-sample]');
@@ -120,14 +125,20 @@ const local = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.
   await shot('03b-today-study');
   const nChecks = await page.evaluate(() => document.querySelectorAll('.study-block [data-in=chunk-done]').length);
   assert(nChecks === s0.chunks.length, `today's study lists the day's ${s0.chunks.length} chunks`);
-  const done1 = await page.evaluate(({ cid, sid, kid }) => L.registrar.complete(cid, sid, kid), { cid: course.id, sid: s0.id, kid: s0.chunks[0].id });
-  assert(done1 === 'done', 'a chunk completed on its day counts on time');
+  const needs = await page.evaluate(({ cid, sid, kid }) => L.registrar.complete(cid, sid, kid), { cid: course.id, sid: s0.id, kid: s0.chunks[0].id });
+  assert(needs === 'needs_check', 'a read chunk cannot be ticked without the quick check');
+  const wrong = await page.evaluate(async ({ cid, sid, kid }) => { const chk = await L.registrar.checkPaper(cid, sid, kid); const a = {}; chk.questions.forEach((q) => { a[q.id] = (q.answer + 1) % 4; }); return L.registrar.submitCheck(cid, sid, kid, a); }, { cid: course.id, sid: s0.id, kid: s0.chunks[0].id });
+  assert(wrong.passed === false && !(await page.evaluate(({ cid, sid, kid }) => !!L.registrar.course(cid).sessions.find((s) => s.id === sid).chunks.find((k) => k.id === kid).done, { cid: course.id, sid: s0.id, kid: s0.chunks[0].id })), 'wrong answers do not tick the chunk');
+  const pass = await page.evaluate(async ({ cid, sid, kid }) => { const chk = await L.registrar.checkPaper(cid, sid, kid); const a = {}; chk.questions.forEach((q) => { a[q.id] = q.answer; }); return L.registrar.submitCheck(cid, sid, kid, a); }, { cid: course.id, sid: s0.id, kid: s0.chunks[0].id });
+  const done1 = pass.result;
+  assert(pass.passed && done1 === 'done', 'right answers pass the check and the chunk counts on time');
+  assert((await page.evaluate(() => L.S.ledger.filter((e) => e.type === 'chunk_checked').length)) === 2, 'both check attempts are in the ledger');
   const notYet = await page.evaluate(({ cid, sid, kid }) => L.registrar.complete(cid, sid, kid), { cid: course.id, sid: course.sessions[2].id, kid: course.sessions[2].chunks[0].id });
   assert(notYet === 'not_yet', 'a future day\'s chunk cannot be completed early');
   const s1 = course.sessions[1];
   await setClock(`${course.sessions[2].date}T12:00:00`);
   await sweep();
-  const late1 = await page.evaluate(({ cid, sid, kid }) => L.registrar.complete(cid, sid, kid), { cid: course.id, sid: s1.id, kid: s1.chunks[0].id });
+  const late1 = await page.evaluate(async ({ cid, sid, kid }) => { const chk = await L.registrar.checkPaper(cid, sid, kid); const a = {}; chk.questions.forEach((q) => { a[q.id] = q.answer; }); const r = await L.registrar.submitCheck(cid, sid, kid, a); return r.result; }, { cid: course.id, sid: s1.id, kid: s1.chunks[0].id });
   assert(late1 === 'late', 'a chunk completed after its day is recorded late');
   const part = await page.evaluate((cid) => L.registrar.standing(L.registrar.course(cid)).participation, course.id);
   assert(part && part.done === 2 && Math.abs(part.credit - 1.5) < 1e-9, `participation credit: on-time 1 + late ½ (${part && part.credit})`);
@@ -452,6 +463,8 @@ const local = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.
   assert(after.pages === 600, `600 page offsets recorded (${after.pages})`);
   const roles = await m.evaluate(() => { const c = L.S.courses[0]; const segs = c.material.segments; const reads = c.sessions.flatMap((s) => s.chunks.filter((k) => k.kind === 'read')); return { front: segs.filter((g) => g.role === 'front').length, back: segs.filter((g) => g.role === 'back').length, firstPage: Math.min(...reads.map((k) => k.pages ? k.pages[0] : 999)), lastPage: Math.max(...reads.map((k) => k.pages ? k.pages[1] : 0)), titles: reads.map((k) => k.title).filter((t) => /contents|index|copyright/i.test(t)).length }; });
   assert(roles.front >= 1 && roles.back >= 1, `title, copyright, contents and index pages are classified (${roles.front} front, ${roles.back} back)`);
+  const outl = await m.evaluate(() => { const c = L.S.courses[0]; return { outlined: c.material.sources[0].outlined, chapters: c.material.segments.filter((g) => /^Chapter \d+/.test(g.title)).length, total: c.material.segments.length }; });
+  assert(outl.outlined && outl.chapters >= 55, `segments come from the PDF's bookmarks (${outl.chapters} chapters of ${outl.total} segments)`);
   assert(roles.firstPage >= 5 && roles.lastPage <= 597 && roles.titles === 0, `no study chunk covers the contents or index pages (reading spans pp. ${roles.firstPage}–${roles.lastPage})`);
   console.log(`   ${after.weeks} weeks · ${after.chunks} chunks`);
   const book = await m.evaluate(() => L.S.courses[0]);
@@ -463,6 +476,10 @@ const local = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.
   const ov1 = await m.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   assert(ov1 <= 0, `phone day view has no horizontal overflow (${ov1}px)`);
   await m.tap('.study-block .chunk:first-child .chunk-check');
+  await m.waitForSelector('#check-form', { timeout: 30000 });
+  await m.screenshot({ path: path.join(shots, '33b-phone-check.png') });
+  const answersOk = await m.evaluate(() => { const c = L.S.courses[0]; const s = c.sessions.find((x) => x.chunks.some((k) => k.check)); const k = s.chunks.find((k) => k.check); k.check.questions.forEach((q) => { document.querySelector(`#check-form input[name="${q.id}"][value="${q.answer}"]`).checked = true; }); return true; });
+  await m.tap('[data-act=check-submit]');
   await m.waitForFunction(() => document.querySelector('.study-block .chunk[data-state=done]'), null, { timeout: 5000 });
   const tile = await m.evaluate(() => { const c = L.S.courses[0]; return L.tileState(c, L.date.iso(L.today())); });
   assert(tile === 'part', `today's tile lights up after a chunk is ticked (${tile})`);

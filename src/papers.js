@@ -64,6 +64,7 @@
         <tr><th>Withdraw by</th><td>${L.fmt.date(L.date.addDays(L.date.parse(p.policy.withdrawBefore), -1))}</td></tr>
       </tbody></table>
       <ol class="sheet-clauses">${CLAUSES.map((c) => `<li>${esc(c)}</li>`).join('')}</ol>
+      <p class="sheet-dim" style="margin-top:12px">Lyceum is an independent study tool, not an accredited institution. Its courses, grades and certificates confer no academic credit.</p>
       <div class="sheet-sign">
         <div class="sign-block">
           <div class="sign-label">The Student</div>
@@ -157,7 +158,8 @@
       <text x="900" y="700" text-anchor="middle" ${F} font-size="26" font-style="italic" fill="${green}">The Registrar</text>
       <line x1="750" y1="712" x2="1050" y2="712" stroke="${ink}" stroke-width="1"/>
       <text x="900" y="730" text-anchor="middle" ${S} font-size="11" letter-spacing="2" fill="${dim}">REGISTRAR</text>
-      <text x="${W / 2}" y="760" text-anchor="middle" ${S} font-size="10.5" letter-spacing="1" fill="${dim}">${esc(cert.no)} · ${esc(cert.code)} · ${L.fmt.date(cert.issuedAt).toUpperCase()} ${new Date(cert.issuedAt).getFullYear()}</text>
+      <text x="${W / 2}" y="752" text-anchor="middle" ${S} font-size="10.5" letter-spacing="1" fill="${dim}">${esc(cert.no)} · ${esc(cert.code)} · ${L.fmt.date(cert.issuedAt).toUpperCase()} ${new Date(cert.issuedAt).getFullYear()}</text>
+      <text x="${W / 2}" y="770" text-anchor="middle" ${S} font-size="9" letter-spacing="0.5" fill="${dim}">LYCEUM IS AN INDEPENDENT STUDY TOOL, NOT AN ACCREDITED INSTITUTION. THIS CERTIFICATE CONFERS NO ACADEMIC CREDIT.</text>
     </svg>`;
   }
 

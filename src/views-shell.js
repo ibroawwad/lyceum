@@ -53,13 +53,14 @@
     const end = L.date.addDays(start, cols * 7 - 1);
     const out = [];
     for (let d = start; d <= end; d = L.date.addDays(d, 1)) { const iso = L.date.iso(d); const v = iso > c.term.end ? 'off' : L.tileState(c, iso); out.push(`<i data-v="${v}"${iso === today ? ' class="is-today"' : ''} title="${iso}"></i>`); }
-    return `<div class="tiles-wrap"><div class="tiles" style="--ch:${L.cc(c)};--cols:${cols}">${out.join('')}</div></div>`;
+    const done = c.sessions.filter((x) => x.date <= today && x.chunks.length && x.chunks.every((k) => k.done)).length;
+    return `<div class="tiles-wrap" role="img" aria-label="Study grid for ${esc(c.code)}: ${done} full days so far"><div class="tiles" style="--ch:${L.cc(c)};--cols:${cols}" aria-hidden="true">${out.join('')}</div></div>`;
   };
   L.tilesRow = (c, days = 14) => {
     const today = L.today();
     const out = [];
     for (let i = days - 1; i >= 0; i--) { const iso = L.date.iso(L.date.addDays(today, -i)); const v = iso < c.term.start || iso > c.term.end ? 'off' : L.tileState(c, iso); out.push(`<i data-v="${v}"${i === 0 ? ' class="is-today"' : ''}></i>`); }
-    return `<div class="tiles-row" style="--ch:${L.cc(c)}">${out.join('')}</div>`;
+    return `<div class="tiles-row" style="--ch:${L.cc(c)}" role="img" aria-label="Last ${days} days for ${esc(c.code)}">${out.join('')}</div>`;
   };
 
   // ---------- rail ----------
@@ -76,7 +77,7 @@
     const nd = R().nextDeadline();
     rail.innerHTML = `
       <div class="rail-brand">${L.logo()}</div>
-      <nav class="rail-nav">
+      <nav class="rail-nav" aria-label="Main">
         <a href="#/today"${cur('today')}>${I.today}<span>Today</span>${openNow ? `<span class="badge">${openNow}</span>` : ''}</a>
         <a href="#/courses"${cur('courses')}>${I.courses}<span>Courses</span>${active ? `<span class="badge is-quiet">${active}</span>` : ''}</a>
         <a href="#/calendar"${cur('calendar')}>${I.calendar}<span>Calendar</span></a>
@@ -142,7 +143,8 @@
     });
     let tick = 0;
     L.on('tick', () => { if (++tick % 30 === 0 && !document.querySelector('.exam')) renderRail(); });
-    R().sweep().then(() => L.render()).catch((e) => { console.error(e); L.render(); });
+    (L.native ? L.native.restore().then(() => L.native.boot()) : Promise.resolve()).catch((e) => console.error(e))
+      .then(() => R().sweep()).then(() => L.render()).catch((e) => { console.error(e); L.render(); });
   };
 
   // ---------- welcome ----------
@@ -262,17 +264,41 @@
     const meta = [`<span class="kind">${KIND_LABEL[k.kind] || k.kind}</span>`, where, `${k.minutes} min`, state === 'late' ? 'done late' : state === 'overdue' ? `due ${L.fmt.date(s.date)}` : ''].filter(Boolean).join(' · ');
     return `<div class="chunk" data-state="${state}" data-kind="${k.kind}">
       <div class="chunk-body"><a class="chunk-title" href="${href}">${esc(k.title)}</a>${hint && k.hint ? `<div class="chunk-hint">${esc(k.hint)}</div>` : ''}<div class="chunk-meta">${meta}</div></div>
-      <label class="chunk-check"><input type="checkbox" data-in="chunk-done" data-course="${c.id}" data-session="${s.id}" data-chunk="${k.id}"${k.done ? ' checked disabled' : state === 'future' ? ' disabled' : ''}><span class="sr-only">Done</span></label></div>`;
+      <label class="chunk-check"><input type="checkbox" data-in="chunk-done" data-course="${c.id}" data-session="${s.id}" data-chunk="${k.id}" aria-label="${k.done ? 'Done: ' : 'Mark done: '}${esc(k.title)}"${k.done ? ' checked disabled' : state === 'future' ? ' disabled' : ''}></label></div>`;
   };
   L.studyBlock = (c, s, { today = false, hints = false } = {}) => {
     const done = s.chunks.filter((k) => k.done).length;
     return `<div class="study-block" style="--ch:${L.cc(c)}"><div class="study-head"><a class="icon-sq" href="#/course/${c.id}" aria-label="${esc(c.code)}">${esc(c.subjectCode.slice(0, 2))}</a><div class="t"><b>${esc(c.title)}</b><span>${done}/${s.chunks.length} · ${L.fmt.dur(s.minutes)} · ${esc(s.topic)}</span></div>${today ? `<a class="btn btn-sm btn-quiet" href="#/course/${c.id}/day/${s.date}">Open</a>` : ''}</div>
       <div class="chunks">${s.chunks.map((k, i) => L.chunkRow(c, s, k, { number: i + 1, hint: hints })).join('')}</div></div>`;
   };
+  // quick check: a bottom sheet with two questions; both right → the chunk is done
+  async function openCheck(courseId, sessionId, chunkId) {
+    const c = R().course(courseId); const s = c.sessions.find((x) => x.id === sessionId); const ch = s.chunks.find((x) => x.id === chunkId);
+    const busy = L.ui.busy('Setting two questions from this chunk…');
+    let chk; try { chk = await R().checkPaper(courseId, sessionId, chunkId); } finally { busy.done(); }
+    const body = `<p class="small muted">Two questions from <b>${esc(ch.title)}</b>. Both right and the chunk counts.${chk.source === 'offline' ? ' (Set by the offline examiner.)' : ''}</p>
+      <form id="check-form" class="stack gap-2">${chk.questions.map((q, i) => `<div class="question" style="margin:0"><div class="prompt">${i + 1}. ${esc(q.prompt)}</div><div class="options">${q.options.map((o, k) => `<label><input type="radio" name="${q.id}" value="${k}"><span class="k">${'ABCD'[k]}</span><span>${esc(o)}</span></label>`).join('')}</div></div>`).join('')}</form>`;
+    L.ui.modal({ title: 'Quick check', body, actions: [{ label: 'Not yet — read again', act: 'modal-cancel' }, { label: 'Check', act: 'check-submit', primary: true }] });
+    L.checkCtx = { courseId, sessionId, chunkId };
+  }
+  L.actions['check-submit'] = async () => {
+    const ctx = L.checkCtx; if (!ctx) return;
+    const form = document.getElementById('check-form'); const answers = {};
+    new FormData(form).forEach((v, k) => { answers[k] = v; });
+    const c = R().course(ctx.courseId); const s = c.sessions.find((x) => x.id === ctx.sessionId); const ch = s.chunks.find((x) => x.id === ctx.chunkId);
+    if (Object.keys(answers).length < ch.check.questions.length) { L.ui.toast('Answer both questions.', 'warn'); return; }
+    const r = await R().submitCheck(ctx.courseId, ctx.sessionId, ctx.chunkId, answers);
+    L.ui.closeModal(); L.checkCtx = null;
+    if (r.passed) { if (L.native) L.native.haptic('success'); L.ui.toast(r.result === 'late' ? 'Passed — recorded as late (half credit).' : 'Passed. Chunk done.', 'good'); }
+    else { if (L.native) L.native.haptic('medium'); L.ui.toast(`${r.right} of ${ch.check.questions.length} right. Read it again, then try once more.`, 'warn', 4000); }
+    L.render();
+  };
   L.inputs['chunk-done'] = async (el) => {
     if (!el.checked) return;
     const r = await R().complete(el.dataset.course, el.dataset.session, el.dataset.chunk);
+    if (r === 'needs_check') { el.checked = false; openCheck(el.dataset.course, el.dataset.session, el.dataset.chunk); return; }
     if (r === 'not_yet') { el.checked = false; L.ui.toast('That chunk is scheduled for a later day.', 'warn'); return; }
+    if (L.native) L.native.haptic(r === 'done' ? 'success' : 'light');
     if (r === 'late') L.ui.toast('Done — recorded as late (half credit).', 'warn');
     else if (r === 'done') L.ui.toast('Done.', 'good', 1600);
     L.render();

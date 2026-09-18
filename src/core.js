@@ -71,7 +71,7 @@ window.L = window.L || {};
   L.storageProblem = null; // set when the record cannot be written; the UI shows it until it clears
   L.saveNow = () => {
     if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
-    try { localStorage.setItem(KEY, JSON.stringify(L.S)); L.storageProblem = null; }
+    try { localStorage.setItem(KEY, JSON.stringify(L.S)); L.storageProblem = null; if (L.native) { L.native.saveRecord(); L.native.rescheduleSoon(); } }
     catch (e) {
       console.error('Lyceum: could not save', e);
       L.storageProblem = /quota/i.test(e.name + e.message) ? 'Storage is full on this device. Export your record from Settings, then erase old courses.' : 'This device refused to save the record: ' + e.message;
@@ -190,13 +190,13 @@ window.L = window.L || {};
     req.onerror = () => reject(req.error);
   }));
   L.db = {
-    putMaterial: (id, text) => tx('readwrite', (s) => s.put(text, id)),
-    getMaterial: (id) => tx('readonly', (s) => s.get(id)).then((r) => (r == null ? null : r)),
+    putMaterial: (id, text) => tx('readwrite', (s) => s.put(text, id)).then((r) => { if (L.native) L.native.putMaterial(id, text); return r; }),
+    getMaterial: (id) => tx('readonly', (s) => s.get(id)).then(async (r) => (r == null ? (L.native ? L.native.getMaterial(id) : null) : r)),
     deleteMaterial: (id) => tx('readwrite', (s) => s.delete(id)),
     allMaterials: () => all('materials'),
     // originals: { kind:'pdf', name, blob: Blob } | { kind:'html', name, html }. Blobs are what iOS Safari stores reliably.
-    putFile: (id, file) => tx('readwrite', (s) => s.put(file.bytes ? { kind: file.kind, name: file.name, blob: new Blob([file.bytes], { type: 'application/pdf' }) } : file, id), 'files'),
-    getFile: (id) => tx('readonly', (s) => s.get(id), 'files').then(async (r) => { if (r == null) return null; if (r.blob && !r.bytes) r.bytes = await r.blob.arrayBuffer(); return r; }),
+    putFile: (id, file) => tx('readwrite', (s) => s.put(file.bytes ? { kind: file.kind, name: file.name, blob: new Blob([file.bytes], { type: 'application/pdf' }) } : file, id), 'files').then((r) => { if (L.native) L.native.putFile(id, file); return r; }),
+    getFile: (id) => tx('readonly', (s) => s.get(id), 'files').then(async (r) => { if (r == null) return L.native ? L.native.getFile(id) : null; if (r.blob && !r.bytes) r.bytes = await r.blob.arrayBuffer(); return r; }),
     deleteFile: (id) => tx('readwrite', (s) => s.delete(id), 'files'),
     allFiles: () => all('files'),
   };
@@ -334,10 +334,11 @@ window.L = window.L || {};
     const el = ev.target.closest('[data-act]');
     if (!el || !host.contains(el)) return;
     const act = el.dataset.act;
-    if (act === 'modal-ok' || act === 'modal-cancel') {
-      ev.preventDefault(); ev.stopPropagation();
-      if (host._onAction) host._onAction(act); else L.ui.closeModal();
-    }
+    ev.preventDefault(); ev.stopPropagation();
+    if (act === 'modal-ok' || act === 'modal-cancel') { if (host._onAction) host._onAction(act); else L.ui.closeModal(); return; }
+    // other actions inside a modal go to the normal registry (the global handler ignores #modals)
+    const fn = L.actions && L.actions[act];
+    if (fn) Promise.resolve(fn(el, ev)).catch((e) => { console.error(e); L.ui.toast(e.message || 'Something went wrong.', 'bad'); });
   }, true);
   document.addEventListener('keydown', (ev) => {
     const host = $('#modals');

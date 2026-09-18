@@ -69,7 +69,7 @@ views-misc, views-enrol`. Every JS file is wrapped by the author as
 ES2020 is fine (optional chaining, `??`, async/await). Run `node --check src/<file>.js` before
 finishing a file. Run `node tools/build.js && node tools/smoke.js` to test the whole thing.
 
-CDN libraries (only these; loaded in shell.html, may be absent when offline — always guard):
+Libraries and fonts are bundled from `vendor/` at build time (no CDN at runtime; the pdf.js worker is handed over as a blob). Still guard the globals:
 - `pdfjsLib` — pdf.js 3.11.174 (`pdfjsLib.GlobalWorkerOptions.workerSrc` is set in shell.html)
 - `mammoth` — 1.6.0 (docx → text)
 - `marked` — 12.0.2, `DOMPurify` — 3.1.6 (render lecture notes markdown safely)
@@ -561,6 +561,12 @@ wires `#signature-pad`; `L.registrar.enrol(prospectus, { no, name, signature })`
 record name and a drawn signature, stores `course.contract`, ledger `contract_signed` then `enrolled`.
 `issueCertificate(course)` runs from `sweep()` on completion at ≥ `PASS` (70 %); `certificateSvg(course)` is the one
 source for display, print and `certificatePng()` export. Routes `#/contract/:id`, `#/certificate/:id`, `#/stats`.
+
+### 8.8 Quick check (honest streaks)
+A `read` chunk cannot be ticked directly: `complete()` returns `'needs_check'` until `submitCheck()` has passed. `checkPaper()` sets two mcq from the chunk's own text (faculty `check` mix, offline otherwise) and caches them on `chunk.check`; `submitCheck(answers)` logs `chunk_checked { right, of, attempt, passed }`, and on a pass marks `chunk.checked` and completes the chunk (late rules unchanged). Retries are unlimited and all logged.
+
+### 9.2 Native bridge (`src/native.js`)
+`L.native` wraps Capacitor when present (no-ops on the web): the record is mirrored to `Documents/lyceum/record.json` and restored at boot if newer; materials/originals are mirrored as files; local notifications are re-planned from the schedule on every save (study block, paper opens, due −3 h, exam morning; ≤ 60 pending); haptics on ticks; native share for the certificate PNG.
 
 ### 10.1 Test hooks (binding — the smoke test uses exactly these)
 - welcome: `<input id="student-name">`, button `[data-act=matriculate]`.

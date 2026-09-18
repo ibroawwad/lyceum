@@ -107,6 +107,7 @@
     midterm: [['mcq', 10, 2], ['short', 4, 5], ['problem', 2, 10]],
     final: [['mcq', 14, 2], ['short', 6, 5], ['problem', 3, 10], ['essay', 1, 15]],
     project: [['essay', 1, 100]],
+    check: [['mcq', 2, 1]],
   };
   function sampleText(text, limit) {
     text = String(text || '');

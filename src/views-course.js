@@ -217,6 +217,7 @@
   L.actions['share-certificate'] = async (el) => {
     const c = R().course(el.dataset.course); if (!c || !c.certificate) return;
     const blob = await L.papers.certificatePng(c);
+    if (L.native && L.native.isNative()) { try { if (await L.native.shareFile(`${c.certificate.no}.png`, blob, `Certificate ${c.certificate.no}`)) return; } catch (e) { if (e && /cancel/i.test(e.message || '')) return; console.error(e); } }
     const file = new File([blob], `${c.certificate.no}.png`, { type: 'image/png' });
     if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
       try { await navigator.share({ files: [file], title: `Certificate ${c.certificate.no}` }); return; } catch (e) { if (e.name === 'AbortError') return; }
