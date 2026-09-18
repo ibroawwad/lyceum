@@ -31,3 +31,10 @@ Contract: `SPEC.md`.
 **Native wrapper (Capacitor):** `android/` and `ios/` are generated Capacitor projects around the same
 `dist/`. `npm run mobile:android` opens Android Studio; `npm run mobile:ios` needs Xcode + CocoaPods
 (`pod install` in `ios/App` once Xcode is installed — this machine only had the command-line tools).
+
+## Server (`server/`)
+A dependency-free Node 24 API (faculty proxy with our key + entitlement tokens, App Store / Play purchase
+verification, public certificate verification at `/verify/<code>`, library catalogue). Deployed on its own with
+`deploy/release.sh <host> [domain]`: user `lyceum`, `/srv/lyceum/app`, container `lyceum-api` on `127.0.0.1:4700`,
+its own nginx block; nothing shared with any other service on the box. Config in `/srv/lyceum/app/.env`
+(see `server/.env.example`). The app talks to it when **More → Lyceum server** is set.

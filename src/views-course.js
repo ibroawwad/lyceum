@@ -211,7 +211,7 @@
       const cert = c.certificate;
       return `<div class="page"><div class="page-head"><div><span class="eyebrow"><a href="#/course/${c.id}" class="code" style="--ch:${L.cc(c)}">${esc(c.code)}</a></span><h1 class="display">Certificate of Completion</h1><p class="lede">${esc(cert.no)} · issued ${L.fmt.date(cert.issuedAt)} · verification ${esc(cert.code)}</p></div><div class="actions"><button class="btn btn-primary" data-act="share-certificate" data-course="${c.id}">Share image</button><button class="btn" data-act="print">Print / Save PDF</button></div></div>
         <div class="sheet-viewport is-landscape"><div class="sheet certificate" id="sheet">${L.papers.certificateSvg(c)}</div></div>
-        <p class="small muted mt-2">Verify on the device that issued it: More → Grades → Verify record. Hash ${esc(cert.hash.slice(0, 16))}…</p></div>`;
+        <p class="small muted mt-2">${cert.registeredUrl ? `Public verification: <a href="${esc(cert.registeredUrl)}" target="_blank" rel="noopener">${esc(cert.registeredUrl.replace(/^https?:\/\//, ''))}</a> · ` : ''}Hash ${esc(cert.hash.slice(0, 16))}…</p></div>`;
     },
   };
   L.actions['share-certificate'] = async (el) => {
@@ -233,6 +233,7 @@
     const busy = L.ui.busy(`Week ${w.n}: gathering the material…`);
     try {
       const text = await R().materialFor(c, [w.n]);
+      L.currentCourseToken = c.entitlement ? c.entitlement.token : null;
       const r = await L.faculty.notes({ course: c, week: w, text, onModel: (m) => busy.update(`Faculty: ${m}`) });
       c.notes = c.notes || {}; c.notes[w.n] = { markdown: r.markdown, source: r.source, model: r.model, at: new Date(L.now()).toISOString() };
       L.save();

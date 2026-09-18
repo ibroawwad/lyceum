@@ -128,8 +128,21 @@
     const code = hash.slice(0, 12).toUpperCase().match(/.{4}/g).join('-');
     c.certificate = { no, issuedAt, letter: c.final.letter, pct: c.final.pct, credits: c.credits, breakdown, hash, code };
     await L.ledger.append('certificate_issued', { courseId: c.id, no, code, letter: c.final.letter, pct: c.final.pct });
+    registerCertificate(c).catch(() => null);
     return c.certificate;
   }
+  // public verification: the server keeps number, hash, name, course and grade; retried on later boots until it sticks
+  async function registerCertificate(c) {
+    const base = L.faculty.apiBase(); const cert = c.certificate;
+    if (!base || !cert || cert.registeredUrl) return null;
+    const r = await fetch(base + '/v1/certificates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: cert.code, no: cert.no, hash: cert.hash, name: L.S.student.name, studentId: L.S.student.id, courseCode: c.code, title: c.title, letter: cert.letter, pct: cert.pct, credits: cert.credits, issuedAt: cert.issuedAt }) });
+    if (!r.ok) return null;
+    const j = await r.json();
+    cert.registeredUrl = j.url || (base.replace(/api\./, 'verify.') + '/verify/' + cert.code);
+    L.save();
+    return cert.registeredUrl;
+  }
+  L.on('state', () => { for (const c of L.S.courses) if (c.certificate && !c.certificate.registeredUrl && L.faculty.apiBase()) registerCertificate(c).catch(() => null); });
 
   // the certificate is one SVG so it displays, prints and exports identically
   function certificateSvg(c) {
@@ -176,5 +189,5 @@
     } finally { URL.revokeObjectURL(url); }
   }
 
-  L.papers = { contractNo, contractText, contractSheet, mountPad, get pad() { return pad; }, PASS, issueCertificate, certificateSvg, certificatePng };
+  L.papers = { contractNo, contractText, contractSheet, mountPad, get pad() { return pad; }, PASS, issueCertificate, registerCertificate, certificateSvg, certificatePng };
 })(window.L);

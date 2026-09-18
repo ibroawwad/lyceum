@@ -471,6 +471,7 @@
     const c = course(courseId); const s = c.sessions.find((x) => x.id === sessionId); const ch = s.chunks.find((x) => x.id === chunkId);
     if (ch.check) return ch.check;
     const text = ((await L.db.getMaterial(c.id)) || '').slice(ch.from, ch.to);
+    L.currentCourseToken = c.entitlement ? c.entitlement.token : null;
     const { paper, source } = await L.faculty.composePaper({ course: c, assessment: { id: 'chk_' + ch.id, kind: 'check', title: `Check · ${ch.title}`, coversWeeks: [s.week] }, text });
     ch.check = { questions: paper.questions.filter((q) => q.type === 'mcq').slice(0, 2).map((q) => ({ id: q.id, prompt: q.prompt, options: q.options, answer: q.answer })), source, attempts: 0 };
     L.save();
@@ -508,6 +509,7 @@
       log('Assembling the covered material…');
       const text = await materialFor(c, a.coversWeeks);
       log(L.faculty.available() ? 'Setting the paper…' : 'Setting the paper (offline examiner)…');
+      L.currentCourseToken = c.entitlement ? c.entitlement.token : null;
       const r = await L.faculty.composePaper({ course: c, assessment: a, text, onModel: (m) => log(`Faculty: ${m}`) });
       // the state may have been re-rendered while we waited; write to the live object
       const live = find(courseId, aid);
@@ -543,6 +545,7 @@
       a.attempt.auto = auto;
       const answered = a.paper.questions.filter((q) => String(a.attempt.answers[q.id] ?? '').trim() !== '').length;
       await L.ledger.append('assessment_submitted', { courseId: c.id, ref: a.id, auto, answered, of: a.paper.questions.length });
+      L.currentCourseToken = c.entitlement ? c.entitlement.token : null;
       const r = await L.faculty.grade({ course: c, assessment: a, paper: a.paper, answers: a.attempt.answers });
       const pts = L.sum(r.results.map((x) => x.points));
       const max = L.sum(a.paper.questions.map((q) => q.points));

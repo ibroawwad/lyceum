@@ -14,7 +14,24 @@
     constructor(reason, tried = []) { super(reason); this.name = 'FacultyError'; this.reason = reason; this.tried = tried; }
   }
 
-  const available = () => !!(L.S?.settings?.apiKey || '').trim();
+  // the faculty is reachable with the student's own key, or through the Lyceum server (proxy) when configured
+  const apiBase = () => (L.S?.settings?.apiBase || L.API_BASE || '').trim().replace(/\/$/, '');
+  const available = () => !!(L.S?.settings?.apiKey || '').trim() || !!apiBase();
+  L.currentCourseToken = null; // set by the registrar around a course's faculty work (entitlement for the proxy)
+  async function callProxy({ system, user, maxTokens, json, temperature, onModel, model }) {
+    if (onModel) onModel('lyceum server');
+    const ctl = new AbortController(); const timer = setTimeout(() => ctl.abort(), 100000);
+    let r;
+    try {
+      r = await fetch(apiBase() + '/v1/faculty/chat', { method: 'POST', signal: ctl.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: L.currentCourseToken || undefined, model, messages: [{ role: 'system', content: system }, { role: 'user', content: user }], max_tokens: maxTokens, temperature }) });
+    } catch (e) { throw new FacultyError(`The Lyceum server could not be reached (${e.name === 'AbortError' ? 'timeout' : 'network'}).`, []); }
+    finally { clearTimeout(timer); }
+    let body = null; try { body = await r.json(); } catch (e) { body = null; }
+    if (!r.ok) throw new FacultyError((body && body.error) || `The Lyceum server answered ${r.status}.`, [{ model: 'server', status: r.status }]);
+    const content = body.content || '';
+    if (json) { const data = extractJson(content); if (data == null) throw new FacultyError('The faculty reply could not be read.', []); return { data, text: content, model: body.model, ms: body.ms || 0 }; }
+    return { text: content, model: body.model, ms: body.ms || 0 };
+  }
   const chain = () => {
     const first = (L.S?.settings?.model || '').trim();
     return [first, ...MODELS].filter((m, i, a) => m && a.indexOf(m) === i);
@@ -52,6 +69,7 @@
 
   async function call({ task = 'task', system, user, maxTokens = 6000, json = true, temperature = 0.3, onModel } = {}) {
     const key = (L.S?.settings?.apiKey || '').trim();
+    if (!key && apiBase()) return callProxy({ system, user, maxTokens, json, temperature, onModel, model: L.S?.settings?.model });
     if (!key) throw new FacultyError('No OpenRouter key is set. Add one in Settings, or continue with the offline examiner.');
     const tried = [];
     for (const model of chain()) {
@@ -361,5 +379,5 @@
     }
   }
 
-  L.faculty = { MODELS, FacultyError, available, chain, call, test, extractJson, analyze, composePaper, grade, notes, offline, MIX };
+  L.faculty = { apiBase, MODELS, FacultyError, available, chain, call, test, extractJson, analyze, composePaper, grade, notes, offline, MIX };
 })(window.L);

@@ -800,7 +800,7 @@ window.L = window.L || {};
     return {
       version: L.VERSION,
       student: null,
-      settings: { apiKey: '', model: 'anthropic/claude-fable-5.1', weeklyHours: 12, theme: 'dark' },
+      settings: { apiKey: '', apiBase: '', model: 'anthropic/claude-fable-5.1', weeklyHours: 12, theme: 'dark' },
       clock: { offsetMs: 0 },
       courses: [],
       ledger: [],
@@ -1829,7 +1829,24 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
     constructor(reason, tried = []) { super(reason); this.name = 'FacultyError'; this.reason = reason; this.tried = tried; }
   }
 
-  const available = () => !!(L.S?.settings?.apiKey || '').trim();
+  // the faculty is reachable with the student's own key, or through the Lyceum server (proxy) when configured
+  const apiBase = () => (L.S?.settings?.apiBase || L.API_BASE || '').trim().replace(/\/$/, '');
+  const available = () => !!(L.S?.settings?.apiKey || '').trim() || !!apiBase();
+  L.currentCourseToken = null; // set by the registrar around a course's faculty work (entitlement for the proxy)
+  async function callProxy({ system, user, maxTokens, json, temperature, onModel, model }) {
+    if (onModel) onModel('lyceum server');
+    const ctl = new AbortController(); const timer = setTimeout(() => ctl.abort(), 100000);
+    let r;
+    try {
+      r = await fetch(apiBase() + '/v1/faculty/chat', { method: 'POST', signal: ctl.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: L.currentCourseToken || undefined, model, messages: [{ role: 'system', content: system }, { role: 'user', content: user }], max_tokens: maxTokens, temperature }) });
+    } catch (e) { throw new FacultyError(`The Lyceum server could not be reached (${e.name === 'AbortError' ? 'timeout' : 'network'}).`, []); }
+    finally { clearTimeout(timer); }
+    let body = null; try { body = await r.json(); } catch (e) { body = null; }
+    if (!r.ok) throw new FacultyError((body && body.error) || `The Lyceum server answered ${r.status}.`, [{ model: 'server', status: r.status }]);
+    const content = body.content || '';
+    if (json) { const data = extractJson(content); if (data == null) throw new FacultyError('The faculty reply could not be read.', []); return { data, text: content, model: body.model, ms: body.ms || 0 }; }
+    return { text: content, model: body.model, ms: body.ms || 0 };
+  }
   const chain = () => {
     const first = (L.S?.settings?.model || '').trim();
     return [first, ...MODELS].filter((m, i, a) => m && a.indexOf(m) === i);
@@ -1867,6 +1884,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
 
   async function call({ task = 'task', system, user, maxTokens = 6000, json = true, temperature = 0.3, onModel } = {}) {
     const key = (L.S?.settings?.apiKey || '').trim();
+    if (!key && apiBase()) return callProxy({ system, user, maxTokens, json, temperature, onModel, model: L.S?.settings?.model });
     if (!key) throw new FacultyError('No OpenRouter key is set. Add one in Settings, or continue with the offline examiner.');
     const tried = [];
     for (const model of chain()) {
@@ -2176,7 +2194,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
     }
   }
 
-  L.faculty = { MODELS, FacultyError, available, chain, call, test, extractJson, analyze, composePaper, grade, notes, offline, MIX };
+  L.faculty = { apiBase, MODELS, FacultyError, available, chain, call, test, extractJson, analyze, composePaper, grade, notes, offline, MIX };
 })(window.L);
 
 
@@ -2654,6 +2672,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
     const c = course(courseId); const s = c.sessions.find((x) => x.id === sessionId); const ch = s.chunks.find((x) => x.id === chunkId);
     if (ch.check) return ch.check;
     const text = ((await L.db.getMaterial(c.id)) || '').slice(ch.from, ch.to);
+    L.currentCourseToken = c.entitlement ? c.entitlement.token : null;
     const { paper, source } = await L.faculty.composePaper({ course: c, assessment: { id: 'chk_' + ch.id, kind: 'check', title: `Check · ${ch.title}`, coversWeeks: [s.week] }, text });
     ch.check = { questions: paper.questions.filter((q) => q.type === 'mcq').slice(0, 2).map((q) => ({ id: q.id, prompt: q.prompt, options: q.options, answer: q.answer })), source, attempts: 0 };
     L.save();
@@ -2691,6 +2710,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
       log('Assembling the covered material…');
       const text = await materialFor(c, a.coversWeeks);
       log(L.faculty.available() ? 'Setting the paper…' : 'Setting the paper (offline examiner)…');
+      L.currentCourseToken = c.entitlement ? c.entitlement.token : null;
       const r = await L.faculty.composePaper({ course: c, assessment: a, text, onModel: (m) => log(`Faculty: ${m}`) });
       // the state may have been re-rendered while we waited; write to the live object
       const live = find(courseId, aid);
@@ -2726,6 +2746,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
       a.attempt.auto = auto;
       const answered = a.paper.questions.filter((q) => String(a.attempt.answers[q.id] ?? '').trim() !== '').length;
       await L.ledger.append('assessment_submitted', { courseId: c.id, ref: a.id, auto, answered, of: a.paper.questions.length });
+      L.currentCourseToken = c.entitlement ? c.entitlement.token : null;
       const r = await L.faculty.grade({ course: c, assessment: a, paper: a.paper, answers: a.attempt.answers });
       const pts = L.sum(r.results.map((x) => x.points));
       const max = L.sum(a.paper.questions.map((q) => q.points));
@@ -2961,8 +2982,21 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
     const code = hash.slice(0, 12).toUpperCase().match(/.{4}/g).join('-');
     c.certificate = { no, issuedAt, letter: c.final.letter, pct: c.final.pct, credits: c.credits, breakdown, hash, code };
     await L.ledger.append('certificate_issued', { courseId: c.id, no, code, letter: c.final.letter, pct: c.final.pct });
+    registerCertificate(c).catch(() => null);
     return c.certificate;
   }
+  // public verification: the server keeps number, hash, name, course and grade; retried on later boots until it sticks
+  async function registerCertificate(c) {
+    const base = L.faculty.apiBase(); const cert = c.certificate;
+    if (!base || !cert || cert.registeredUrl) return null;
+    const r = await fetch(base + '/v1/certificates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: cert.code, no: cert.no, hash: cert.hash, name: L.S.student.name, studentId: L.S.student.id, courseCode: c.code, title: c.title, letter: cert.letter, pct: cert.pct, credits: cert.credits, issuedAt: cert.issuedAt }) });
+    if (!r.ok) return null;
+    const j = await r.json();
+    cert.registeredUrl = j.url || (base.replace(/api\./, 'verify.') + '/verify/' + cert.code);
+    L.save();
+    return cert.registeredUrl;
+  }
+  L.on('state', () => { for (const c of L.S.courses) if (c.certificate && !c.certificate.registeredUrl && L.faculty.apiBase()) registerCertificate(c).catch(() => null); });
 
   // the certificate is one SVG so it displays, prints and exports identically
   function certificateSvg(c) {
@@ -3009,7 +3043,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
     } finally { URL.revokeObjectURL(url); }
   }
 
-  L.papers = { contractNo, contractText, contractSheet, mountPad, get pad() { return pad; }, PASS, issueCertificate, certificateSvg, certificatePng };
+  L.papers = { contractNo, contractText, contractSheet, mountPad, get pad() { return pad; }, PASS, issueCertificate, registerCertificate, certificateSvg, certificatePng };
 })(window.L);
 
 
@@ -3536,7 +3570,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
       const cert = c.certificate;
       return `<div class="page"><div class="page-head"><div><span class="eyebrow"><a href="#/course/${c.id}" class="code" style="--ch:${L.cc(c)}">${esc(c.code)}</a></span><h1 class="display">Certificate of Completion</h1><p class="lede">${esc(cert.no)} · issued ${L.fmt.date(cert.issuedAt)} · verification ${esc(cert.code)}</p></div><div class="actions"><button class="btn btn-primary" data-act="share-certificate" data-course="${c.id}">Share image</button><button class="btn" data-act="print">Print / Save PDF</button></div></div>
         <div class="sheet-viewport is-landscape"><div class="sheet certificate" id="sheet">${L.papers.certificateSvg(c)}</div></div>
-        <p class="small muted mt-2">Verify on the device that issued it: More → Grades → Verify record. Hash ${esc(cert.hash.slice(0, 16))}…</p></div>`;
+        <p class="small muted mt-2">${cert.registeredUrl ? `Public verification: <a href="${esc(cert.registeredUrl)}" target="_blank" rel="noopener">${esc(cert.registeredUrl.replace(/^https?:\/\//, ''))}</a> · ` : ''}Hash ${esc(cert.hash.slice(0, 16))}…</p></div>`;
     },
   };
   L.actions['share-certificate'] = async (el) => {
@@ -3558,6 +3592,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
     const busy = L.ui.busy(`Week ${w.n}: gathering the material…`);
     try {
       const text = await R().materialFor(c, [w.n]);
+      L.currentCourseToken = c.entitlement ? c.entitlement.token : null;
       const r = await L.faculty.notes({ course: c, week: w, text, onModel: (m) => busy.update(`Faculty: ${m}`) });
       c.notes = c.notes || {}; c.notes[w.n] = { markdown: r.markdown, source: r.source, model: r.model, at: new Date(L.now()).toISOString() };
       L.save();
@@ -3847,6 +3882,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
     },
   };
   L.inputs['api-key'] = (el) => { L.S.settings.apiKey = el.value.trim(); L.save(); };
+  L.inputs['api-base'] = (el) => { L.S.settings.apiBase = el.value.trim().replace(/\/$/, ''); L.save(); };
   L.inputs.model = (el) => { L.S.settings.model = el.value.trim(); L.save(); };
   L.inputs['weekly-hours'] = (el) => { const v = L.clamp(Math.round(Number(el.value) || 12), 4, 40); L.S.settings.weeklyHours = v; L.save(); };
   L.actions.theme = (el) => { L.theme.set(el.dataset.theme); L.render(); };

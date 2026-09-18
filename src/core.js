@@ -36,7 +36,7 @@ window.L = window.L || {};
     return {
       version: L.VERSION,
       student: null,
-      settings: { apiKey: '', model: 'anthropic/claude-fable-5.1', weeklyHours: 12, theme: 'dark' },
+      settings: { apiKey: '', apiBase: '', model: 'anthropic/claude-fable-5.1', weeklyHours: 12, theme: 'dark' },
       clock: { offsetMs: 0 },
       courses: [],
       ledger: [],
