@@ -322,7 +322,8 @@ body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: 
 .empty h2 { font-size: 20px; margin-bottom: 8px; }
 .empty p { color: var(--text-2); max-width: 52ch; }
 .today-grid { display: flex; flex-direction: column; gap: 12px; }
-.reading-layout { display: grid; grid-template-columns: 1fr; gap: 20px; }
+.reading-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
+.reading-layout > * { min-width: 0; } /* a long chunk line must shrink, not widen the day view past the phone */
 .reading-side { display: flex; flex-direction: column; gap: 12px; }
 @media (max-width: 1023px) { .reading-side { order: -1; } } /* on a phone the checklist comes before the pages */
 
@@ -760,6 +761,7 @@ body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: 
 <div id="toasts" class="toast-host" aria-live="polite"></div>
 <div id="modals" class="modal-host"></div>
 <script>
+window.LYCEUM_API = '';
 
 /* ---- core.js ---- */
 window.L = window.L || {};
@@ -800,7 +802,7 @@ window.L = window.L || {};
     return {
       version: L.VERSION,
       student: null,
-      settings: { apiKey: '', apiBase: '', model: 'anthropic/claude-fable-5.1', weeklyHours: 12, theme: 'dark' },
+      settings: { apiKey: '', apiBase: '', iapDevSecret: '', model: 'anthropic/claude-fable-5.1', weeklyHours: 12, theme: 'dark' },
       clock: { offsetMs: 0 },
       courses: [],
       ledger: [],
@@ -820,6 +822,8 @@ window.L = window.L || {};
       return ok;
     });
     out.ledger = Array.isArray(s?.ledger) ? s.ledger : [];
+    out.device = typeof s?.device === 'string' ? s.device : null;
+    out.pendingPurchases = Array.isArray(s?.pendingPurchases) ? s.pendingPurchases : [];
     out.version = L.VERSION;
     return out;
   }
@@ -852,6 +856,7 @@ window.L = window.L || {};
   };
 
   // ---------- clock ----------
+  L.API_BASE = typeof window.LYCEUM_API === 'string' ? window.LYCEUM_API.trim().replace(/\/$/, '') : '';
   L.debug = (() => { try { return new URLSearchParams(location.search).has('debug'); } catch (e) { return false; } })();
   L.now = () => Date.now() + (L.S?.clock?.offsetMs || 0);
   L.today = () => L.date.startOfDay(new Date(L.now()));
@@ -2521,12 +2526,12 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
   }
   const plan = (input) => plans(input).standard; // kept for tools that want one prospectus
 
-  async function enrol(prospectus, contract) {
+  async function enrol(prospectus, contract, entitlement = null) {
     if (prospectus.unavailable) throw new Error(prospectus.unavailable);
     if (!contract || !contract.signature || !contract.name) throw new Error('Enrolment needs a signed registration contract.');
     const no = contract.no || L.papers.contractNo();
-    const textHash = await L.sha256(L.papers.contractText(prospectus, L.S.student, no));
-    const c = Object.assign({}, prospectus, { id: L.uid('c'), createdAt: new Date(L.now()).toISOString(), state: 'enrolled', contract: { no, signedAt: new Date(L.now()).toISOString(), name: contract.name, signature: contract.signature, textHash } });
+    const textHash = await L.sha256(L.papers.contractText(prospectus, L.S.student, no, contract.fee));
+    const c = Object.assign({}, prospectus, { id: L.uid('c'), createdAt: new Date(L.now()).toISOString(), state: 'enrolled', contract: { no, signedAt: new Date(L.now()).toISOString(), name: contract.name, signature: contract.signature, textHash, fee: contract.fee || null }, entitlement: entitlement || null });
     const text = c.sourcesText; delete c.sourcesText;
     const files = c.sourceFiles || []; delete c.sourceFiles;
     // the record comes first; a storage failure for the material must never lose the enrolment
@@ -2539,7 +2544,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
       catch (e) { console.error(e); const src = c.material.sources.find((x) => x.id === f.id); if (src) src.hasFile = false; problems.push(`the original of ${f.file.name || 'a file'}`); }
     }
     await L.ledger.append('contract_signed', { courseId: c.id, no, textHash, name: contract.name });
-    await L.ledger.append('enrolled', { courseId: c.id, code: c.code, title: c.title, weeks: c.term.weeks, start: c.term.start, end: c.term.end, hoursPerWeek: c.plan.hoursPerWeek, pace: c.plan.pace });
+    await L.ledger.append('enrolled', { courseId: c.id, code: c.code, title: c.title, weeks: c.term.weeks, start: c.term.start, end: c.term.end, hoursPerWeek: c.plan.hoursPerWeek, pace: c.plan.pace, fee: contract.fee || null, purchase: entitlement ? { platform: entitlement.platform, tx: entitlement.tx } : null });
     L.saveNow();
     if (problems.length && L.ui) L.ui.toast(`Enrolled, but this device could not store ${problems.join(' and ')}. Reading will use what is available.`, 'warn', 8000);
     return c;
@@ -2893,7 +2898,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
   // ---------- contract ----------
   const contractNo = () => `LYC-C-${new Date(L.now()).getFullYear()}-${String(L.S.courses.filter((c) => c.contract).length + 1).padStart(4, '0')}`;
   // the canonical text that gets hashed; the sheet renders the same facts
-  function contractText(p, student, no) {
+  function contractText(p, student, no, fee) {
     const lines = [
       `REGISTRATION CONTRACT ${no}`,
       `Student: ${student.name} (${student.id})`,
@@ -2901,6 +2906,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
       `Term: ${p.term.start} to ${p.term.end} (${p.term.weeks} weeks)`,
       `Pace: ${p.plan.paceLabel}, ${p.plan.minutesPerDay} minutes a day, ${DAYS_LABEL(p)}, ${p.plan.hoursPerWeek} hours a week`,
       `Credits: ${p.credits}`,
+      `Fee: ${fee || 'none'}`,
       `Withdrawal deadline: ${p.policy.withdrawBefore}`,
       `Late policy: -${p.policy.late.perDayPct}% per day for at most ${p.policy.late.maxDays} days; examinations have no late window`,
       `Weights: ${Object.entries(p.policy.weights).map(([k, w]) => `${k} ${w}%`).join(', ')}`,
@@ -2913,7 +2919,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
     'One attempt per paper, within its window; an unsubmitted paper is a zero.',
     'Every paper is the Student\u2019s own work; the record is permanent; withdrawal only before the deadline above.',
   ];
-  function contractSheet(p, student, { no, signedAt, signature, name, forSigning = false } = {}) {
+  function contractSheet(p, student, { no, signedAt, signature, name, fee, forSigning = false } = {}) {
     const date = signedAt ? new Date(signedAt) : new Date(L.now());
     const count = (k) => p.assessments.filter((a) => a.kind === k).length;
     const exam = (k) => { const a = p.assessments.find((x) => x.kind === k); return a ? `${L.fmt.date(a.opensAt)} ${L.fmt.time(a.opensAt)}–${L.fmt.time(a.dueAt)}` : null; };
@@ -2934,6 +2940,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
         <tr><th>Pace</th><td>${esc(p.plan.paceLabel)} · ${p.plan.minutesPerDay} min a day, ${DAYS_LABEL(p)}</td></tr>
         <tr><th>Papers</th><td>${papers.map(esc).join('; ')}.</td></tr>
         <tr><th>Weights</th><td>${esc(weights)}</td></tr>
+        ${fee ? `<tr><th>Fee</th><td>${esc(fee)} · one enrolment, charged by the store at signature</td></tr>` : ''}
         <tr><th>Withdraw by</th><td>${L.fmt.date(L.date.addDays(L.date.parse(p.policy.withdrawBefore), -1))}</td></tr>
       </tbody></table>
       <ol class="sheet-clauses">${CLAUSES.map((c) => `<li>${esc(c)}</li>`).join('')}</ol>
@@ -3064,6 +3071,90 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
   }
 
   L.papers = { contractNo, contractText, contractSheet, mountPad, get pad() { return pad; }, PASS, issueCertificate, registerCertificate, certificateSvg, certificatePng };
+})(window.L);
+
+
+/* ---- store.js ---- */
+(function (L) {
+  'use strict';
+  // Purchases. The store apps sell one consumable product, a course enrolment, bought once per course at the
+  // moment of signing. The receipt goes to the Lyceum server, which mints a device-bound entitlement token for
+  // that course (faculty papers and grading through the proxy, a registered certificate). The web build charges
+  // nothing: it keeps the offline examiner and the student's own key.
+  const PRODUCT = 'com.lyceum.app.course';
+  const plugin = () => (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.NativePurchases) || null;
+  const base = () => (L.S?.settings?.apiBase || L.API_BASE || '').trim().replace(/\/$/, '');
+  const devSecret = () => (L.S?.settings?.iapDevSecret || '').trim();
+  const platform = () => (window.Capacitor && window.Capacitor.getPlatform ? window.Capacitor.getPlatform() : 'web');
+  const iso = () => new Date(L.now()).toISOString();
+
+  // a stable random id for this installation; every entitlement is bound to it
+  function deviceId() {
+    if (!L.S.device) { L.S.device = 'd' + Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10); L.save(); }
+    return L.S.device;
+  }
+  const courseHash = (p) => L.sha256([p.code, p.title, p.plan.pace, p.term.start, (p.material && p.material.hash) || '', deviceId()].join('|'));
+
+  // enrolment is paid inside the native apps when the server issues entitlements and is not running the free
+  // pilot; a developer secret (debug settings) exercises the same path on the web against a test server
+  function required() {
+    if (!base()) return false;
+    if (devSecret()) return true;
+    if (!L.native.isNative() || !plugin()) return false;
+    const h = L.serverHealth;
+    return !!(h && h.ok && h.entitlements && !h.free);
+  }
+  const pending = () => (Array.isArray(L.S.pendingPurchases) ? L.S.pendingPurchases : []);
+
+  // the store's own name and price for the product; App Review requires that these are shown, not hard-coded
+  let product = null;
+  async function price() {
+    if (devSecret() && !plugin()) return { title: 'Course enrolment (test)', priceString: 'TEST' };
+    if (product) return product;
+    const NP = plugin(); if (!NP) return null;
+    try { const r = await NP.getProducts({ productIdentifiers: [PRODUCT], productType: 'inapp' }); product = (r.products || [])[0] || null; } catch (e) { console.error('products', e); product = null; }
+    return product;
+  }
+
+  async function verify(body) {
+    let r;
+    try { r = await fetch(base() + '/v1/iap/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); }
+    catch (e) { const err = new Error('The Lyceum server could not be reached.'); err.offline = true; throw err; }
+    let j = null; try { j = await r.json(); } catch (e) { j = null; }
+    if (!r.ok) { const err = new Error((j && j.error) || `The server answered ${r.status}.`); err.status = r.status; throw err; }
+    return j;
+  }
+
+  // one purchase → one entitlement. A purchase that never reached the server is kept on the device and settled
+  // on the next attempt (any course: the server has not seen it), so nobody is ever charged twice.
+  async function buy(p) {
+    const ch = await courseHash(p); const device = deviceId();
+    const held = pending().find((x) => x.courseHash === ch) || pending()[0];
+    if (held) { held.courseHash = ch; held.device = device; L.saveNow(); return settle(held); }
+    if (devSecret()) return settle({ platform: 'dev', productId: PRODUCT, courseHash: ch, device, at: iso() });
+    const NP = plugin(); if (!NP) throw new Error('Course enrolments are bought inside the Lyceum app.');
+    const sup = await NP.isBillingSupported().catch(() => ({ isBillingSupported: false }));
+    if (!sup.isBillingSupported) throw new Error('This device cannot make purchases.');
+    let t;
+    try { t = await NP.purchaseProduct({ productIdentifier: PRODUCT, productType: 'inapp', quantity: 1, isConsumable: true }); }
+    catch (e) { const m = String(e && e.message || e); throw new Error(/cancel/i.test(m) ? 'The purchase was cancelled. Nothing was charged.' : `The purchase did not go through: ${m}`); }
+    const entry = { platform: platform(), productId: PRODUCT, courseHash: ch, device, tx: t.transactionId || null, receipt: t.receipt || null, jws: t.jwsRepresentation || null, purchaseToken: t.purchaseToken || null, at: iso() };
+    L.S.pendingPurchases = [...pending(), entry]; L.saveNow();
+    return settle(entry);
+  }
+  async function settle(entry) {
+    const body = Object.assign({}, entry); if (entry.platform === 'dev') body.secret = devSecret();
+    let r;
+    try { r = await verify(body); }
+    catch (e) {
+      if (entry.platform !== 'dev' && (e.offline || e.status >= 500)) { e.message = 'Your purchase is safe on this device, but the Lyceum server could not confirm it. Connect to the internet and tap Sign and enrol again; you will not be charged twice.'; }
+      throw e;
+    }
+    L.S.pendingPurchases = pending().filter((x) => x.courseHash !== entry.courseHash); L.saveNow();
+    return { token: r.token, tx: entry.tx || null, platform: entry.platform, productId: entry.productId, courseHash: entry.courseHash, sandbox: !!r.sandbox, at: iso() };
+  }
+
+  L.store = { PRODUCT, required, price, buy, deviceId, courseHash, pending };
 })(window.L);
 
 
@@ -3583,7 +3674,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
     render(p) {
       const c = R().course(p.id); if (!c || !c.contract) return notFound('Contract');
       return `<div class="page"><div class="page-head"><div><span class="eyebrow"><a href="#/course/${c.id}" class="code" style="--ch:${L.cc(c)}">${esc(c.code)}</a></span><h1 class="display">Registration contract</h1><p class="lede">Signed ${L.fmt.dt(c.contract.signedAt)} · ${esc(c.contract.no)}</p></div><div class="actions"><button class="btn" data-act="print">Print / Save PDF</button></div></div>
-        <div class="sheet-viewport">${L.papers.contractSheet(c, L.S.student, { no: c.contract.no, signedAt: c.contract.signedAt, signature: c.contract.signature, name: c.contract.name })}</div>
+        <div class="sheet-viewport">${L.papers.contractSheet(c, L.S.student, { no: c.contract.no, signedAt: c.contract.signedAt, signature: c.contract.signature, name: c.contract.name, fee: c.contract.fee })}</div>
         <p class="small muted mt-2 mono">Text hash ${esc(c.contract.textHash.slice(0, 16))}… · recorded in the ledger as contract_signed.</p></div>`;
     },
   };
@@ -3885,6 +3976,9 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
               <div class="field"><label for="api-key">OpenRouter key</label><input id="api-key" class="input mono" type="password" autocomplete="off" value="${esc(s.apiKey)}" data-in="api-key" placeholder="sk-or-v1-…"><span class="hint">Stored only in this browser. With no key, papers are set and graded by the offline examiner.</span></div>
               <div class="field"><label for="model">Preferred model</label><input id="model" class="input mono" list="model-list" value="${esc(s.model)}" data-in="model"><datalist id="model-list">${models.map((m) => `<option value="${esc(m)}">`).join('')}</datalist><span class="hint">Falls back through ${L.faculty.MODELS.length} models, then to the offline examiner.</span></div>
               <div class="cols"><button class="btn" data-act="test-faculty">Test connection</button><span class="small muted" id="faculty-test"></span></div>
+              <div class="divider"></div>
+              <div class="field"><label for="api-base">Lyceum server</label><input id="api-base" class="input mono" autocomplete="off" spellcheck="false" value="${esc(s.apiBase)}" data-in="api-base" placeholder="${esc(L.API_BASE || 'https://api.…')}"><span class="hint">${serverHint()}</span></div>
+              ${L.debug ? `<div class="field"><label for="iap-dev">Developer enrolment secret</label><input id="iap-dev" class="input mono" type="password" autocomplete="off" value="${esc(s.iapDevSecret || '')}" data-in="iap-dev" placeholder="matches IAP_DEV_SECRET on a test server"><span class="hint">Runs the paid-enrolment path without a store. ${L.store.pending().length ? `${L.store.pending().length} purchase(s) waiting for the server.` : ''}</span></div>` : ''}
             </div></div>
             <div class="card"><div class="card-head"><h2>Study budget</h2></div><div class="card-body"><div class="field"><label for="weekly-hours">Hours per week you can give to coursework</label><div class="cols"><input id="weekly-hours" class="input num" type="number" min="4" max="40" step="1" value="${s.weeklyHours}" data-in="weekly-hours" style="width:110px"><span class="small muted">Applies to future enrolments. The registrar refuses a course that would exceed it.</span></div></div></div></div>
             <div class="card"><div class="card-head"><h2>Appearance</h2></div><div class="card-body"><div class="switch" role="group" aria-label="Theme">${['dark', 'light', 'system'].map((t) => `<button data-act="theme" data-theme="${t}" aria-pressed="${s.theme === t}">${t.charAt(0).toUpperCase() + t.slice(1)}</button>`).join('')}</div></div></div>
@@ -3907,6 +4001,14 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
     },
   };
   L.inputs['api-key'] = (el) => { L.S.settings.apiKey = el.value.trim(); L.save(); };
+  function serverHint() {
+    const h = L.serverHealth; const base = (L.S.settings.apiBase || L.API_BASE || '').trim();
+    if (!base) return 'Serves the Library, the faculty proxy and certificate verification. Leave empty to work alone.';
+    if (!h) return 'Checking…';
+    if (!h.ok) return 'Not reachable right now.';
+    return `Connected · faculty ${h.faculty ? 'on' : 'off'} · ${h.free ? 'free pilot' : h.entitlements ? 'paid enrolments' : 'no entitlements'}`;
+  }
+  L.inputs['iap-dev'] = (el) => { L.S.settings.iapDevSecret = el.value.trim(); L.save(); };
   L.inputs['api-base'] = (el) => { L.S.settings.apiBase = el.value.trim().replace(/\/$/, ''); L.save(); L.faculty.probe().then(() => L.render()); };
   L.inputs.model = (el) => { L.S.settings.model = el.value.trim(); L.save(); };
   L.inputs['weekly-hours'] = (el) => { const v = L.clamp(Math.round(Number(el.value) || 12), 4, 40); L.S.settings.weeklyHours = v; L.save(); };
@@ -4008,10 +4110,10 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
       const body = W.step === 1 ? materialStep()
         : W.step === 2 ? (W.plans ? paceCards() : `<div class="card"><div class="card-body"><div class="log" id="registrar-log">${W.log.map((l) => `<div>${esc(l)}</div>`).join('')}</div>${W.error ? `<div class="notice mt-2" data-kind="bad"><span>${esc(W.error)}</span></div><div class="cols mt-2"><button class="btn" data-act="enrol-back">Back to material</button></div>` : ''}</div></div>`)
         : W.step === 3 && W.prospectus ? prospectus(W.prospectus)
-        : W.step === 4 && W.prospectus ? `<div class="sheet-viewport">${L.papers.contractSheet(W.prospectus, L.S.student, { no: W.contractNo, forSigning: true })}</div>
+        : W.step === 4 && W.prospectus ? `<div class="sheet-viewport">${L.papers.contractSheet(W.prospectus, L.S.student, { no: W.contractNo, fee: W.fee, forSigning: true })}</div>
             ${W.error ? `<div class="notice mt-2" data-kind="bad"><span>${esc(W.error)}</span></div>` : ''}
-            <div class="cols mt-3"><button class="btn btn-primary" data-act="sign-enrol">Sign and enrol</button><button class="btn btn-quiet" data-act="enrol-prospectus">Back</button></div>
-            <p class="small muted mt-2">Draw your signature in the box and type your full name as it appears on your record. Signing enrols you; the schedule is then fixed.</p>` : '';
+            <div class="cols mt-3"><button class="btn btn-primary" data-act="sign-enrol"${W.busy ? ' disabled' : ''}>${W.fee && !W.paid ? `Sign and pay ${esc(W.fee)}` : 'Sign and enrol'}</button><button class="btn btn-quiet" data-act="enrol-prospectus">Back</button></div>
+            <p class="small muted mt-2">Draw your signature in the box and type your full name as it appears on your record. ${W.fee && !W.paid ? `Signing opens the store's payment sheet for the ${esc(W.fee)} enrolment fee; the schedule is then fixed.` : 'Signing enrols you; the schedule is then fixed.'}</p>` : '';
       const h1 = W.step === 4 ? 'Registration contract' : W.step === 3 ? 'Prospectus' : W.step === 2 && W.plans ? 'Choose a pace' : 'Add a course';
       const lede = W.step === 1 ? 'Add the material. It comes back as a course with a fixed term and a daily block.' : W.step === 4 ? 'Read it, sign it, and the term begins.' : W.step === 3 ? 'Enrolling makes these terms binding.' : W.plans ? 'Three pacings. Pick one.' : 'Reading your material…';
       return `<div class="page"><div class="page-head"><div><h1 class="display">${h1}</h1><p class="lede">${lede}</p></div></div>${steps()}${body}</div>`;
@@ -4113,8 +4215,11 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
       W.error = e.message || 'The registrar could not schedule this material.';
     } finally { W.busy = false; L.render(); }
   };
-  L.actions['enrol-confirm'] = () => {
-    if (!W.prospectus) return;
+  // the store's price is fetched before the contract is shown, so the sheet renders once and a drawn signature is never wiped
+  L.actions['enrol-confirm'] = async () => {
+    if (!W.prospectus || W.busy) return;
+    W.fee = null; W.paid = null;
+    if (L.store.required()) { W.busy = true; L.render(); try { const pr = await L.store.price(); W.fee = pr ? pr.priceString : null; } catch (e) { W.fee = null; } W.busy = false; }
     W.contractNo = L.papers.contractNo(); W.error = null; W.step = 4; L.render();
   };
   L.actions['enrol-prospectus'] = () => { W.step = 3; W.error = null; L.render(); };
@@ -4131,12 +4236,15 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
     const signature = pad.dataUrl();
     if (!signature) { fail('Draw your signature in the box.'); return; }
     W.busy = true;
+    const btn = document.querySelector('[data-act=sign-enrol]'); if (btn) { btn.disabled = true; btn.textContent = W.fee && !W.paid ? 'Waiting for the store…' : 'Enrolling…'; }
     try {
-      const c = await R().enrol(p, { no: W.contractNo, name: typed, signature });
-      W.step = 1; W.sources = []; W.hint = ''; W.plans = null; W.prospectus = null; W.log = []; W.sampleLoaded = false; W.error = null;
+      // the fee is paid once; a purchase that already went through (server unreachable afterwards) is settled, not repeated
+      if (L.store.required() && !W.paid) W.paid = await L.store.buy(p);
+      const c = await R().enrol(p, { no: W.contractNo, name: typed, signature, fee: W.fee || null }, W.paid || null);
+      W.step = 1; W.sources = []; W.hint = ''; W.plans = null; W.prospectus = null; W.log = []; W.sampleLoaded = false; W.error = null; W.fee = null; W.paid = null;
       L.ui.toast(`Enrolled in ${c.code}. Term begins ${L.fmt.date(c.term.start)}.`, 'good', 5000);
       L.go(`/course/${c.id}`);
-    } catch (e) { W.error = e.message; L.render(); }
+    } catch (e) { W.busy = false; fail(e.message); if (btn) { btn.disabled = false; btn.textContent = W.fee && !W.paid ? `Sign and pay ${W.fee}` : 'Sign and enrol'; } return; }
     finally { W.busy = false; }
   };
 })(window.L);

@@ -301,12 +301,12 @@
   }
   const plan = (input) => plans(input).standard; // kept for tools that want one prospectus
 
-  async function enrol(prospectus, contract) {
+  async function enrol(prospectus, contract, entitlement = null) {
     if (prospectus.unavailable) throw new Error(prospectus.unavailable);
     if (!contract || !contract.signature || !contract.name) throw new Error('Enrolment needs a signed registration contract.');
     const no = contract.no || L.papers.contractNo();
-    const textHash = await L.sha256(L.papers.contractText(prospectus, L.S.student, no));
-    const c = Object.assign({}, prospectus, { id: L.uid('c'), createdAt: new Date(L.now()).toISOString(), state: 'enrolled', contract: { no, signedAt: new Date(L.now()).toISOString(), name: contract.name, signature: contract.signature, textHash } });
+    const textHash = await L.sha256(L.papers.contractText(prospectus, L.S.student, no, contract.fee));
+    const c = Object.assign({}, prospectus, { id: L.uid('c'), createdAt: new Date(L.now()).toISOString(), state: 'enrolled', contract: { no, signedAt: new Date(L.now()).toISOString(), name: contract.name, signature: contract.signature, textHash, fee: contract.fee || null }, entitlement: entitlement || null });
     const text = c.sourcesText; delete c.sourcesText;
     const files = c.sourceFiles || []; delete c.sourceFiles;
     // the record comes first; a storage failure for the material must never lose the enrolment
@@ -319,7 +319,7 @@
       catch (e) { console.error(e); const src = c.material.sources.find((x) => x.id === f.id); if (src) src.hasFile = false; problems.push(`the original of ${f.file.name || 'a file'}`); }
     }
     await L.ledger.append('contract_signed', { courseId: c.id, no, textHash, name: contract.name });
-    await L.ledger.append('enrolled', { courseId: c.id, code: c.code, title: c.title, weeks: c.term.weeks, start: c.term.start, end: c.term.end, hoursPerWeek: c.plan.hoursPerWeek, pace: c.plan.pace });
+    await L.ledger.append('enrolled', { courseId: c.id, code: c.code, title: c.title, weeks: c.term.weeks, start: c.term.start, end: c.term.end, hoursPerWeek: c.plan.hoursPerWeek, pace: c.plan.pace, fee: contract.fee || null, purchase: entitlement ? { platform: entitlement.platform, tx: entitlement.tx } : null });
     L.saveNow();
     if (problems.length && L.ui) L.ui.toast(`Enrolled, but this device could not store ${problems.join(' and ')}. Reading will use what is available.`, 'warn', 8000);
     return c;

@@ -375,7 +375,7 @@ const local = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.
 
   console.log('11b. the Library through a local Lyceum server');
   const { spawn } = require('child_process');
-  const api = spawn(process.execPath, ['index.js'], { cwd: path.join(root, 'server'), env: Object.assign({}, process.env, { TOKEN_SECRET: 'smoke', PORT: '4791', DB_PATH: path.join(root, 'server', 'data-smoke', 'l.sqlite'), LIBRARY_DIR: path.join(root, 'server', 'data-smoke', 'lib'), FREE_FACULTY: '1' }), stdio: 'ignore' });
+  const api = spawn(process.execPath, ['index.js'], { cwd: path.join(root, 'server'), env: Object.assign({}, process.env, { TOKEN_SECRET: 'smoke', PORT: '4791', DB_PATH: path.join(root, 'server', 'data-smoke', 'l.sqlite'), LIBRARY_DIR: path.join(root, 'server', 'data-smoke', 'lib'), FREE_FACULTY: '1', IAP_DEV_SECRET: 'smoke' }), stdio: 'ignore' });
   await sleep(900);
   await ctx.unroute(/^https?:\/\//);
   await ctx.route(/^https?:\/\//, (r) => (r.request().url().startsWith('http://127.0.0.1:4791/') ? r.continue() : r.abort()));
@@ -396,6 +396,41 @@ const local = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.
   const cover = await page.evaluate(() => { const p = window.__prospectus; const t = p.sourcesText; return { words: p.material.words, hasLicenceText: /START OF THE PROJECT GUTENBERG/.test(t), segs: p.material.segments.length }; });
   assert(cover.words > 30000 && !cover.hasLicenceText && cover.segs >= 5, `Gutenberg header stripped, text segmented (${cover.words} words, ${cover.segs} segments)`);
   await page.click('[data-act=enrol-discard]');
+
+  console.log('11c. paid enrolment: the fee on the contract, the purchase settled by the server, the entitlement on the course');
+  await page.evaluate(() => { L.S.settings.iapDevSecret = 'smoke'; L.saveNow(); });
+  await page.goto(file + '?debug=1#/enrol?sample=1');
+  await page.waitForSelector('.paces', { timeout: 60000 });
+  assert(await page.evaluate(() => L.store.required()), 'a server that issues entitlements makes the enrolment a purchase');
+  await page.click('[data-act=choose-pace][data-pace=standard]');
+  await page.waitForSelector('.prospectus', { timeout: 10000 });
+  await page.click('[data-act=enrol-confirm]');
+  await page.waitForSelector('#signature-pad', { timeout: 10000 });
+  const sheetText = await page.evaluate(() => document.querySelector('.sheet').innerText);
+  const payBtn = await page.evaluate(() => document.querySelector('[data-act=sign-enrol]').textContent);
+  assert(/Fee\s+TEST/i.test(sheetText) && /Sign and pay TEST/.test(payBtn), `the contract shows the store price and the button says so (${payBtn})`);
+  // the purchase goes through but the server cannot be reached afterwards: the enrolment waits, nothing is lost
+  const before = consoleErrors.length;
+  await ctx.unroute(/^https?:\/\//); await ctx.route(/^https?:\/\//, (r) => (r.request().url().includes('/v1/iap/verify') ? r.abort() : r.request().url().startsWith('http://127.0.0.1:4791/') ? r.continue() : r.abort()));
+  await signContract(page, 'Ada Lovelace');
+  await page.waitForSelector('#contract-error', { timeout: 15000 });
+  assert(/could not be reached/.test(await page.evaluate(() => document.querySelector('#contract-error').innerText)), 'a server outage after signing shows an error and keeps the signature');
+  assert(await page.evaluate(() => L.S.courses.every((c) => !c.entitlement) && !!document.querySelector('#signature-pad')), 'no course was written and the contract is still on screen');
+  consoleErrors.splice(before); // the browser logs the aborted request; it was the point
+  await ctx.unroute(/^https?:\/\//); await ctx.route(/^https?:\/\//, (r) => (r.request().url().startsWith('http://127.0.0.1:4791/') ? r.continue() : r.abort()));
+  await page.click('[data-act=sign-enrol]');
+  await page.waitForSelector('.course-head, .page-head h1', { timeout: 20000 });
+  await sleep(300);
+  const paid = await page.evaluate(() => { const c = L.S.courses[L.S.courses.length - 1]; const led = L.S.ledger.filter((e) => e.type === 'enrolled').pop(); return { ent: c.entitlement, fee: c.contract.fee, ledgerFee: led && led.detail && led.detail.fee, purchase: led && led.detail && led.detail.purchase, pending: L.store.pending().length, device: L.S.device }; });
+  assert(paid.ent && /^[\w-]+\.[\w-]+\.[\w-]+$/.test(paid.ent.token) && paid.ent.platform === 'dev', `the course carries a server entitlement token (${paid.ent && paid.ent.platform})`);
+  assert(paid.fee === 'TEST' && paid.ledgerFee === 'TEST' && paid.purchase && paid.purchase.platform === 'dev', 'the contract and the ledger record the fee and the purchase');
+  assert(paid.pending === 0 && typeof paid.device === 'string', 'nothing is left pending; the device has an id');
+  const signed = await page.evaluate(() => { const c = L.S.courses[L.S.courses.length - 1]; L.go('/contract/' + c.id); return c.id; });
+  await page.waitForSelector('.sheet', { timeout: 10000 });
+  assert(/Fee\s+TEST/i.test(await page.evaluate(() => document.querySelector('.sheet').innerText)), 'the signed contract shows the fee');
+  await page.evaluate((id) => L.registrar.withdraw(id), signed).catch(() => null);
+  await page.evaluate(() => { L.S.settings.iapDevSecret = ''; L.saveNow(); });
+
   await ctx.unroute(/^https?:\/\//); await ctx.route(/^https?:\/\//, (r) => r.abort());
   await page.evaluate(() => { L.S.settings.apiBase = ''; L.saveNow(); });
   api.kill(); fs.rmSync(path.join(root, 'server', 'data-smoke'), { recursive: true, force: true });
@@ -432,9 +467,10 @@ const local = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.
 
   console.log('13. phone layout');
   await page.setViewportSize({ width: 390, height: 844 });
-  for (const r of ['#/today', `#/course/${pdfCourse.id}?tab=plan`, `#/course/${pdfCourse.id}?tab=assessments`, '#/calendar', `#/assess/${course.id}/${quiz1.id}`, '#/record', '#/stats', `#/certificate/${passed.id}`, `#/contract/${passed.id}`]) {
+  for (const r of ['#/today', `#/course/${pdfCourse.id}?tab=plan`, `#/course/${pdfCourse.id}?tab=assessments`, '#/calendar', `#/assess/${course.id}/${quiz1.id}`, '#/record', '#/stats', `#/certificate/${passed.id}`, `#/contract/${passed.id}`, `#/course/${pdfCourse.id}/day/${pdfCourse.sessions[0].date}`]) {
     await page.goto(file + '?debug=1' + r); await sleep(350);
-    const ov = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    // scrollWidth misses content clipped by an overflow:hidden ancestor, so every box is measured too
+    const ov = await page.evaluate(() => { let worst = document.documentElement.scrollWidth - document.documentElement.clientWidth; document.querySelectorAll('.page *').forEach((el) => { const r = el.getBoundingClientRect(); if (r.width <= 20 || r.right <= window.innerWidth + 1) return; for (let a = el; a && a !== document.body; a = a.parentElement) { const o = getComputedStyle(a).overflowX; if (o === 'auto' || o === 'scroll') return; } worst = Math.max(worst, Math.round(r.right - window.innerWidth)); }); return worst; });
     assert(ov <= 0, `phone ${r} has no horizontal overflow (${ov}px)`);
   }
   const tabbar = await page.evaluate(() => getComputedStyle(document.querySelector('.rail')).position);

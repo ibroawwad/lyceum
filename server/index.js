@@ -89,7 +89,7 @@ async function iapVerify(req, res, body) {
   const { platform, productId, courseHash, device } = body;
   if (!courseHash || !device) return json(res, 400, { error: 'courseHash and device required' });
   let v;
-  if (platform === 'ios') v = await iap.apple({ receipt: body.receipt, productId });
+  if (platform === 'ios') v = await iap.apple({ receipt: body.receipt, jws: body.jws, productId });
   else if (platform === 'android') v = await iap.google({ purchaseToken: body.purchaseToken, productId });
   else if (platform === 'dev' && DEV_SECRET && body.secret === DEV_SECRET) v = { ok: true, tx: 'dev:' + sha(courseHash + device).slice(0, 24) };
   else return json(res, 400, { error: 'unknown platform' });
@@ -146,7 +146,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
   const url = new URL(req.url, 'http://x');
   try {
-    if (url.pathname === '/health') return json(res, 200, { ok: true, faculty: !!OPENROUTER_KEY, entitlements: !!SECRET, apple: !!process.env.APPLE_SHARED_SECRET, google: !!process.env.GOOGLE_SERVICE_ACCOUNT_JSON, free: FREE_FACULTY });
+    if (url.pathname === '/health') return json(res, 200, { ok: true, faculty: !!OPENROUTER_KEY, entitlements: !!SECRET, apple: true, google: !!process.env.GOOGLE_SERVICE_ACCOUNT_JSON, free: FREE_FACULTY });
     if (req.method === 'GET' && url.pathname === '/v1/library') return library(res);
     const lp = url.pathname.match(/^\/v1\/library\/([a-z0-9-]+)\/pack$/); if (req.method === 'GET' && lp) return libraryPack(req, res, lp[1]);
     const lg = url.pathname.match(/^\/v1\/library\/([a-z0-9-]+)\/pages\/(\d+)-(\d+)$/); if (req.method === 'GET' && lg) return libraryPages(req, res, lg[1], lg[2], lg[3]);

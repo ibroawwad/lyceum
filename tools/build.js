@@ -6,7 +6,7 @@ const root = path.join(__dirname, '..');
 const src = (f) => path.join(root, 'src', f);
 const read = (f) => fs.readFileSync(src(f), 'utf8');
 
-const ORDER = ['core.js', 'native.js', 'sample.js', 'intake.js', 'faculty.js', 'registrar.js', 'papers.js',
+const ORDER = ['core.js', 'native.js', 'sample.js', 'intake.js', 'faculty.js', 'registrar.js', 'papers.js', 'store.js',
   'views-shell.js', 'views-course.js', 'views-misc.js', 'views-enrol.js', 'library.js'];
 
 let html = read('shell.html');
@@ -22,6 +22,8 @@ html = html.replace('/* STYLES */', () => read('styles.css'));
 const js = ORDER.filter((f) => fs.existsSync(src(f))).map((f) => `\n/* ---- ${f} ---- */\n${read(f)}`).join('\n');
 if (js.includes('</script>')) throw new Error('a JS module contains "</script>" — split the string');
 html = html.replace('/* SCRIPTS */', () => js);
+// the server the native apps talk to, baked in at build time: LYCEUM_API=https://api.example.com npm run build
+html = html.replace('/* API_BASE */', () => String(process.env.LYCEUM_API || '').replace(/['\\]/g, ''));
 fs.mkdirSync(path.join(root, 'dist'), { recursive: true });
 fs.writeFileSync(path.join(root, 'dist', 'lyceum.html'), html);
 fs.writeFileSync(path.join(root, 'dist', 'index.html'), html); // hosting + Capacitor expect index.html

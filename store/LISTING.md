@@ -1,0 +1,75 @@
+# Lyceum — store listing
+
+Everything below is ready to paste. Placeholders in **[brackets]** need your side (domain, legal name, price).
+
+## Identity
+| | |
+|---|---|
+| Name | Lyceum |
+| Subtitle (iOS, ≤30) | Any material, a real course |
+| Short description (Play, ≤80) | Turn any study material into a real course: a fixed term, daily blocks, graded papers. |
+| Bundle id / package | `com.lyceum.app` |
+| Category | Education |
+| Age rating | 4+ / Everyone (no user-generated public content, no web browsing, no ads) |
+| Price | Free app · one in-app product |
+| Support URL | https://ibroawwad.github.io/lyceum/ (or **[your domain]**) |
+| Privacy policy | https://ibroawwad.github.io/lyceum/privacy.html |
+| Terms | https://ibroawwad.github.io/lyceum/terms.html |
+| Copyright | © 2026 **[legal name]** |
+
+## In-app product (create identically on both stores)
+| | |
+|---|---|
+| Product id | `com.lyceum.app.course` |
+| Type | Consumable (Apple) · One-time product, consumable (Play) |
+| Reference name | Course enrolment |
+| Display name | Course enrolment |
+| Description | Enrols one course: written papers set and graded by the faculty, and a registered certificate. |
+| Price | **[Tier — e.g. $4.99]** |
+
+The app shows the store's own name and price (fetched at signing); nothing is hard-coded. Purchases are verified
+server-side (Apple StoreKit 2 signed transactions; Google Play Developer API) before an entitlement is issued.
+
+## Description (both stores)
+Lyceum turns whatever you need to learn — a textbook PDF, lecture notes, a web page, a chapter — into a real university course, with the discipline you would get on campus and cannot give yourself.
+
+The registrar reads your material and writes the term: a fixed start and end, a study block every weekday, quizzes on Fridays, problem sets, a midterm, a project and a final. You choose the pace — condensed, standard or extended — sign the registration contract, and from then on the calendar is not yours to change. Papers open and close on time. Missed work is a zero. Late work costs marks. The term ends when it ends.
+
+Every day is bite-sized: two to five short chunks with the original pages in front of you, a quick check before a reading counts, and a tile grid that fills in as you keep the streak. Grades are real, letter and GPA. Pass at 70% and Lyceum issues a certificate with a verification code.
+
+The Library carries open-access textbooks and classics — OpenStax courses, Euclid, Darwin, Marcus Aurelius — ready to enrol.
+
+• Any material: PDF, DOCX, Markdown, text, a URL
+• Three pacings: 120, 60 or 30 minutes a day
+• A binding calendar: quizzes, problem sets, midterm, project, final
+• Original pages, not extracted text, with a text toggle
+• Quick checks, streaks and a study grid
+• Letter grades, GPA, a permanent tamper-evident record
+• A signed contract at enrolment and a certificate at the end
+• Reminders for study blocks, paper openings and deadlines
+• Works offline; your record lives on your device and in your Files
+
+Lyceum is an independent study tool, not an accredited institution. Certificates confer no academic credit. The app is free; each course enrolment is a one-time purchase that unlocks written papers graded by the faculty and a registered certificate.
+
+## Keywords (iOS, ≤100 chars)
+study,course,textbook,syllabus,exam,quiz,streak,planner,learning,pdf,habit,certificate,university
+
+## What's new (2.0.0)
+First release.
+
+## App Privacy (App Store Connect) / Data safety (Play)
+Data collected, not linked to identity, not used for tracking:
+- **User content** — the study material and answers you submit are sent to the Lyceum server only when the faculty writes or grades a paper (paid courses). Used for app functionality; not stored beyond the paper cache.
+- **Purchase history** — the store's transaction id, kept on the server to issue the course entitlement.
+- **Other** — a certificate you earn is registered (number, name you typed, course, grade) so it can be verified publicly at the verification link.
+No tracking, no advertising, no analytics SDKs, no third-party sharing. Data can be deleted by erasing the device record (More → Erase) and by request at **[support email]**.
+
+## Review notes (App Review / Play)
+Lyceum works fully offline; the sample course exercises every screen:
+1. Open the app, type a name, then tap “Try the sample” on the Today screen.
+2. Choose the standard pace, read the prospectus, sign the contract (draw a signature, type the name), enrol.
+3. Today shows the daily block; Courses shows the tile grid; Calendar the term; Stats the streak.
+The in-app purchase appears at the contract step when the app is connected to the Lyceum server (**[api domain]**). In sandbox, a purchase unlocks the faculty for that course; without a purchase the offline examiner sets and grades every paper, so no feature is blocked behind the purchase except faculty-written papers and the registered certificate.
+
+## Screenshots
+Generated by `node tools/shots.js` into `store/screenshots/` (iOS 6.9″ 1320×2868, iOS 6.5″ 1284×2778, Android 1080×1920) plus `store/feature-graphic.png` (1024×500). Upload in this order: Today, Day, Course, Courses, Calendar, Paces, Prospectus, Stats, Assessment.

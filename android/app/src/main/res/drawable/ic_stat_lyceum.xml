@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- status-bar icon for local notifications: a white temple silhouette on transparent, as Android requires -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+  <path android:fillColor="#FFFFFFFF" android:pathData="M12,2.5 L22,8.5 L2,8.5 Z" />
+  <path android:fillColor="#FFFFFFFF" android:pathData="M3,9.5 h18 v1.6 h-18 Z" />
+  <path android:fillColor="#FFFFFFFF" android:pathData="M4,12 h2 v7 h-2 Z M9,12 h2 v7 h-2 Z M13,12 h2 v7 h-2 Z M18,12 h2 v7 h-2 Z" />
+  <path android:fillColor="#FFFFFFFF" android:pathData="M3,19.8 h18 v1.7 h-18 Z" />
+</vector>

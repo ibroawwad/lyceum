@@ -568,6 +568,19 @@ A `read` chunk cannot be ticked directly: `complete()` returns `'needs_check'` u
 ### 9.2 Native bridge (`src/native.js`)
 `L.native` wraps Capacitor when present (no-ops on the web): the record is mirrored to `Documents/lyceum/record.json` and restored at boot if newer; materials/originals are mirrored as files; local notifications are re-planned from the schedule on every save (study block, paper opens, due −3 h, exam morning; ≤ 60 pending); haptics on ticks; native share for the certificate PNG.
 
+### 9.3 Purchases (`src/store.js`)
+`L.store` sells one consumable product, `com.lyceum.app.course`, through `@capgo/native-purchases` inside the
+native apps. `required()` is true only when a server is configured, it issues entitlements (`/health.entitlements`)
+and is not running the free pilot (`/health.free`) — or when a developer secret is set (debug settings) to exercise
+the path on the web against a test server. The contract step shows the store's own price (`price()` →
+`priceString`, never hard-coded) and the button reads “Sign and pay …”; `buy(prospectus)` runs after the signature
+is valid and before the record is written: store sheet → receipt (Apple JWS / Play purchase token) →
+`POST /v1/iap/verify` → `{ token }` → `enrol(p, contract, entitlement)` stores `course.entitlement =
+{ token, tx, platform, productId, courseHash, sandbox, at }`, `course.contract.fee` and the ledger `enrolled` entry
+carries `fee` + `purchase`. A receipt the server could not confirm is kept in `S.pendingPurchases` and settled on the
+next attempt for any course (the server has never seen it), so a student is never charged twice. `S.device` is a
+random id every entitlement is bound to. The web build charges nothing.
+
 ### 10.1 Test hooks (binding — the smoke test uses exactly these)
 - welcome: `<input id="student-name">`, button `[data-act=matriculate]`.
 - today: `.empty` when there are no courses (with `[data-act=load-sample]`), `.today-grid` otherwise.
@@ -575,7 +588,9 @@ A `read` chunk cannot be ticked directly: `complete()` returns `'needs_check'` u
   submits to the registrar automatically, landing on the prospectus.
 - enrol: while a prospectus is displayed, `window.__prospectus` holds the Prospectus object
   (debug aid, harmless); `[data-act=enrol-confirm]` opens the contract step: `.sheet.contract`, `<canvas id="signature-pad">`,
-  `<input id="contract-name">`, `[data-act=sign-enrol]`; `[data-act=enrol-discard]` abandons.
+  `<input id="contract-name">`, `[data-act=sign-enrol]` (labelled “Sign and pay <price>” when `L.store.required()`);
+  a failed purchase or enrolment renders `#contract-error` in place without re-rendering (the signature stays);
+  `[data-act=enrol-discard]` abandons.
 - modals: `L.ui.confirm` renders `.modal` with `[data-act=modal-ok]` and `[data-act=modal-cancel]`.
 - course page: `.syllabus` present on the syllabus tab.
 - assess: before-state has `<input type="checkbox" id="pledge">` and `[data-act=begin]` (disabled

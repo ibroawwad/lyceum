@@ -153,6 +153,9 @@
               <div class="field"><label for="api-key">OpenRouter key</label><input id="api-key" class="input mono" type="password" autocomplete="off" value="${esc(s.apiKey)}" data-in="api-key" placeholder="sk-or-v1-…"><span class="hint">Stored only in this browser. With no key, papers are set and graded by the offline examiner.</span></div>
               <div class="field"><label for="model">Preferred model</label><input id="model" class="input mono" list="model-list" value="${esc(s.model)}" data-in="model"><datalist id="model-list">${models.map((m) => `<option value="${esc(m)}">`).join('')}</datalist><span class="hint">Falls back through ${L.faculty.MODELS.length} models, then to the offline examiner.</span></div>
               <div class="cols"><button class="btn" data-act="test-faculty">Test connection</button><span class="small muted" id="faculty-test"></span></div>
+              <div class="divider"></div>
+              <div class="field"><label for="api-base">Lyceum server</label><input id="api-base" class="input mono" autocomplete="off" spellcheck="false" value="${esc(s.apiBase)}" data-in="api-base" placeholder="${esc(L.API_BASE || 'https://api.…')}"><span class="hint">${serverHint()}</span></div>
+              ${L.debug ? `<div class="field"><label for="iap-dev">Developer enrolment secret</label><input id="iap-dev" class="input mono" type="password" autocomplete="off" value="${esc(s.iapDevSecret || '')}" data-in="iap-dev" placeholder="matches IAP_DEV_SECRET on a test server"><span class="hint">Runs the paid-enrolment path without a store. ${L.store.pending().length ? `${L.store.pending().length} purchase(s) waiting for the server.` : ''}</span></div>` : ''}
             </div></div>
             <div class="card"><div class="card-head"><h2>Study budget</h2></div><div class="card-body"><div class="field"><label for="weekly-hours">Hours per week you can give to coursework</label><div class="cols"><input id="weekly-hours" class="input num" type="number" min="4" max="40" step="1" value="${s.weeklyHours}" data-in="weekly-hours" style="width:110px"><span class="small muted">Applies to future enrolments. The registrar refuses a course that would exceed it.</span></div></div></div></div>
             <div class="card"><div class="card-head"><h2>Appearance</h2></div><div class="card-body"><div class="switch" role="group" aria-label="Theme">${['dark', 'light', 'system'].map((t) => `<button data-act="theme" data-theme="${t}" aria-pressed="${s.theme === t}">${t.charAt(0).toUpperCase() + t.slice(1)}</button>`).join('')}</div></div></div>
@@ -175,6 +178,14 @@
     },
   };
   L.inputs['api-key'] = (el) => { L.S.settings.apiKey = el.value.trim(); L.save(); };
+  function serverHint() {
+    const h = L.serverHealth; const base = (L.S.settings.apiBase || L.API_BASE || '').trim();
+    if (!base) return 'Serves the Library, the faculty proxy and certificate verification. Leave empty to work alone.';
+    if (!h) return 'Checking…';
+    if (!h.ok) return 'Not reachable right now.';
+    return `Connected · faculty ${h.faculty ? 'on' : 'off'} · ${h.free ? 'free pilot' : h.entitlements ? 'paid enrolments' : 'no entitlements'}`;
+  }
+  L.inputs['iap-dev'] = (el) => { L.S.settings.iapDevSecret = el.value.trim(); L.save(); };
   L.inputs['api-base'] = (el) => { L.S.settings.apiBase = el.value.trim().replace(/\/$/, ''); L.save(); L.faculty.probe().then(() => L.render()); };
   L.inputs.model = (el) => { L.S.settings.model = el.value.trim(); L.save(); };
   L.inputs['weekly-hours'] = (el) => { const v = L.clamp(Math.round(Number(el.value) || 12), 4, 40); L.S.settings.weeklyHours = v; L.save(); };

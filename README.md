@@ -28,9 +28,12 @@ Legal pages live in `legal/` and are served next to the app.
 Build from source: `npm run build`. Test: `npm test` (headless Chrome) and `npm run check` (node checks).
 Contract: `SPEC.md`.
 
-**Native wrapper (Capacitor):** `android/` and `ios/` are generated Capacitor projects around the same
-`dist/`. `npm run mobile:android` opens Android Studio; `npm run mobile:ios` needs Xcode + CocoaPods
-(`pod install` in `ios/App` once Xcode is installed — this machine only had the command-line tools).
+**Native apps (Capacitor 8):** `android/` and `ios/` (Swift Package Manager, no CocoaPods) wrap the same `dist/`.
+`LYCEUM_API=https://api.<domain> npm run mobile:sync` builds with the server baked in; `npm run mobile:ios` /
+`npm run mobile:android` open Xcode / Android Studio. Icons and splash screens come from `assets/` via
+`npx capacitor-assets generate`. The app is free; each course enrolment is a one-time in-app purchase
+(`com.lyceum.app.course`) verified by the server, which unlocks the faculty and a registered certificate for that
+course. Store copy, screenshots (`node tools/shots.js`) and the release runbook live in `store/`.
 
 ## Library
 `server/library.json` is the catalogue (23 titles to start: OpenStax CC BY editions and public-domain classics from

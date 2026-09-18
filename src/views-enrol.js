@@ -65,10 +65,10 @@
       const body = W.step === 1 ? materialStep()
         : W.step === 2 ? (W.plans ? paceCards() : `<div class="card"><div class="card-body"><div class="log" id="registrar-log">${W.log.map((l) => `<div>${esc(l)}</div>`).join('')}</div>${W.error ? `<div class="notice mt-2" data-kind="bad"><span>${esc(W.error)}</span></div><div class="cols mt-2"><button class="btn" data-act="enrol-back">Back to material</button></div>` : ''}</div></div>`)
         : W.step === 3 && W.prospectus ? prospectus(W.prospectus)
-        : W.step === 4 && W.prospectus ? `<div class="sheet-viewport">${L.papers.contractSheet(W.prospectus, L.S.student, { no: W.contractNo, forSigning: true })}</div>
+        : W.step === 4 && W.prospectus ? `<div class="sheet-viewport">${L.papers.contractSheet(W.prospectus, L.S.student, { no: W.contractNo, fee: W.fee, forSigning: true })}</div>
             ${W.error ? `<div class="notice mt-2" data-kind="bad"><span>${esc(W.error)}</span></div>` : ''}
-            <div class="cols mt-3"><button class="btn btn-primary" data-act="sign-enrol">Sign and enrol</button><button class="btn btn-quiet" data-act="enrol-prospectus">Back</button></div>
-            <p class="small muted mt-2">Draw your signature in the box and type your full name as it appears on your record. Signing enrols you; the schedule is then fixed.</p>` : '';
+            <div class="cols mt-3"><button class="btn btn-primary" data-act="sign-enrol"${W.busy ? ' disabled' : ''}>${W.fee && !W.paid ? `Sign and pay ${esc(W.fee)}` : 'Sign and enrol'}</button><button class="btn btn-quiet" data-act="enrol-prospectus">Back</button></div>
+            <p class="small muted mt-2">Draw your signature in the box and type your full name as it appears on your record. ${W.fee && !W.paid ? `Signing opens the store's payment sheet for the ${esc(W.fee)} enrolment fee; the schedule is then fixed.` : 'Signing enrols you; the schedule is then fixed.'}</p>` : '';
       const h1 = W.step === 4 ? 'Registration contract' : W.step === 3 ? 'Prospectus' : W.step === 2 && W.plans ? 'Choose a pace' : 'Add a course';
       const lede = W.step === 1 ? 'Add the material. It comes back as a course with a fixed term and a daily block.' : W.step === 4 ? 'Read it, sign it, and the term begins.' : W.step === 3 ? 'Enrolling makes these terms binding.' : W.plans ? 'Three pacings. Pick one.' : 'Reading your material…';
       return `<div class="page"><div class="page-head"><div><h1 class="display">${h1}</h1><p class="lede">${lede}</p></div></div>${steps()}${body}</div>`;
@@ -170,8 +170,11 @@
       W.error = e.message || 'The registrar could not schedule this material.';
     } finally { W.busy = false; L.render(); }
   };
-  L.actions['enrol-confirm'] = () => {
-    if (!W.prospectus) return;
+  // the store's price is fetched before the contract is shown, so the sheet renders once and a drawn signature is never wiped
+  L.actions['enrol-confirm'] = async () => {
+    if (!W.prospectus || W.busy) return;
+    W.fee = null; W.paid = null;
+    if (L.store.required()) { W.busy = true; L.render(); try { const pr = await L.store.price(); W.fee = pr ? pr.priceString : null; } catch (e) { W.fee = null; } W.busy = false; }
     W.contractNo = L.papers.contractNo(); W.error = null; W.step = 4; L.render();
   };
   L.actions['enrol-prospectus'] = () => { W.step = 3; W.error = null; L.render(); };
@@ -188,12 +191,15 @@
     const signature = pad.dataUrl();
     if (!signature) { fail('Draw your signature in the box.'); return; }
     W.busy = true;
+    const btn = document.querySelector('[data-act=sign-enrol]'); if (btn) { btn.disabled = true; btn.textContent = W.fee && !W.paid ? 'Waiting for the store…' : 'Enrolling…'; }
     try {
-      const c = await R().enrol(p, { no: W.contractNo, name: typed, signature });
-      W.step = 1; W.sources = []; W.hint = ''; W.plans = null; W.prospectus = null; W.log = []; W.sampleLoaded = false; W.error = null;
+      // the fee is paid once; a purchase that already went through (server unreachable afterwards) is settled, not repeated
+      if (L.store.required() && !W.paid) W.paid = await L.store.buy(p);
+      const c = await R().enrol(p, { no: W.contractNo, name: typed, signature, fee: W.fee || null }, W.paid || null);
+      W.step = 1; W.sources = []; W.hint = ''; W.plans = null; W.prospectus = null; W.log = []; W.sampleLoaded = false; W.error = null; W.fee = null; W.paid = null;
       L.ui.toast(`Enrolled in ${c.code}. Term begins ${L.fmt.date(c.term.start)}.`, 'good', 5000);
       L.go(`/course/${c.id}`);
-    } catch (e) { W.error = e.message; L.render(); }
+    } catch (e) { W.busy = false; fail(e.message); if (btn) { btn.disabled = false; btn.textContent = W.fee && !W.paid ? `Sign and pay ${W.fee}` : 'Sign and enrol'; } return; }
     finally { W.busy = false; }
   };
 })(window.L);

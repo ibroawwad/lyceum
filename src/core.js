@@ -36,7 +36,7 @@ window.L = window.L || {};
     return {
       version: L.VERSION,
       student: null,
-      settings: { apiKey: '', apiBase: '', model: 'anthropic/claude-fable-5.1', weeklyHours: 12, theme: 'dark' },
+      settings: { apiKey: '', apiBase: '', iapDevSecret: '', model: 'anthropic/claude-fable-5.1', weeklyHours: 12, theme: 'dark' },
       clock: { offsetMs: 0 },
       courses: [],
       ledger: [],
@@ -56,6 +56,8 @@ window.L = window.L || {};
       return ok;
     });
     out.ledger = Array.isArray(s?.ledger) ? s.ledger : [];
+    out.device = typeof s?.device === 'string' ? s.device : null;
+    out.pendingPurchases = Array.isArray(s?.pendingPurchases) ? s.pendingPurchases : [];
     out.version = L.VERSION;
     return out;
   }
@@ -88,6 +90,7 @@ window.L = window.L || {};
   };
 
   // ---------- clock ----------
+  L.API_BASE = typeof window.LYCEUM_API === 'string' ? window.LYCEUM_API.trim().replace(/\/$/, '') : '';
   L.debug = (() => { try { return new URLSearchParams(location.search).has('debug'); } catch (e) { return false; } })();
   L.now = () => Date.now() + (L.S?.clock?.offsetMs || 0);
   L.today = () => L.date.startOfDay(new Date(L.now()));

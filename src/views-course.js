@@ -204,7 +204,7 @@
     render(p) {
       const c = R().course(p.id); if (!c || !c.contract) return notFound('Contract');
       return `<div class="page"><div class="page-head"><div><span class="eyebrow"><a href="#/course/${c.id}" class="code" style="--ch:${L.cc(c)}">${esc(c.code)}</a></span><h1 class="display">Registration contract</h1><p class="lede">Signed ${L.fmt.dt(c.contract.signedAt)} · ${esc(c.contract.no)}</p></div><div class="actions"><button class="btn" data-act="print">Print / Save PDF</button></div></div>
-        <div class="sheet-viewport">${L.papers.contractSheet(c, L.S.student, { no: c.contract.no, signedAt: c.contract.signedAt, signature: c.contract.signature, name: c.contract.name })}</div>
+        <div class="sheet-viewport">${L.papers.contractSheet(c, L.S.student, { no: c.contract.no, signedAt: c.contract.signedAt, signature: c.contract.signature, name: c.contract.name, fee: c.contract.fee })}</div>
         <p class="small muted mt-2 mono">Text hash ${esc(c.contract.textHash.slice(0, 16))}… · recorded in the ledger as contract_signed.</p></div>`;
     },
   };

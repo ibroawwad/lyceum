@@ -20,7 +20,7 @@
   // ---------- contract ----------
   const contractNo = () => `LYC-C-${new Date(L.now()).getFullYear()}-${String(L.S.courses.filter((c) => c.contract).length + 1).padStart(4, '0')}`;
   // the canonical text that gets hashed; the sheet renders the same facts
-  function contractText(p, student, no) {
+  function contractText(p, student, no, fee) {
     const lines = [
       `REGISTRATION CONTRACT ${no}`,
       `Student: ${student.name} (${student.id})`,
@@ -28,6 +28,7 @@
       `Term: ${p.term.start} to ${p.term.end} (${p.term.weeks} weeks)`,
       `Pace: ${p.plan.paceLabel}, ${p.plan.minutesPerDay} minutes a day, ${DAYS_LABEL(p)}, ${p.plan.hoursPerWeek} hours a week`,
       `Credits: ${p.credits}`,
+      `Fee: ${fee || 'none'}`,
       `Withdrawal deadline: ${p.policy.withdrawBefore}`,
       `Late policy: -${p.policy.late.perDayPct}% per day for at most ${p.policy.late.maxDays} days; examinations have no late window`,
       `Weights: ${Object.entries(p.policy.weights).map(([k, w]) => `${k} ${w}%`).join(', ')}`,
@@ -40,7 +41,7 @@
     'One attempt per paper, within its window; an unsubmitted paper is a zero.',
     'Every paper is the Student\u2019s own work; the record is permanent; withdrawal only before the deadline above.',
   ];
-  function contractSheet(p, student, { no, signedAt, signature, name, forSigning = false } = {}) {
+  function contractSheet(p, student, { no, signedAt, signature, name, fee, forSigning = false } = {}) {
     const date = signedAt ? new Date(signedAt) : new Date(L.now());
     const count = (k) => p.assessments.filter((a) => a.kind === k).length;
     const exam = (k) => { const a = p.assessments.find((x) => x.kind === k); return a ? `${L.fmt.date(a.opensAt)} ${L.fmt.time(a.opensAt)}–${L.fmt.time(a.dueAt)}` : null; };
@@ -61,6 +62,7 @@
         <tr><th>Pace</th><td>${esc(p.plan.paceLabel)} · ${p.plan.minutesPerDay} min a day, ${DAYS_LABEL(p)}</td></tr>
         <tr><th>Papers</th><td>${papers.map(esc).join('; ')}.</td></tr>
         <tr><th>Weights</th><td>${esc(weights)}</td></tr>
+        ${fee ? `<tr><th>Fee</th><td>${esc(fee)} · one enrolment, charged by the store at signature</td></tr>` : ''}
         <tr><th>Withdraw by</th><td>${L.fmt.date(L.date.addDays(L.date.parse(p.policy.withdrawBefore), -1))}</td></tr>
       </tbody></table>
       <ol class="sheet-clauses">${CLAUSES.map((c) => `<li>${esc(c)}</li>`).join('')}</ol>

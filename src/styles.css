@@ -148,7 +148,8 @@ body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: 
 .empty h2 { font-size: 20px; margin-bottom: 8px; }
 .empty p { color: var(--text-2); max-width: 52ch; }
 .today-grid { display: flex; flex-direction: column; gap: 12px; }
-.reading-layout { display: grid; grid-template-columns: 1fr; gap: 20px; }
+.reading-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
+.reading-layout > * { min-width: 0; } /* a long chunk line must shrink, not widen the day view past the phone */
 .reading-side { display: flex; flex-direction: column; gap: 12px; }
 @media (max-width: 1023px) { .reading-side { order: -1; } } /* on a phone the checklist comes before the pages */
 
