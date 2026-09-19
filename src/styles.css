@@ -106,7 +106,7 @@ button { cursor: pointer; }
 /* ---------- logo ---------- */
 .logo { display: inline-flex; align-items: center; gap: 10px; color: var(--text); font-weight: 700; font-size: 18px; letter-spacing: -0.01em; }
 .logo svg { width: 30px; height: 30px; flex: none; color: var(--text); }
-.logo .mark-img { width: 30px; height: 30px; flex: none; border-radius: 22%; }
+.logo .mark-img { width: 30px; height: 30px; flex: none; }
 .logo.is-big .mark-img { width: 72px; height: 72px; }
 
 /* ---------- layout: phone-first, tab bar; desktop gets a slim rail ---------- */

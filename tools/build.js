@@ -22,6 +22,9 @@ html = html.replace('/* STYLES */', () => read('styles.css'));
 const js = ORDER.filter((f) => fs.existsSync(src(f))).map((f) => `\n/* ---- ${f} ---- */\n${read(f)}`).join('\n');
 if (js.includes('</script>')) throw new Error('a JS module contains "</script>" — split the string');
 html = html.replace('/* SCRIPTS */', () => js);
+// favicon and home-screen icon come from the same files as the app icon, so a new mark never leaves a stale bookmark
+const dataPng = (f) => 'data:image/png;base64,' + fs.readFileSync(src(f)).toString('base64');
+html = html.replace('/* ICON_64 */', () => dataPng('icon-64.png')).replace('/* ICON_180 */', () => dataPng('icon-180.png'));
 // the server the native apps talk to, baked in at build time: LYCEUM_API=https://api.example.com npm run build
 html = html.replace('/* API_BASE */', () => String(process.env.LYCEUM_API || '').replace(/['\\]/g, ''));
 fs.mkdirSync(path.join(root, 'dist'), { recursive: true });
