@@ -225,6 +225,22 @@
     const sessions = [];
     let dayIndex = 0;
     let prevTitles = [];
+    // spaced review: what was read n study days ago comes back at expanding intervals (1, 3, 7, 21 days). Each day
+    // reviews yesterday's reading and the oldest reading that is due, so nothing studied is seen only once.
+    const readLog = []; // per study day: the read chunks of that day
+    const INTERVALS = [1, 3, 7, 21];
+    const reviewsFor = (n, clean) => {
+      const out = [];
+      for (const d of [1, ...INTERVALS.slice(1).reverse()]) {
+        const past = readLog[n - d]; if (!past || !past.length) continue;
+        const r = past[0];
+        out.push({ id: L.uid('k'), kind: 'review', title: `Review · ${clean(r.title)}`, hint: d === 1 ? 'Recall yesterday\'s key ideas without looking, then check them against the pages.' : `Read ${d} days ago. Say what you remember first; reread only what is gone.`, minutes: d === 1 ? 6 : 8, ago: d, segment: r.segment, from: r.from, to: r.to, pages: r.pages, source: r.source, done: null });
+        if (out.length === 2) break;
+      }
+      // a day with nothing due still recalls the latest reading, so no block is ever practice alone
+      if (!out.length && n > 0) { for (let i = n - 1; i >= 0; i--) { const past = readLog[i]; if (past && past.length) { const r = past[0]; const d = n - i; out.push({ id: L.uid('k'), kind: 'review', title: `Review · ${clean(r.title)}`, hint: `Read ${d} day${d === 1 ? '' : 's'} ago. Say what you remember first; reread only what is gone.`, minutes: 6, ago: d, segment: r.segment, from: r.from, to: r.to, pages: r.pages, source: r.source, done: null }); break; } } }
+      return out;
+    };
     for (const w of weeksOut) {
       const reading = w.segments.filter((i) => (segments[i].role || 'body') === 'body').flatMap((i) => chunkSegment(text, segments[i], maxMin).map((p) => Object.assign(p, { segment: i })));
       let days = studyDays.map((day) => ({ day, date: D.iso(D.addDays(D.parse(w.start), day)) }));
@@ -245,7 +261,8 @@
           acc += r.minutes;
         }
         const clean = (t) => shortTitle(t.replace(/ · part \d+$/, '').replace(/ …$/, ''));
-        if (dayIndex > 0 && prevTitles.length) chunks.push({ id: L.uid('k'), kind: 'review', title: `Review · ${clean(prevTitles[0])}`, hint: 'Recall yesterday\'s key ideas without looking, then check them against the pages.', minutes: 10, done: null });
+        readLog[dayIndex] = chunks.filter((k) => k.kind === 'read').map((k) => ({ title: k.title, segment: k.segment, from: k.from, to: k.to, pages: k.pages, source: k.source }));
+        chunks.push(...reviewsFor(dayIndex, clean));
         const focus = chunks.filter((k) => k.kind === 'read').map((k) => k.title);
         if (w.kind === 'final' || w.kind === 'midterm') chunks.push({ id: L.uid('k'), kind: 'practise', title: `Practise · ${w.kind === 'final' ? 'final exam' : 'midterm'}`, hint: `Work problems across ${w.kind === 'final' ? 'the whole course' : 'weeks 1–' + midWeek}; time yourself.`, minutes: practiseMin, done: null });
         else chunks.push({ id: L.uid('k'), kind: 'practise', title: `Practise · ${clean(focus[0] || prevTitles[0] || w.title)}`, hint: 'Rework the examples, then write two problems of your own and solve them.', minutes: practiseMin, done: null });

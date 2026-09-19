@@ -307,12 +307,12 @@ window.L = window.L || {};
       L.theme.sync();
     },
     // the browser chrome and the native status bar follow the effective theme
-    isDark() { const t = document.documentElement.getAttribute('data-theme'); return t ? t === 'dark' : !(window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches); },
+    isDark() { const el = document.documentElement; const t = el && el.getAttribute ? el.getAttribute('data-theme') : null; return t ? t === 'dark' : !(window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches); },
     sync() {
       const dark = L.theme.isDark(); const bg = dark ? '#1b090d' : '#f3efe6';
       const meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.setAttribute('content', bg);
       if (L.native && L.native.statusBar) L.native.statusBar(dark, bg);
-      if (marbleFor !== dark) { marbleFor = dark; document.documentElement.style.setProperty('--marble', `url("data:image/svg+xml,${encodeURIComponent(marble(dark))}")`); }
+      if (marbleFor !== dark && document.documentElement.style) { marbleFor = dark; document.documentElement.style.setProperty('--marble', `url("data:image/svg+xml,${encodeURIComponent(marble(dark))}")`); }
     },
     apply() { const chosen = L.S?.settings?.themeChosen; L.theme.set(L.S?.settings?.theme || 'dark'); if (L.S && !chosen) { L.S.settings.themeChosen = false; } },
   };

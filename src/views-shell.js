@@ -265,9 +265,10 @@
   L.chunkRow = (c, s, k, { number, hint = false } = {}) => {
     const todayIso = L.date.iso(L.today());
     const state = k.done ? (L.date.iso(k.done) <= s.date ? 'done' : 'late') : s.date < todayIso ? 'overdue' : s.date > todayIso ? 'future' : 'due';
-    const where = k.kind === 'read' ? (k.pages ? (k.pages[0] === k.pages[1] ? `p. ${k.pages[0]}` : `pp. ${k.pages[0]}–${k.pages[1]}`) : '') : '';
-    const href = k.kind === 'read' ? `#/course/${c.id}/day/${s.date}?chunk=${k.id}` : `#/course/${c.id}/day/${s.date}`;
-    const meta = [`<span class="kind">${KIND_LABEL[k.kind] || k.kind}</span>`, where, `${k.minutes} min`, state === 'late' ? 'done late' : state === 'overdue' ? `due ${L.fmt.date(s.date)}` : ''].filter(Boolean).join(' · ');
+    const where = k.pages && (k.kind === 'read' || k.kind === 'review') ? (k.pages[0] === k.pages[1] ? `p. ${k.pages[0]}` : `pp. ${k.pages[0]}–${k.pages[1]}`) : '';
+    const href = k.kind === 'read' || (k.kind === 'review' && k.from != null) ? `#/course/${c.id}/day/${s.date}?chunk=${k.id}` : `#/course/${c.id}/day/${s.date}`;
+    const ago = k.kind === 'review' && k.ago > 1 ? `${k.ago} days on` : '';
+    const meta = [`<span class="kind">${KIND_LABEL[k.kind] || k.kind}</span>`, ago, where, `${k.minutes} min`, state === 'late' ? 'done late' : state === 'overdue' ? `due ${L.fmt.date(s.date)}` : ''].filter(Boolean).join(' · ');
     return `<div class="chunk" data-state="${state}" data-kind="${k.kind}">
       <div class="chunk-body"><a class="chunk-title" href="${href}">${esc(k.title)}</a>${hint && k.hint ? `<div class="chunk-hint">${esc(k.hint)}</div>` : ''}<div class="chunk-meta">${meta}</div></div>
       <label class="chunk-check"><input type="checkbox" data-in="chunk-done" data-course="${c.id}" data-session="${s.id}" data-chunk="${k.id}" aria-label="${k.done ? 'Done: ' : 'Mark done: '}${esc(k.title)}"${k.done ? ' checked disabled' : state === 'future' ? ' disabled' : ''}></label></div>`;

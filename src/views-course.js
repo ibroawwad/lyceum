@@ -134,8 +134,8 @@
       const s = c.sessions.find((x) => x.date === p.date); if (!s) return notFound('Study block');
       const idx = c.sessions.indexOf(s);
       const prev = c.sessions[idx - 1], next = c.sessions[idx + 1];
-      const reads = s.chunks.filter((k) => k.kind === 'read');
-      const active = reads.find((k) => k.id === q.chunk) || reads[0];
+      const reads = s.chunks.filter((k) => k.kind === 'read' || (k.kind === 'review' && k.from != null)); // a review opens the pages it reviews
+      const active = reads.find((k) => k.id === q.chunk) || reads.find((k) => k.kind === 'read') || reads[0];
       const w = R().week(c, s.week);
       const notes = c.notes && c.notes[s.week];
       const mode = q.view === 'text' ? 'text' : 'pages';
@@ -157,8 +157,8 @@
     },
     async mount(root, p, q) {
       const c = R().course(p.id); const s = c && c.sessions.find((x) => x.date === p.date); if (!s) return;
-      const reads = s.chunks.filter((k) => k.kind === 'read');
-      const active = reads.find((k) => k.id === q.chunk) || reads[0];
+      const reads = s.chunks.filter((k) => k.kind === 'read' || (k.kind === 'review' && k.from != null)); // a review opens the pages it reviews
+      const active = reads.find((k) => k.id === q.chunk) || reads.find((k) => k.kind === 'read') || reads[0];
       const body = root.querySelector('#reading-body');
       const notes = c.notes && c.notes[s.week];
       const nb = root.querySelector('#notes-body');

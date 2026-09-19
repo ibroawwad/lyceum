@@ -277,7 +277,7 @@ Segment = { i, title, start, end, words, role:'front'|'body'|'back', subheads:[{
 Week = { n, start:'YYYY-MM-DD', title, parts:[{ unit:idx, fraction:0..1, label:'Unit 3 · Cont.' }],
          segments:[i…], objectives:[], kind:'teaching'|'midterm'|'final' }
 Session = { id, week, day:0..6, date:'YYYY-MM-DD', start:540, minutes, kind:'Study block', topic, chunks: Chunk[] }  // one per study day
-Chunk = { id, kind:'read'|'practise'|'review', title (≤ 64 chars), hint?, minutes:5..25 (practise ≤ 30, review 10), done: null|iso,
+Chunk = { id, kind:'read'|'practise'|'review', title (≤ 64 chars), hint?, minutes:5..25 (practise ≤ 30, review 6–8), ago? (review: study days since the reading), done: null|iso,
           segment?, from?, to? (char offsets, read only), pages?:[a,b]|null, source?: sourceId }
 Assessment = { id, kind:'quiz'|'pset'|'midterm'|'final'|'project', title, week, coversWeeks:[…],
                opensAt: iso, dueAt: iso, closesAt: iso, durationMin: number|null, lateAllowed: boolean,
@@ -469,7 +469,7 @@ running course ends }`. Three pacings (`PACES`) defined by daily effort: condens
 
 ### 8.3 Daily study blocks
 One `Session` per study day (`kind:'Study block'`) at the course's slot hour — candidates 09:00, 11:00, 14:00, 16:00, 18:00, 07:00, 20:00; the first hour at which no concurrent course has a block overlapping on any shared day wins (`minutesPerDay = hoursPerWeek × 60 / studyDays`). Final week: blocks only on days before the final; midterm week: no block on the exam day.
-Each block holds 2–5 chunks: the week's reading split into bite-sized `read` chunks (at a segment's sub-headings, else at paragraph boundaries so none exceeds `clamp(round(minutesPerDay/3), 12, 25)` min; `minutes = clamp(round(words/70), 5, 60)`), spread across the week's days by count; a 10-min `review` of the previous day's reading (from day 2); a `practise` chunk (`clamp(round(minutesPerDay × 0.3), 10, 25)` min) on the day's focus, or on the coming exam in midterm/final weeks. Reading chunks carry `pages` via `locate()` when the source is a PDF.
+Each block holds 2–5 chunks: the week's reading split into bite-sized `read` chunks (at a segment's sub-headings, else at paragraph boundaries so none exceeds `clamp(round(minutesPerDay/3), 12, 25)` min; `minutes = clamp(round(words/70), 5, 60)`), spread across the week's days by count; up to two `review` chunks by **spaced repetition** — yesterday's reading (6 min) and the oldest reading due at the expanding intervals 3 / 7 / 21 study days (8 min), each carrying the reviewed `segment/from/to/pages` and `ago` so it opens the pages it reviews; a `practise` chunk (`clamp(round(minutesPerDay × 0.3), 10, 25)` min) on the day's focus, or on the coming exam in midterm/final weeks. Reading chunks carry `pages` via `locate()` when the source is a PDF.
 
 ### 8.4 Weeks
 Capacity per week: 1.0 teaching; 0.5 midterm week; 0.35 final week. `midterm week = ceil(weeks/2)`
