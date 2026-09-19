@@ -275,6 +275,27 @@ window.L = window.L || {};
     if (L.render) L.render();
   };
 
+  // ---------- marble ----------
+  // The ground is stone: soft clouds and a few veins that wander (a fractal-noise displacement of smooth curves),
+  // drawn once per theme as one SVG and fixed behind everything at low opacity. Cream veins on the burgundy, faint
+  // burgundy veins on the cream. Deterministic, so the stone looks the same on every visit.
+  let marbleFor = null;
+  function marble(dark) {
+    const ink = dark ? '#f4ecdf' : '#5a1a22';
+    const cloud = dark ? '1 1 1' : '0.35 0.1 0.13';
+    let r = 7; const rnd = () => { r = (r * 9301 + 49297) % 233280; return r / 233280; };
+    const veins = [];
+    for (let i = 0; i < 8; i++) {
+      const x0 = -200 + rnd() * 1700, y0 = -150 + rnd() * 200, x1 = x0 - 400 + rnd() * 1000, y1 = 1400 + rnd() * 200;
+      const c1x = x0 + 250 - rnd() * 500, c2x = x1 - 250 + rnd() * 500;
+      const d = `M${x0.toFixed(0)} ${y0.toFixed(0)} C ${c1x.toFixed(0)} ${(y0 + 550).toFixed(0)}, ${c2x.toFixed(0)} ${(y1 - 550).toFixed(0)}, ${x1.toFixed(0)} ${y1.toFixed(0)}`;
+      const w = 0.9 + rnd() * 1.3, o = 0.3 + rnd() * 0.5;
+      veins.push(`<path d="${d}" stroke="${ink}" stroke-width="${(w * 7).toFixed(1)}" opacity="${(o * 0.18).toFixed(2)}" fill="none"/><path d="${d}" stroke="${ink}" stroke-width="${w.toFixed(1)}" opacity="${o.toFixed(2)}" fill="none"/>`);
+    }
+    const [cr, cg, cb] = cloud.split(' ');
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1400" viewBox="0 0 1400 1400"><filter id="m" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB"><feTurbulence type="fractalNoise" baseFrequency="0.0022" numOctaves="2" seed="7" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="420" xChannelSelector="R" yChannelSelector="G" result="d"/><feGaussianBlur in="d" stdDeviation="1.3"/></filter><filter id="c" color-interpolation-filters="sRGB"><feTurbulence type="fractalNoise" baseFrequency="0.0045" numOctaves="3" seed="12"/><feColorMatrix type="matrix" values="0 0 0 0 ${cr}  0 0 0 0 ${cg}  0 0 0 0 ${cb}  0 0 0 0.9 -0.25"/></filter><rect width="1400" height="1400" filter="url(#c)" opacity="${dark ? 0.55 : 0.4}"/><g filter="url(#m)">${veins.join('')}</g></svg>`;
+  }
+
   // ---------- theme ----------
   L.theme = {
     set(mode) {
@@ -290,6 +311,7 @@ window.L = window.L || {};
       const dark = L.theme.isDark(); const bg = dark ? '#1b090d' : '#f3efe6';
       const meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.setAttribute('content', bg);
       if (L.native && L.native.statusBar) L.native.statusBar(dark, bg);
+      if (marbleFor !== dark) { marbleFor = dark; document.documentElement.style.setProperty('--marble', `url("data:image/svg+xml,${encodeURIComponent(marble(dark))}")`); }
     },
     apply() { const chosen = L.S?.settings?.themeChosen; L.theme.set(L.S?.settings?.theme || 'dark'); if (L.S && !chosen) { L.S.settings.themeChosen = false; } },
   };

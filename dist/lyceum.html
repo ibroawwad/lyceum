@@ -195,6 +195,8 @@ window.__PDF_WORKER_SRC = "/**\n * @licstart The following is the entire license
   --warn: #e0ab4f;
   --bad: #e2786f;
   --focus: #d2ae63;
+  --rail-bg: #150508; --rail-text: #f4ecdf; --rail-muted: #a88f90; --rail-active: #e9dbc1; --rail-active-bg: #2a1017; --rail-line: rgba(255, 255, 255, 0.07);
+  --marble-op: 0.24;
   --ch: #d4a24c;
   --k-practise: #e0ab4f; --k-review: #b391dc;
   --a-quiz: #d4a24c; --a-pset: #3fa590; --a-midterm: #de6a42; --a-final: #8f78db; --a-project: #5493dc;
@@ -216,18 +218,21 @@ window.__PDF_WORKER_SRC = "/**\n * @licstart The following is the entire license
     --bg: #f3efe6; --card: #fbf9f4; --card-2: #ece6da; --card-3: #dfd7c8; --line: #e4dccf; --text: #22080a; --text-2: #4a2a2e; --muted: #7d6a68;
     --accent: #5a1a22; --accent-ink: #f8f1e6; --accent-soft: rgba(90, 26, 34, 0.10); --gold: #a9863f; --good: #2f7a4a; --warn: #a8701f; --bad: #b0382f; --focus: #5a1a22;
     --a-pset: #2f8a78; --a-project: #3d7cc4; color-scheme: light;
+    --rail-bg: #2c0508; --rail-text: #f4ecdf; --rail-muted: #c4aaa8; --rail-active: #e9dbc1; --rail-active-bg: rgba(255, 255, 255, 0.10); --rail-line: rgba(255, 255, 255, 0.08); --marble-op: 0.2;
   }
 }
 :root[data-theme="light"] {
   --bg: #f3efe6; --card: #fbf9f4; --card-2: #ece6da; --card-3: #dfd7c8; --line: #e4dccf; --text: #22080a; --text-2: #4a2a2e; --muted: #7d6a68;
   --accent: #5a1a22; --accent-ink: #f8f1e6; --accent-soft: rgba(90, 26, 34, 0.10); --gold: #a9863f; --good: #2f7a4a; --warn: #a8701f; --bad: #b0382f; --focus: #5a1a22;
   --a-pset: #2f8a78; --a-project: #3d7cc4; color-scheme: light;
+  --rail-bg: #2c0508; --rail-text: #f4ecdf; --rail-muted: #c4aaa8; --rail-active: #e9dbc1; --rail-active-bg: rgba(255, 255, 255, 0.10); --rail-line: rgba(255, 255, 255, 0.08); --marble-op: 0.2;
 }
 
 /* ---------- base ---------- */
 *, *::before, *::after { box-sizing: border-box; }
 html { height: 100%; -webkit-text-size-adjust: 100%; background: var(--bg); scroll-padding-bottom: calc(var(--tab-h) + 24px); scroll-padding-top: calc(env(safe-area-inset-top) + 12px); }
-body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text); font: 0.9375rem/1.5 var(--font); -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+body { margin: 0; min-height: 100%; background: transparent; color: var(--text); font: 0.9375rem/1.5 var(--font); -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+body::before { content: ""; position: fixed; inset: 0; z-index: -1; background: var(--marble, none) center / cover no-repeat; opacity: var(--marble-op); pointer-events: none; }
 h1, h2, h3, h4 { margin: 0; font-weight: 700; line-height: 1.2; letter-spacing: -0.01em; text-wrap: balance; }
 h1 { font-size: 1.5rem; } h2 { font-size: 1.0625rem; } h3 { font-size: 0.9375rem; } h4 { font-size: 0.8125rem; }
 p { margin: 0 0 10px; } p:last-child { margin-bottom: 0; }
@@ -263,7 +268,7 @@ button { cursor: pointer; }
 @keyframes bar-up { from { transform: scaleY(0); } }
 
 /* ---------- type ---------- */
-.display { font-size: 1.625rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; }
+.display { font-family: "EB Garamond", Georgia, "Times New Roman", serif; font-size: 1.9rem; font-weight: 600; letter-spacing: -0.005em; line-height: 1.1; }
 .serif { font-weight: 600; }
 .mono { font-family: var(--font-mono); font-size: 0.92em; }
 .num { font-variant-numeric: tabular-nums; }
@@ -294,15 +299,15 @@ body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: 
 .page-head.is-row { flex-direction: row; align-items: center; justify-content: space-between; }
 .page-head > div:first-child { min-width: 0; }
 .page-head .actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.rail { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; background: var(--card); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); }
+.rail { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; background: var(--rail-bg); color: var(--rail-text); border-top: 1px solid var(--rail-line); padding-bottom: env(safe-area-inset-bottom); }
 .rail[hidden] { display: none; }
 .rail-brand, .rail-foot { display: none; }
 .rail-nav { display: flex; height: var(--tab-h); }
-.rail-nav a { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 11px; font-weight: 600; color: var(--muted); position: relative; }
+.rail-nav a { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 11px; font-weight: 600; color: var(--rail-muted); position: relative; }
 .rail-nav a svg { width: 24px; height: 24px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.rail-nav a[aria-current="page"] { color: var(--accent); }
-.rail-nav .badge { position: absolute; top: 8px; left: calc(50% + 6px); min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--accent); color: var(--accent-ink); font-size: 10px; font-weight: 700; display: grid; place-items: center; }
-.rail-nav .badge.is-quiet { background: var(--card-3); color: var(--text-2); }
+.rail-nav a[aria-current="page"] { color: var(--rail-active); }
+.rail-nav .badge { position: absolute; top: 8px; left: calc(50% + 6px); min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--gold); color: #2c0508; font-size: 10px; font-weight: 700; display: grid; place-items: center; }
+.rail-nav .badge.is-quiet { background: rgba(255, 255, 255, 0.14); color: var(--rail-text); }
 .grid-2 { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
 .grid-3 { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
 .cols { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
@@ -334,18 +339,18 @@ body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: 
 
 @media (min-width: 1024px) {
   .app { display: grid; grid-template-columns: var(--rail-w) minmax(0, 1fr); padding-bottom: 0; }
-  .rail { position: sticky; top: 0; bottom: auto; height: 100dvh; margin-top: calc(-1 * env(safe-area-inset-top)); padding-top: calc(22px + env(safe-area-inset-top)); display: flex; flex-direction: column; background: var(--bg); border-top: 0; border-right: 1px solid var(--line); padding: 22px 14px 18px; }
-  .rail-brand { display: block; padding: 0 10px 22px; }
+  .rail { position: sticky; top: 0; bottom: auto; height: 100dvh; margin-top: calc(-1 * env(safe-area-inset-top)); padding-top: calc(22px + env(safe-area-inset-top)); display: flex; flex-direction: column; background: var(--rail-bg); border-top: 0; border-right: 1px solid var(--line); padding: 22px 14px 18px; }
+  .rail-brand { display: block; padding: 0 10px 22px; } .rail-brand .logo { color: var(--rail-text); }
   .rail-nav { flex-direction: column; height: auto; gap: 2px; }
   .rail-nav a { flex: none; flex-direction: row; justify-content: flex-start; gap: 12px; padding: 10px 12px; border-radius: var(--r-ctl); font-size: 14px; }
   .rail-nav a svg { width: 20px; height: 20px; }
-  .rail-nav a[aria-current="page"] { background: var(--card); color: var(--text); }
+  .rail-nav a[aria-current="page"] { background: var(--rail-active-bg); color: var(--rail-text); }
   .rail-nav .badge { position: static; margin-left: auto; }
   .rail-foot { display: flex; flex-direction: column; gap: 12px; margin-top: auto; padding-top: 16px; }
   .page { max-width: 680px; padding: 36px 40px 60px; }
   .page-head { flex-direction: row; align-items: flex-end; justify-content: space-between; margin-bottom: 22px; }
   .page-head.is-row { align-items: center; }
-  .display { font-size: 30px; }
+  .display { font-size: 34px; }
   .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .page.is-wide { max-width: 980px; }
@@ -354,13 +359,13 @@ body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: 
 }
 .rail-clock { font-family: var(--font-mono); font-variant-numeric: tabular-nums; padding: 0 12px; }
 .rail-clock .big { font-size: 26px; font-weight: 600; line-height: 1; }
-.rail-clock .sub { font-size: 11px; color: var(--muted); margin-top: 6px; }
-.rail-next { font-size: 12.5px; color: var(--text-2); padding: 10px 12px; border-radius: var(--r-ctl); background: var(--card); }
+.rail-clock .sub { font-size: 11px; color: var(--rail-muted); margin-top: 6px; }
+.rail-next { font-size: 12.5px; color: var(--rail-text); padding: 10px 12px; border-radius: var(--r-ctl); background: rgba(255, 255, 255, 0.07); }
 .rail-next .label { display: block; margin-bottom: 3px; }
-.rail-next .when { font-family: var(--font-mono); font-size: 12px; color: var(--accent); font-weight: 600; }
+.rail-next .when { font-family: var(--font-mono); font-size: 12px; color: var(--gold); font-weight: 600; }
 .rail-student { display: flex; align-items: center; gap: 10px; padding: 0 8px; }
-.rail-student .seal { width: 30px; height: 30px; border-radius: 9px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; font-weight: 700; font-size: 14px; flex: none; }
-.rail-student .name { font-weight: 600; font-size: 13.5px; line-height: 1.2; } .rail-student .id { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.rail-student .seal { width: 30px; height: 30px; border-radius: 9px; background: var(--gold); color: #2c0508; display: grid; place-items: center; font-weight: 700; font-size: 14px; flex: none; }
+.rail-student .name { font-weight: 600; font-size: 13.5px; line-height: 1.2; } .rail-student .id { font-family: var(--font-mono); font-size: 11px; color: var(--rail-muted); }
 
 /* ---------- controls ---------- */
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 10px 16px; border-radius: var(--r-ctl); border: 0; background: var(--card-2); color: var(--text); font-weight: 600; font-size: 14px; line-height: 1.2; cursor: pointer; white-space: nowrap; transition: filter 120ms, transform 60ms; }
@@ -690,7 +695,7 @@ body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: 
 
 /* ---------- official papers (paper-white regardless of theme) ---------- */
 .sheet-viewport { width: 100%; }
-.sheet { --paper: #fbfaf6; --ink: #161616; --dim: #6b6355; --rule: #d8d3c6; --green: #5a1a22; --gold: #a9863f; width: 100%; max-width: 820px; margin: 0 auto; background: var(--paper); color: var(--ink); font-family: "EB Garamond", Georgia, "Times New Roman", serif; font-size: 15px; line-height: 1.45; padding: 44px 52px; box-shadow: 0 1px 2px rgba(0,0,0,0.2), 0 12px 40px rgba(0,0,0,0.25); transform-origin: top left; }
+.sheet { --paper: #2c0508; --ink: #f4ecdf; --dim: #c9b3b1; --rule: #5a2a33; --green: #e9dbc1; --gold: #d2ae63; print-color-adjust: exact; -webkit-print-color-adjust: exact; width: 100%; max-width: 820px; margin: 0 auto; background: var(--paper); color: var(--ink); font-family: "EB Garamond", Georgia, "Times New Roman", serif; font-size: 15px; line-height: 1.45; padding: 44px 52px; box-shadow: 0 1px 2px rgba(0,0,0,0.2), 0 12px 40px rgba(0,0,0,0.25); transform-origin: top left; }
 .sheet.certificate { width: 100%; padding: 0; box-shadow: 0 1px 2px rgba(0,0,0,0.2), 0 12px 40px rgba(0,0,0,0.25); }
 .sheet.certificate svg { display: block; width: 100%; height: auto; }
 .sheet-head { display: grid; grid-template-columns: auto 1fr auto; gap: 18px; align-items: center; padding-bottom: 16px; border-bottom: 2px solid var(--gold); margin-bottom: 22px; }
@@ -711,15 +716,15 @@ body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: 
 .sheet-clauses { margin: 16px 0 0; padding-left: 22px; font-size: 14px; } .sheet-clauses li { margin-bottom: 4px; }
 .sheet-sign { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 30px; padding-top: 18px; border-top: 2px solid var(--gold); }
 .sign-label { font-family: Inter, system-ui, sans-serif; font-size: 10.5px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--dim); margin-bottom: 8px; }
-.pad-wrap { position: relative; height: 120px; border: 1px solid var(--rule); border-radius: 4px; background: #fff; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.pad-wrap { position: relative; height: 120px; border: 1px solid var(--rule); border-radius: 4px; background: #f3efe6; display: flex; align-items: center; justify-content: center; overflow: hidden; }
 .pad-wrap canvas { width: 100%; height: 100%; touch-action: none; cursor: crosshair; display: block; }
 .pad-wrap.is-signed img { max-height: 100px; max-width: 90%; }
 .pad-wrap.is-registrar { border: 0; background: transparent; color: var(--gold); gap: 10px; justify-content: flex-start; }
 .registrar-script { font-style: italic; font-size: 24px; color: var(--green); }
-.pad-clear { position: absolute; right: 6px; bottom: 6px; font-family: Inter, system-ui, sans-serif; font-size: 11px; font-weight: 600; border: 0; background: #efece4; color: #4a4536; padding: 4px 8px; border-radius: 6px; }
+.pad-clear { position: absolute; right: 6px; bottom: 6px; font-family: Inter, system-ui, sans-serif; font-size: 11px; font-weight: 600; border: 0; background: #e4dccf; color: #5a1a22; padding: 4px 8px; border-radius: 6px; }
 .sign-name { width: 100%; margin-top: 8px; padding: 8px 0; border: 0; border-bottom: 1px solid var(--ink); background: transparent; font-family: "EB Garamond", Georgia, serif; font-size: 18px; color: var(--ink); border-radius: 0; }
 .sign-name.is-signed { font-weight: 500; }
-.sign-name::placeholder { color: #a39c8c; font-style: italic; font-size: 15px; }
+.sign-name::placeholder { color: #a88f90; font-style: italic; font-size: 15px; }
 .sign-date { font-family: Inter, system-ui, sans-serif; font-size: 11px; color: var(--dim); margin-top: 6px; }
 @media (max-width: 760px) {
   .assess-table thead { display: none; }
@@ -746,7 +751,7 @@ body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: 
 @media print {
   @page { margin: 12mm; }
   .rail, .page-head .actions, .btn, .toast-host, .modal-host, .tabs, .page-head, .page > p { display: none !important; }
-  .app { display: block; padding: 0; } .page { max-width: none; padding: 0; } body { background: #fff; color: #000; }
+  .app { display: block; padding: 0; } .page { max-width: none; padding: 0; } body { background: #fff; color: #000; } body::before { display: none; }
   .transcript { border: 0; padding: 0; }
   .sheet { max-width: none; box-shadow: none; padding: 0; }
   .sheet.contract { font-size: 13px; }
@@ -1044,6 +1049,27 @@ window.L = window.L || {};
     if (L.render) L.render();
   };
 
+  // ---------- marble ----------
+  // The ground is stone: soft clouds and a few veins that wander (a fractal-noise displacement of smooth curves),
+  // drawn once per theme as one SVG and fixed behind everything at low opacity. Cream veins on the burgundy, faint
+  // burgundy veins on the cream. Deterministic, so the stone looks the same on every visit.
+  let marbleFor = null;
+  function marble(dark) {
+    const ink = dark ? '#f4ecdf' : '#5a1a22';
+    const cloud = dark ? '1 1 1' : '0.35 0.1 0.13';
+    let r = 7; const rnd = () => { r = (r * 9301 + 49297) % 233280; return r / 233280; };
+    const veins = [];
+    for (let i = 0; i < 8; i++) {
+      const x0 = -200 + rnd() * 1700, y0 = -150 + rnd() * 200, x1 = x0 - 400 + rnd() * 1000, y1 = 1400 + rnd() * 200;
+      const c1x = x0 + 250 - rnd() * 500, c2x = x1 - 250 + rnd() * 500;
+      const d = `M${x0.toFixed(0)} ${y0.toFixed(0)} C ${c1x.toFixed(0)} ${(y0 + 550).toFixed(0)}, ${c2x.toFixed(0)} ${(y1 - 550).toFixed(0)}, ${x1.toFixed(0)} ${y1.toFixed(0)}`;
+      const w = 0.9 + rnd() * 1.3, o = 0.3 + rnd() * 0.5;
+      veins.push(`<path d="${d}" stroke="${ink}" stroke-width="${(w * 7).toFixed(1)}" opacity="${(o * 0.18).toFixed(2)}" fill="none"/><path d="${d}" stroke="${ink}" stroke-width="${w.toFixed(1)}" opacity="${o.toFixed(2)}" fill="none"/>`);
+    }
+    const [cr, cg, cb] = cloud.split(' ');
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1400" viewBox="0 0 1400 1400"><filter id="m" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB"><feTurbulence type="fractalNoise" baseFrequency="0.0022" numOctaves="2" seed="7" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="420" xChannelSelector="R" yChannelSelector="G" result="d"/><feGaussianBlur in="d" stdDeviation="1.3"/></filter><filter id="c" color-interpolation-filters="sRGB"><feTurbulence type="fractalNoise" baseFrequency="0.0045" numOctaves="3" seed="12"/><feColorMatrix type="matrix" values="0 0 0 0 ${cr}  0 0 0 0 ${cg}  0 0 0 0 ${cb}  0 0 0 0.9 -0.25"/></filter><rect width="1400" height="1400" filter="url(#c)" opacity="${dark ? 0.55 : 0.4}"/><g filter="url(#m)">${veins.join('')}</g></svg>`;
+  }
+
   // ---------- theme ----------
   L.theme = {
     set(mode) {
@@ -1059,6 +1085,7 @@ window.L = window.L || {};
       const dark = L.theme.isDark(); const bg = dark ? '#1b090d' : '#f3efe6';
       const meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.setAttribute('content', bg);
       if (L.native && L.native.statusBar) L.native.statusBar(dark, bg);
+      if (marbleFor !== dark) { marbleFor = dark; document.documentElement.style.setProperty('--marble', `url("data:image/svg+xml,${encodeURIComponent(marble(dark))}")`); }
     },
     apply() { const chosen = L.S?.settings?.themeChosen; L.theme.set(L.S?.settings?.theme || 'dark'); if (L.S && !chosen) { L.S.settings.themeChosen = false; } },
   };
@@ -2983,7 +3010,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
   function mountPad(root) {
     const canvas = root.querySelector('#signature-pad'); if (!canvas) return null;
     const ctx = canvas.getContext('2d');
-    ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#1d2a6b';
+    ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#5a1a22';
     let drawing = false, points = 0, last = null;
     const pos = (e) => { const r = canvas.getBoundingClientRect(); return [(e.clientX - r.left) * (canvas.width / r.width), (e.clientY - r.top) * (canvas.height / r.height)]; };
     const down = (e) => { drawing = true; last = pos(e); canvas.setPointerCapture && canvas.setPointerCapture(e.pointerId); e.preventDefault(); };
@@ -3044,10 +3071,10 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
     const W = 1200, H = 800;
     const F = 'font-family="EB Garamond, Georgia, Times New Roman, serif"';
     const S = 'font-family="Inter, Helvetica, Arial, sans-serif"';
-    const gold = '#a9863f', ink = '#161616', dim = '#6b6355', green = '#5a1a22'; // the seal and the name in the brand burgundy
+    const gold = '#d2ae63', ink = '#f4ecdf', dim = '#c9b3b1', green = '#e9dbc1', paper = '#2c0508', field = '#f3efe6'; // burgundy cloth, cream type, gold rules
     const line = cert.breakdown.map((b) => `${(KIND[b.kind] || b.kind)} ${b.avg.toFixed(0)}%`).join('  ·  ');
     return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 ${W} ${H}" class="cert-svg" role="img" aria-label="Certificate of Completion for ${esc(s.name)}">
-      <rect width="${W}" height="${H}" fill="#fbfaf6"/>
+      <rect width="${W}" height="${H}" fill="${paper}"/>
       <rect x="28" y="28" width="${W - 56}" height="${H - 56}" fill="none" stroke="${gold}" stroke-width="3"/>
       <rect x="40" y="40" width="${W - 80}" height="${H - 80}" fill="none" stroke="${gold}" stroke-width="1"/>
       <g style="color:${gold}">${L.SEAL_G(W / 2 - 60, 70, 120, { year: new Date(cert.issuedAt).getFullYear(), id: 'cert' })}</g>
@@ -3057,14 +3084,15 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
       <line x1="320" y1="396" x2="880" y2="396" stroke="${gold}" stroke-width="1"/>
       <text x="${W / 2}" y="446" text-anchor="middle" ${F} font-size="30" font-weight="500" fill="${ink}">${esc(c.title)}</text>
       <text x="${W / 2}" y="474" text-anchor="middle" ${S} font-size="12.5" letter-spacing="2" fill="${dim}">${esc(c.code)} · ${L.fmt.date(c.term.start).toUpperCase()} – ${L.fmt.date(c.term.end).toUpperCase()} ${new Date(c.term.end + 'T00:00:00').getFullYear()} · ${c.credits} CREDIT${c.credits === 1 ? '' : 'S'}</text>
-      <text x="${W / 2}" y="560" text-anchor="middle" ${F} font-size="60" font-weight="600" fill="${green}">${esc(cert.letter)}<tspan font-size="22" font-weight="400" fill="${dim}" dx="14" dy="-2">${cert.pct.toFixed(1)}%</tspan></text>
+      <text x="${W / 2}" y="560" text-anchor="middle" ${F} font-size="60" font-weight="600" fill="${gold}">${esc(cert.letter)}<tspan font-size="22" font-weight="400" fill="${dim}" dx="14" dy="-2">${cert.pct.toFixed(1)}%</tspan></text>
       <text x="${W / 2}" y="600" text-anchor="middle" ${S} font-size="12" letter-spacing="1" fill="${dim}">${esc(line.toUpperCase())}</text>
       ${(() => { const a = (c.material.sources.find((x) => x.attribution) || {}).attribution; return a ? `<text x="${W / 2}" y="622" text-anchor="middle" ${S} font-size="10" letter-spacing="0.5" fill="${dim}">MATERIAL: ${esc((a.title + (a.author ? ', ' + a.author : '') + ' · ' + a.license).toUpperCase())}</text>` : ''; })()}
-      ${c.contract && c.contract.signature ? `<image href="${c.contract.signature}" x="190" y="646" width="220" height="60" preserveAspectRatio="xMidYMid meet"/>` : ''}
-      <line x1="150" y1="712" x2="450" y2="712" stroke="${ink}" stroke-width="1"/>
+      <rect x="170" y="638" width="260" height="70" rx="6" fill="${field}"/>
+      ${c.contract && c.contract.signature ? `<image href="${c.contract.signature}" x="190" y="644" width="220" height="58" preserveAspectRatio="xMidYMid meet"/>` : ''}
+      <line x1="150" y1="716" x2="450" y2="716" stroke="${gold}" stroke-width="1"/>
       <text x="300" y="730" text-anchor="middle" ${S} font-size="11" letter-spacing="2" fill="${dim}">STUDENT</text>
-      <text x="900" y="700" text-anchor="middle" ${F} font-size="26" font-style="italic" fill="${green}">The Registrar</text>
-      <line x1="750" y1="712" x2="1050" y2="712" stroke="${ink}" stroke-width="1"/>
+      <text x="900" y="700" text-anchor="middle" ${F} font-size="26" font-style="italic" fill="${gold}">The Registrar</text>
+      <line x1="750" y1="716" x2="1050" y2="716" stroke="${gold}" stroke-width="1"/>
       <text x="900" y="730" text-anchor="middle" ${S} font-size="11" letter-spacing="2" fill="${dim}">REGISTRAR</text>
       <text x="${W / 2}" y="752" text-anchor="middle" ${S} font-size="10.5" letter-spacing="1" fill="${dim}">${esc(cert.no)} · ${esc(cert.code)} · ${L.fmt.date(cert.issuedAt).toUpperCase()} ${new Date(cert.issuedAt).getFullYear()}</text>
       <text x="${W / 2}" y="770" text-anchor="middle" ${S} font-size="9" letter-spacing="0.5" fill="${dim}">LYCEUM IS AN INDEPENDENT STUDY TOOL, NOT AN ACCREDITED INSTITUTION. THIS CERTIFICATE CONFERS NO ACADEMIC CREDIT.</text>
@@ -3079,7 +3107,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
       const img = new Image();
       await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
       const canvas = document.createElement('canvas'); canvas.width = 2400; canvas.height = 1600;
-      const ctx = canvas.getContext('2d'); ctx.fillStyle = '#fbfaf6'; ctx.fillRect(0, 0, 2400, 1600); ctx.drawImage(img, 0, 0, 2400, 1600);
+      const ctx = canvas.getContext('2d'); ctx.fillStyle = '#2c0508'; ctx.fillRect(0, 0, 2400, 1600); ctx.drawImage(img, 0, 0, 2400, 1600);
       return await new Promise((res) => canvas.toBlob(res, 'image/png'));
     } finally { URL.revokeObjectURL(url); }
   }
@@ -3993,7 +4021,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
         <div class="page-head is-row"><div><h1 class="display">More</h1></div><div class="actions"><a class="btn btn-sm btn-quiet" href="#/record">Grades →</a></div></div>
         <p class="small muted" style="margin:-6px 0 8px"><a href="privacy.html" target="_blank" rel="noopener">Privacy</a> · <a href="terms.html" target="_blank" rel="noopener">Terms</a> · Lyceum is an independent study tool, not an accredited institution.</p>
         <div class="card"><div class="card-head"><h3>Papers</h3><span class="small muted">${papers.length ? `${L.S.courses.filter((c) => c.certificate).length} certificate${L.S.courses.filter((c) => c.certificate).length === 1 ? '' : 's'}` : ''}</span></div><div class="card-body rows">${papers.length ? papers.map((c) => `<div class="row"><div style="min-width:0;flex:1"><div class="truncate" style="font-weight:600">${esc(c.title)}</div><div class="small muted">${esc(c.code)}${c.certificate ? ` · ${esc(c.certificate.letter)} ${L.fmt.pct(c.certificate.pct)}` : ''}</div></div><div class="cols gap-1">${c.contract ? `<a class="btn btn-sm" href="#/contract/${c.id}">Contract</a>` : ''}${c.certificate ? `<a class="btn btn-sm btn-primary" href="#/certificate/${c.id}">Certificate</a>` : ''}</div></div>`).join('') : '<p class="small muted">Contracts appear when you enrol; certificates when a course ends at 70% or more.</p>'}</div></div>
-        <div class="grid-2">
+        <div class="grid-2 mt-3">
           <div class="stack gap-3">
             <div class="card"><div class="card-head"><h2>Faculty</h2><span class="small muted">${L.faculty.available() ? 'key set' : 'offline examiner'}</span></div><div class="card-body stack gap-2">
               <div class="field"><label for="api-key">OpenRouter key</label><input id="api-key" class="input mono" type="password" autocomplete="off" value="${esc(s.apiKey)}" data-in="api-key" placeholder="sk-or-v1-…"><span class="hint">Stored only in this browser. With no key, papers are set and graded by the offline examiner.</span></div>

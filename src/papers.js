@@ -91,7 +91,7 @@
   function mountPad(root) {
     const canvas = root.querySelector('#signature-pad'); if (!canvas) return null;
     const ctx = canvas.getContext('2d');
-    ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#1d2a6b';
+    ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#5a1a22';
     let drawing = false, points = 0, last = null;
     const pos = (e) => { const r = canvas.getBoundingClientRect(); return [(e.clientX - r.left) * (canvas.width / r.width), (e.clientY - r.top) * (canvas.height / r.height)]; };
     const down = (e) => { drawing = true; last = pos(e); canvas.setPointerCapture && canvas.setPointerCapture(e.pointerId); e.preventDefault(); };
@@ -152,10 +152,10 @@
     const W = 1200, H = 800;
     const F = 'font-family="EB Garamond, Georgia, Times New Roman, serif"';
     const S = 'font-family="Inter, Helvetica, Arial, sans-serif"';
-    const gold = '#a9863f', ink = '#161616', dim = '#6b6355', green = '#5a1a22'; // the seal and the name in the brand burgundy
+    const gold = '#d2ae63', ink = '#f4ecdf', dim = '#c9b3b1', green = '#e9dbc1', paper = '#2c0508', field = '#f3efe6'; // burgundy cloth, cream type, gold rules
     const line = cert.breakdown.map((b) => `${(KIND[b.kind] || b.kind)} ${b.avg.toFixed(0)}%`).join('  ·  ');
     return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 ${W} ${H}" class="cert-svg" role="img" aria-label="Certificate of Completion for ${esc(s.name)}">
-      <rect width="${W}" height="${H}" fill="#fbfaf6"/>
+      <rect width="${W}" height="${H}" fill="${paper}"/>
       <rect x="28" y="28" width="${W - 56}" height="${H - 56}" fill="none" stroke="${gold}" stroke-width="3"/>
       <rect x="40" y="40" width="${W - 80}" height="${H - 80}" fill="none" stroke="${gold}" stroke-width="1"/>
       <g style="color:${gold}">${L.SEAL_G(W / 2 - 60, 70, 120, { year: new Date(cert.issuedAt).getFullYear(), id: 'cert' })}</g>
@@ -165,14 +165,15 @@
       <line x1="320" y1="396" x2="880" y2="396" stroke="${gold}" stroke-width="1"/>
       <text x="${W / 2}" y="446" text-anchor="middle" ${F} font-size="30" font-weight="500" fill="${ink}">${esc(c.title)}</text>
       <text x="${W / 2}" y="474" text-anchor="middle" ${S} font-size="12.5" letter-spacing="2" fill="${dim}">${esc(c.code)} · ${L.fmt.date(c.term.start).toUpperCase()} – ${L.fmt.date(c.term.end).toUpperCase()} ${new Date(c.term.end + 'T00:00:00').getFullYear()} · ${c.credits} CREDIT${c.credits === 1 ? '' : 'S'}</text>
-      <text x="${W / 2}" y="560" text-anchor="middle" ${F} font-size="60" font-weight="600" fill="${green}">${esc(cert.letter)}<tspan font-size="22" font-weight="400" fill="${dim}" dx="14" dy="-2">${cert.pct.toFixed(1)}%</tspan></text>
+      <text x="${W / 2}" y="560" text-anchor="middle" ${F} font-size="60" font-weight="600" fill="${gold}">${esc(cert.letter)}<tspan font-size="22" font-weight="400" fill="${dim}" dx="14" dy="-2">${cert.pct.toFixed(1)}%</tspan></text>
       <text x="${W / 2}" y="600" text-anchor="middle" ${S} font-size="12" letter-spacing="1" fill="${dim}">${esc(line.toUpperCase())}</text>
       ${(() => { const a = (c.material.sources.find((x) => x.attribution) || {}).attribution; return a ? `<text x="${W / 2}" y="622" text-anchor="middle" ${S} font-size="10" letter-spacing="0.5" fill="${dim}">MATERIAL: ${esc((a.title + (a.author ? ', ' + a.author : '') + ' · ' + a.license).toUpperCase())}</text>` : ''; })()}
-      ${c.contract && c.contract.signature ? `<image href="${c.contract.signature}" x="190" y="646" width="220" height="60" preserveAspectRatio="xMidYMid meet"/>` : ''}
-      <line x1="150" y1="712" x2="450" y2="712" stroke="${ink}" stroke-width="1"/>
+      <rect x="170" y="638" width="260" height="70" rx="6" fill="${field}"/>
+      ${c.contract && c.contract.signature ? `<image href="${c.contract.signature}" x="190" y="644" width="220" height="58" preserveAspectRatio="xMidYMid meet"/>` : ''}
+      <line x1="150" y1="716" x2="450" y2="716" stroke="${gold}" stroke-width="1"/>
       <text x="300" y="730" text-anchor="middle" ${S} font-size="11" letter-spacing="2" fill="${dim}">STUDENT</text>
-      <text x="900" y="700" text-anchor="middle" ${F} font-size="26" font-style="italic" fill="${green}">The Registrar</text>
-      <line x1="750" y1="712" x2="1050" y2="712" stroke="${ink}" stroke-width="1"/>
+      <text x="900" y="700" text-anchor="middle" ${F} font-size="26" font-style="italic" fill="${gold}">The Registrar</text>
+      <line x1="750" y1="716" x2="1050" y2="716" stroke="${gold}" stroke-width="1"/>
       <text x="900" y="730" text-anchor="middle" ${S} font-size="11" letter-spacing="2" fill="${dim}">REGISTRAR</text>
       <text x="${W / 2}" y="752" text-anchor="middle" ${S} font-size="10.5" letter-spacing="1" fill="${dim}">${esc(cert.no)} · ${esc(cert.code)} · ${L.fmt.date(cert.issuedAt).toUpperCase()} ${new Date(cert.issuedAt).getFullYear()}</text>
       <text x="${W / 2}" y="770" text-anchor="middle" ${S} font-size="9" letter-spacing="0.5" fill="${dim}">LYCEUM IS AN INDEPENDENT STUDY TOOL, NOT AN ACCREDITED INSTITUTION. THIS CERTIFICATE CONFERS NO ACADEMIC CREDIT.</text>
@@ -187,7 +188,7 @@
       const img = new Image();
       await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
       const canvas = document.createElement('canvas'); canvas.width = 2400; canvas.height = 1600;
-      const ctx = canvas.getContext('2d'); ctx.fillStyle = '#fbfaf6'; ctx.fillRect(0, 0, 2400, 1600); ctx.drawImage(img, 0, 0, 2400, 1600);
+      const ctx = canvas.getContext('2d'); ctx.fillStyle = '#2c0508'; ctx.fillRect(0, 0, 2400, 1600); ctx.drawImage(img, 0, 0, 2400, 1600);
       return await new Promise((res) => canvas.toBlob(res, 'image/png'));
     } finally { URL.revokeObjectURL(url); }
   }
