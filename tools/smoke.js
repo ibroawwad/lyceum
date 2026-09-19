@@ -108,7 +108,7 @@ const local = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.
   assert((await route()) === 'course', 'signing the contract enrols and lands on the course page');
   const course = await page.evaluate(() => L.S.courses[0]);
   assert(course.contract && course.contract.signature.startsWith('data:image/png') && course.contract.no.startsWith('LYC-C-'), 'the signed contract (signature image + number) is stored on the course');
-  assert(course.color !== '#4ade80', `the first course is not the brand green (${course.color})`);
+  assert(course.color !== '#5a1a22' && course.color !== '#e9dbc1', `the first course is not a brand colour (${course.color})`);
   assert(course && course.code && /\s\d{3}$/.test(course.code), `course code assigned (${course && course.code})`);
   assert(course.weeks.length === course.term.weeks, 'weeks array matches term length');
   assert(course.weeks.every((w) => w.kind === 'final' || w.segments.length > 0), 'every teaching week has reading segments');
@@ -329,8 +329,23 @@ const local = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.
   await page.goto(file + '?debug=1#/settings'); await sleep(300);
   assert(await page.evaluate(() => !!document.querySelector('a[href^="#/certificate/"]') && !!document.querySelector('a[href^="#/contract/"]')), 'More page lists contracts and certificates');
   for (const v of ['week', 'month']) { await page.goto(file + `?debug=1#/calendar?v=${v}`); await sleep(300); assert(await page.evaluate((v) => v === 'week' ? document.querySelectorAll('.week-list .agenda-day').length === 7 : !!document.querySelector('.calendar.is-shown .cal-day'), v), `calendar ${v} view renders`); }
-  const tileSizes = await page.evaluate(() => { document.location.hash = '#/courses'; return new Promise((r) => setTimeout(() => r(Array.from(document.querySelectorAll('.tiles i')).slice(0, 3).map((i) => i.getBoundingClientRect().width)), 400)); });
-  assert(tileSizes.every((w) => Math.abs(w - 13) < 0.5), `tiles are a fixed 13px (${tileSizes.map((w) => w.toFixed(1)).join('/')})`);
+  // calendar paging: the arrows move by a month / a week and the period is named between them; the timetable follows
+  await page.goto(file + '?debug=1#/calendar?v=month'); await sleep(300);
+  const monthNav = await page.evaluate(() => ({ title: document.querySelector('.cal-nav .cal-title').textContent, next: document.querySelector('.cal-nav a[aria-label="Next month"]').getAttribute('href'), today: !!document.querySelector('.cal-nav a[href="#/calendar?v=month"]') }));
+  assert(/^[A-Z][a-z]+ \d{4}$/.test(monthNav.title) && !monthNav.today, `month view names the month between the arrows (${monthNav.title})`);
+  await page.goto(file + '?debug=1' + monthNav.next); await sleep(300);
+  const monthNext = await page.evaluate(() => ({ title: document.querySelector('.cal-nav .cal-title').textContent, today: !!document.querySelector('.cal-nav a[href="#/calendar?v=month"]'), days: document.querySelectorAll('.calendar.is-shown .cal-day').length }));
+  assert(monthNext.title !== monthNav.title && monthNext.today && monthNext.days >= 28, `next month is a different month with a way back (${monthNext.title}, ${monthNext.days} cells)`);
+  await page.goto(file + '?debug=1#/calendar?v=week'); await sleep(300);
+  const weekNext = await page.evaluate(() => document.querySelector('.cal-nav a[aria-label="Next week"]').getAttribute('href'));
+  await page.goto(file + '?debug=1' + weekNext); await sleep(300);
+  const wk = await page.evaluate(() => ({ list: document.querySelector('.week-list .agenda-day .agenda-date').textContent, tt: document.querySelector('.timetable .tt-h:nth-child(2)').textContent, head: document.querySelector('.section-head h2').textContent }));
+  assert((wk.list.match(/\d+/) || [])[0] === (wk.tt.match(/\d+/) || [])[0] && /week of/i.test(wk.head), `week paging moves the list and the timetable together (${wk.list.trim()} / ${wk.tt.trim()})`);
+  // the study grid: whole weeks only, cut to the columns that fit the card, every day a tile, no partial column
+  const grid = await page.evaluate(() => { document.location.hash = '#/courses'; return new Promise((r) => setTimeout(() => { const wrap = document.querySelector('.course-card .tiles-wrap'); const vis = Array.from(wrap.querySelectorAll('.tiles i')).filter((i) => !i.hidden); const widths = vis.slice(0, 3).map((i) => i.getBoundingClientRect().width); const states = new Set(vis.map((i) => i.dataset.v)); const last = vis[vis.length - 1].getBoundingClientRect(); r({ n: vis.length, widths, states: [...states], fits: last.right <= wrap.getBoundingClientRect().right + 0.5, cols: vis.length / 7, wrapW: wrap.clientWidth, todayLast: vis.slice(-7).some((i) => i.classList.contains('is-today')) }); }, 400)); });
+  assert(grid.widths.every((w) => Math.abs(w - 13) < 0.5), `tiles are a fixed 13px (${grid.widths.map((w) => w.toFixed(1)).join('/')})`);
+  assert(grid.n % 7 === 0 && grid.fits && grid.cols === Math.floor((grid.wrapW + 3) / 16), `the grid is whole weeks that fit the card (${grid.cols} columns in ${grid.wrapW}px)`);
+  assert(grid.states.every((v) => ['full', 'part', 'empty'].includes(v)) && grid.todayLast, `tiles are full, part or empty and today sits in the last column (${grid.states.join('/')})`);
 
   console.log('8. ledger integrity');
   let v = await page.evaluate(() => L.ledger.verify());

@@ -7,24 +7,24 @@
   },
   "ios": {
     "contentInset": "automatic",
-    "backgroundColor": "#0a0a0b"
+    "backgroundColor": "#1b090d"
   },
   "plugins": {
     "SplashScreen": {
       "launchAutoHide": false,
-      "backgroundColor": "#0a0a0b",
+      "backgroundColor": "#1b090d",
       "showSpinner": false
     },
     "StatusBar": {
       "style": "DARK",
-      "backgroundColor": "#0a0a0b"
+      "backgroundColor": "#1b090d"
     },
     "LocalNotifications": {
       "smallIcon": "ic_stat_lyceum",
-      "iconColor": "#4ade80"
+      "iconColor": "#5a1a22"
     }
   },
   "android": {
-    "backgroundColor": "#0a0a0b"
+    "backgroundColor": "#1b090d"
   }
 }

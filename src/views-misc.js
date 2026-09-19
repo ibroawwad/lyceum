@@ -31,8 +31,9 @@
         cells.push(`<div class="cal-day${other ? ' is-other' : ''}${iso === D.iso(today) ? ' is-today' : ''}"><div class="d">${d.getDate()}${d.getDate() === 1 ? ' ' + D.monthName(d).slice(0, 3) : ''}</div>${ev.join('')}</div>`);
         if (i === 34 && D.addDays(gridStart, 35).getMonth() !== m.getMonth()) break;
       }
-      // weekly timetable for the current week
-      const weekStart = D.addDays(today, -D.dow(today));
+      // weekly timetable for the week being looked at (the current one unless the student paged)
+      const wk0 = /^\d{4}-\d{2}-\d{2}$/.test(q.w || '') ? D.parse(q.w) : D.addDays(today, -D.dow(today));
+      const weekStart = wk0;
       const H0 = 8, H1 = 21, PX = 40; // 40px per hour → 520px
       const cols = DAYS.map((name, di) => {
         const d = D.addDays(weekStart, di);
@@ -43,17 +44,19 @@
       const hours = []; for (let h = H0 + 1; h < H1; h++) hours.push(`<span style="top:${(h - H0) * PX}px">${String(h).padStart(2, '0')}:00</span>`);
       const active = R().courses('active');
       const view = q.v === 'week' ? 'week' : q.v === 'month' ? 'month' : 'agenda';
-      const wk0 = /^\d{4}-\d{2}-\d{2}$/.test(q.w || '') ? D.parse(q.w) : D.addDays(today, -D.dow(today));
       const wkPrev = D.iso(D.addDays(wk0, -7)), wkNext = D.iso(D.addDays(wk0, 7));
       const weekDays = Array.from({ length: 7 }, (_, i) => D.addDays(wk0, i));
       const dayList = (d) => { const sess = R().sessionsOn(d); const due = R().deadlines({ from: D.setTime(d, 0, 0), to: D.setTime(d, 23, 59, 59) }); return sess.map(({ course: c, session: s }) => `<a class="cal-ev" style="--ch:${L.cc(c)}" href="#/course/${c.id}/day/${s.date}">${hm(s.start)} ${esc(c.code)} · ${s.chunks.length} chunks · ${L.fmt.dur(s.minutes)}${s.chunks.length && s.chunks.every((k) => k.done) ? ' ✓' : ''}</a>`).join('') + due.map(({ course: c, assessment: a }) => `<a class="cal-ev is-due${a.kind === 'midterm' || a.kind === 'final' ? ' is-exam' : ''}" style="--ch:${L.cc(c)}" href="#/assess/${c.id}/${a.id}">${esc(a.title)} · ${esc(c.code)} · ${L.fmt.time(a.dueAt)}</a>`).join(''); };
       const switcher = `<div class="switch cal-switch" role="group" aria-label="View">${[['agenda', 'Agenda'], ['week', 'Week'], ['month', 'Month']].map(([k, l]) => `<a href="#/calendar?v=${k}"${view === k ? ' class="is-on"' : ''}>${l}</a>`).join('')}</div>`;
-      const nav = view === 'month' ? `<div class="actions cal-nav"><a class="btn btn-quiet" href="#/calendar?v=month&m=${ym(prev)}">←</a><a class="btn" href="#/calendar?v=month">Today</a><a class="btn btn-quiet" href="#/calendar?v=month&m=${ym(next)}">→</a></div>`
-        : view === 'week' ? `<div class="actions cal-nav"><a class="btn btn-quiet" href="#/calendar?v=week&w=${wkPrev}">←</a><a class="btn" href="#/calendar?v=week">This week</a><a class="btn btn-quiet" href="#/calendar?v=week&w=${wkNext}">→</a></div>` : '';
-      const sub = view === 'month' ? `${D.monthName(m)} ${m.getFullYear()}` : view === 'week' ? `${L.fmt.date(wk0)} – ${L.fmt.date(D.addDays(wk0, 6))}` : 'Next two weeks';
+      // paging: arrows either side of the period's name; a way back to now only when away from it
+      const thisMonth = m.getFullYear() === today.getFullYear() && m.getMonth() === today.getMonth();
+      const thisWeek = D.iso(wk0) === D.iso(D.addDays(today, -D.dow(today)));
+      const nav = view === 'month' ? `<div class="cal-nav"><a class="btn btn-quiet" href="#/calendar?v=month&m=${ym(prev)}" aria-label="Previous month">←</a><b class="cal-title">${D.monthName(m)} ${m.getFullYear()}</b><a class="btn btn-quiet" href="#/calendar?v=month&m=${ym(next)}" aria-label="Next month">→</a>${thisMonth ? '' : '<a class="btn btn-sm" href="#/calendar?v=month">Today</a>'}</div>`
+        : view === 'week' ? `<div class="cal-nav"><a class="btn btn-quiet" href="#/calendar?v=week&w=${wkPrev}" aria-label="Previous week">←</a><b class="cal-title">${L.fmt.date(wk0)} – ${L.fmt.date(D.addDays(wk0, 6))}</b><a class="btn btn-quiet" href="#/calendar?v=week&w=${wkNext}" aria-label="Next week">→</a>${thisWeek ? '' : '<a class="btn btn-sm" href="#/calendar?v=week">This week</a>'}</div>` : '';
+      const sub = view === 'month' ? `${active.length} active course${active.length === 1 ? '' : 's'}` : view === 'week' ? `Week ${thisWeek ? 'now' : 'of ' + L.fmt.date(wk0)}` : 'Next two weeks';
       return `<div class="page is-wide">
-        <div class="page-head is-row"><div><h1 class="display">Calendar</h1><span class="small muted">${sub}</span></div>${nav}</div>
-        ${switcher}
+        <div class="page-head is-row"><div><h1 class="display">Calendar</h1><span class="small muted">${sub}</span></div>${switcher}</div>
+        ${nav}
         ${view === 'month' ? `<div class="calendar is-shown">${DAYS.map((d) => `<div class="cal-h">${d}</div>`).join('')}${cells.join('')}</div>` : ''}
         ${view === 'week' ? `<div class="week-list">${weekDays.map((d) => { const iso = D.iso(d); const ev = dayList(d); return `<div class="agenda-day${iso === D.iso(today) ? ' is-today' : ''}"><div class="agenda-date"><b>${D.dayName(d).slice(0, 3)}</b> ${L.fmt.date(d).slice(4)}${iso === D.iso(today) ? ' · today' : ''}</div>${ev || '<span class="small muted">Nothing scheduled.</span>'}</div>`; }).join('')}</div>` : ''}
         <div class="agenda-14${view === 'agenda' ? ' is-shown' : ' is-hidden'}">${Array.from({ length: 14 }, (_, i) => D.addDays(today, i)).map((d, i) => { const sess = R().sessionsOn(d); const due = R().deadlines({ from: D.setTime(d, 0, 0), to: D.setTime(d, 23, 59, 59) }); if (!sess.length && !due.length) return ''; return `<div class="agenda-day"><div class="agenda-date"><b>${D.dayName(d).slice(0, 3)}</b> ${L.fmt.date(d).slice(4)}${i === 0 ? ' · today' : ''}</div>${sess.map(({ course: c, session: s }) => `<a class="cal-ev" style="--ch:${L.cc(c)}" href="#/course/${c.id}/day/${s.date}">${hm(s.start)} ${esc(c.code)} · ${s.chunks.length} chunks · ${L.fmt.dur(s.minutes)}</a>`).join('')}${due.map(({ course: c, assessment: a }) => `<a class="cal-ev is-due${a.kind === 'midterm' || a.kind === 'final' ? ' is-exam' : ''}" style="--ch:${L.cc(c)}" href="#/assess/${c.id}/${a.id}">${esc(a.title)} · ${esc(c.code)} · ${L.fmt.time(a.dueAt)}</a>`).join('')}</div>`; }).join('') || '<p class="muted small">Nothing in the next two weeks.</p>'}</div>

@@ -152,7 +152,7 @@
     const W = 1200, H = 800;
     const F = 'font-family="EB Garamond, Georgia, Times New Roman, serif"';
     const S = 'font-family="Inter, Helvetica, Arial, sans-serif"';
-    const gold = '#b08d2f', ink = '#161616', dim = '#6b6355', green = '#14532d';
+    const gold = '#a9863f', ink = '#161616', dim = '#6b6355', green = '#5a1a22'; // the seal and the name in the brand burgundy
     const line = cert.breakdown.map((b) => `${(KIND[b.kind] || b.kind)} ${b.avg.toFixed(0)}%`).join('  ·  ');
     return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 ${W} ${H}" class="cert-svg" role="img" aria-label="Certificate of Completion for ${esc(s.name)}">
       <rect width="${W}" height="${H}" fill="#fbfaf6"/>

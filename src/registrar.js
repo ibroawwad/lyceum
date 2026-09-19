@@ -3,7 +3,7 @@
 
   const D = L.date;
   const DAY = 86400000;
-  const COLORS = ['#22d3ee', '#f5b12b', '#fb7185', '#a78bfa', '#60a5fa', '#f472b6', '#fb923c', '#a3e635']; // never the brand green
+  const COLORS = ['#d4a24c', '#3fa590', '#de6a42', '#8f78db', '#5493dc', '#d6608c', '#7fae4a', '#c98f5e']; // never the brand burgundy or cream
   const SCALE = [[93, 'A', 4.0], [90, 'A−', 3.7], [87, 'B+', 3.3], [83, 'B', 3.0], [80, 'B−', 2.7], [77, 'C+', 2.3], [73, 'C', 2.0], [70, 'C−', 1.7], [67, 'D+', 1.3], [63, 'D', 1.0], [60, 'D−', 0.7], [-Infinity, 'F', 0]];
   const KIND_TITLE = { quiz: 'Quiz', pset: 'Problem set', midterm: 'Midterm examination', final: 'Final examination', project: 'Term project' };
   // the registrar's three pacings, defined by daily effort; the term length follows from the material

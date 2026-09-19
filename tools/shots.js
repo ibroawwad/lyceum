@@ -76,9 +76,9 @@ const UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/6
   const icon = fs.readFileSync(path.join(root, 'src', 'icon-512.png')).toString('base64');
   const ctx = await browser.newContext({ viewport: { width: 1024, height: 500 }, deviceScaleFactor: 1 });
   const page = await ctx.newPage();
-  await page.setContent(`<html><body style="margin:0;width:1024px;height:500px;background:#0a0a0b;display:flex;align-items:center;justify-content:center;gap:44px;font-family:Inter,-apple-system,system-ui,sans-serif;color:#f4f4f5">
-    <img src="data:image/png;base64,${icon}" style="width:220px;height:220px;border-radius:48px">
-    <div><div style="font-size:64px;font-weight:700;letter-spacing:-0.02em">Lyceum</div><div style="font-size:26px;color:#a1a1aa;margin-top:8px;max-width:520px;line-height:1.3">Any study material becomes a real course: a fixed term, daily blocks, graded papers, a certificate.</div></div>
+  await page.setContent(`<html><body style="margin:0;width:1024px;height:500px;background:#1b090d;display:flex;align-items:center;justify-content:center;gap:44px;font-family:Inter,-apple-system,system-ui,sans-serif;color:#f4ecdf">
+    <img src="data:image/png;base64,${icon}" style="width:220px;height:220px;border-radius:22%">
+    <div><div style="font-size:64px;font-weight:700;letter-spacing:-0.02em">Lyceum</div><div style="font-size:26px;color:#c9b6ad;margin-top:8px;max-width:520px;line-height:1.3">Any study material becomes a real course: a fixed term, daily blocks, graded papers, a certificate.</div></div>
   </body></html>`);
   await page.screenshot({ path: path.join(root, 'store', 'feature-graphic.png') });
   await ctx.close();

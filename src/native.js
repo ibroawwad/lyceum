@@ -92,13 +92,15 @@
     await S.share({ title, files: [w.uri] });
     return true;
   }
+  // status bar text follows the theme: light text on the burgundy, dark text on the cream
+  async function statusBar(dark, bg) { const SB = plugin('StatusBar'); if (!SB) return; try { await SB.setStyle({ style: dark ? 'DARK' : 'LIGHT' }); await SB.setBackgroundColor({ color: bg }); } catch (e) { /* iOS ignores the colour */ } }
   async function boot() {
     if (!isNative()) return;
-    const SB = plugin('StatusBar'); if (SB) { try { await SB.setStyle({ style: 'DARK' }); await SB.setBackgroundColor({ color: '#0a0a0b' }); } catch (e) { /* iOS ignores colour */ } }
+    await statusBar(L.theme ? L.theme.isDark() : true, L.theme && !L.theme.isDark() ? '#f3efe6' : '#1b090d');
     const LN = plugin('LocalNotifications'); if (LN) LN.addListener('localNotificationActionPerformed', (ev) => { const url = ev.notification && ev.notification.extra && ev.notification.extra.url; if (url) location.hash = url; });
     const App = plugin('App'); if (App) App.addListener('appStateChange', (st) => { if (st.isActive && L.registrar) L.registrar.sweep().then(() => L.render()); });
     const SS = plugin('SplashScreen'); if (SS) { try { await SS.hide(); } catch (e) { /* ignore */ } }
   }
 
-  L.native = { isNative, restore, saveRecord, putMaterial, getMaterial, putFile, getFile, planNotifications, scheduleNotifications, rescheduleSoon, haptic, shareFile, boot };
+  L.native = { isNative, restore, saveRecord, putMaterial, getMaterial, putFile, getFile, planNotifications, scheduleNotifications, rescheduleSoon, haptic, shareFile, statusBar, boot };
 })(window.L);

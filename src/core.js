@@ -14,7 +14,7 @@ window.L = window.L || {};
     const f = typeof key === 'function' ? key : (o) => o[key];
     return (a, b) => { const x = f(a), y = f(b); return x < y ? -1 : x > y ? 1 : 0; };
   };
-  L.cc = (c) => (c && c.color) || '#22d3ee'; // a course's colour, HabitKit-style
+  L.cc = (c) => (c && c.color) || '#d4a24c'; // a course's colour, HabitKit-style
   L.groupBy = (arr, fn) => arr.reduce((m, x) => { const k = typeof fn === 'function' ? fn(x) : x[fn]; (m[k] = m[k] || []).push(x); return m; }, {});
   L.uid = (prefix = 'x') => {
     const b = new Uint8Array(6); crypto.getRandomValues(b);
@@ -282,6 +282,14 @@ window.L = window.L || {};
       if (mode === 'light' || mode === 'dark') root.setAttribute('data-theme', mode); else root.removeAttribute('data-theme');
       try { if (mode === 'light' || mode === 'dark') localStorage.setItem(THEME_KEY, mode); else localStorage.removeItem(THEME_KEY); } catch (e) { /* ignore */ }
       if (L.S) { L.S.settings.theme = mode; L.S.settings.themeChosen = true; L.save(); }
+      L.theme.sync();
+    },
+    // the browser chrome and the native status bar follow the effective theme
+    isDark() { const t = document.documentElement.getAttribute('data-theme'); return t ? t === 'dark' : !(window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches); },
+    sync() {
+      const dark = L.theme.isDark(); const bg = dark ? '#1b090d' : '#f3efe6';
+      const meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.setAttribute('content', bg);
+      if (L.native && L.native.statusBar) L.native.statusBar(dark, bg);
     },
     apply() { const chosen = L.S?.settings?.themeChosen; L.theme.set(L.S?.settings?.theme || 'dark'); if (L.S && !chosen) { L.S.settings.themeChosen = false; } },
   };
@@ -351,6 +359,7 @@ window.L = window.L || {};
   // ---------- boot ----------
   L.load();
   L.theme.apply();
+  try { window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => L.theme.sync()); } catch (e) { /* older WebKit */ }
   window.addEventListener('pagehide', L.saveNow);
   window.addEventListener('beforeunload', L.saveNow);
   setInterval(() => L.emit('tick'), 1000);
