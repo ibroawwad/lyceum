@@ -6,7 +6,7 @@ const root = path.join(__dirname, '..');
 const src = (f) => path.join(root, 'src', f);
 const read = (f) => fs.readFileSync(src(f), 'utf8');
 
-const ORDER = ['core.js', 'native.js', 'sample.js', 'intake.js', 'faculty.js', 'registrar.js', 'papers.js', 'store.js',
+const ORDER = ['core.js', 'native.js', 'sample.js', 'intake.js', 'faculty.js', 'registrar.js', 'papers.js', 'store.js', 'cohort.js',
   'views-shell.js', 'views-course.js', 'views-misc.js', 'views-enrol.js', 'library.js'];
 
 let html = read('shell.html');
@@ -26,7 +26,9 @@ html = html.replace('/* SCRIPTS */', () => js);
 const dataPng = (f) => 'data:image/png;base64,' + fs.readFileSync(src(f)).toString('base64');
 html = html.replace('/* ICON_64 */', () => dataPng('icon-64.png')).replace('/* ICON_180 */', () => dataPng('icon-180.png'));
 // the server the native apps talk to, baked in at build time: LYCEUM_API=https://api.example.com npm run build
-html = html.replace('/* API_BASE */', () => String(process.env.LYCEUM_API || '').replace(/['\\]/g, ''));
+// until a domain exists the API answers on an sslip.io name that resolves to the droplet; LYCEUM_API= (empty) builds without one
+const DEFAULT_API = 'https://api.146-190-139-68.sslip.io';
+html = html.replace('/* API_BASE */', () => String(process.env.LYCEUM_API === undefined ? DEFAULT_API : process.env.LYCEUM_API).replace(/['\\]/g, ''));
 fs.mkdirSync(path.join(root, 'dist'), { recursive: true });
 fs.writeFileSync(path.join(root, 'dist', 'lyceum.html'), html);
 fs.writeFileSync(path.join(root, 'dist', 'index.html'), html); // hosting + Capacitor expect index.html

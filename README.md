@@ -35,6 +35,12 @@ Contract: `SPEC.md`.
 (`com.lyceum.app.course`) verified by the server, which unlocks the faculty and a registered certificate for that
 course. Store copy, screenshots (`node tools/shots.js`) and the release runbook live in `store/`.
 
+## Cohorts
+An instructor (a key issued on the server with `node admin.js add "Name"`, entered under More → Instructor) runs the
+wizard in instructor mode, picks the pace and the Monday the term starts, and publishes the plan; students join with
+the six-character code or the link, sign the same contract, and study the same term, days and papers. The Class tab
+shows the roster's progress; the Teaching page shows every cohort. Nothing about a published term can be changed.
+
 ## Library
 `server/library.json` is the catalogue (23 titles to start: OpenStax CC BY editions and public-domain classics from
 Project Gutenberg). Note: OpenStax's *current* editions are CC BY-NC-SA; only the CC BY editions are listed because
@@ -47,4 +53,4 @@ A dependency-free Node 24 API (faculty proxy with our key + entitlement tokens, 
 verification, public certificate verification at `/verify/<code>`, library catalogue). Deployed on its own with
 `deploy/release.sh <host> [domain]`: user `lyceum`, `/srv/lyceum/app`, container `lyceum-api` on `127.0.0.1:4700`,
 its own nginx block; nothing shared with any other service on the box. Config in `/srv/lyceum/app/.env`
-(see `server/.env.example`). The app talks to it when **More → Lyceum server** is set.
+(see `server/.env.example`). The build bakes the public address in (`LYCEUM_API`, today `https://api.146-190-139-68.sslip.io` until a domain exists); **More → Faculty → Lyceum server** overrides it.

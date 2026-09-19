@@ -6,6 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const db = require('./db');
 const iap = require('./iap');
+const cohorts = require('./cohorts');
 const lib = require('./library');
 
 const PORT = Number(process.env.PORT || 4700);
@@ -32,6 +33,9 @@ function verify(token) {
 const json = (res, status, body, extra = {}) => { res.writeHead(status, Object.assign({ 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }, extra)); res.end(JSON.stringify(body)); };
 const html = (res, status, body) => { res.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(body); };
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function readRaw(req, limit) {
+  return new Promise((resolve, reject) => { let n = 0; const chunks = []; req.on('data', (c) => { n += c.length; if (n > limit) { reject(new Error('body too large')); req.destroy(); } else chunks.push(c); }); req.on('end', () => resolve(Buffer.concat(chunks))); req.on('error', reject); });
+}
 function readBody(req, limit = 3 * 1024 * 1024) {
   return new Promise((resolve, reject) => { let n = 0; const chunks = []; req.on('data', (c) => { n += c.length; if (n > limit) { reject(new Error('body too large')); req.destroy(); } else chunks.push(c); }); req.on('end', () => { try { resolve(chunks.length ? JSON.parse(Buffer.concat(chunks)) : {}); } catch (e) { reject(new Error('invalid JSON')); } }); req.on('error', reject); });
 }
@@ -139,8 +143,8 @@ async function libraryPages(req, res, id, from, to) {
 const server = http.createServer(async (req, res) => {
   const origin = req.headers.origin || '*';
   res.setHeader('Access-Control-Allow-Origin', origin);
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Instructor-Key');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'no-referrer');
   if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
@@ -152,8 +156,20 @@ const server = http.createServer(async (req, res) => {
     const lg = url.pathname.match(/^\/v1\/library\/([a-z0-9-]+)\/pages\/(\d+)-(\d+)$/); if (req.method === 'GET' && lg) return libraryPages(req, res, lg[1], lg[2], lg[3]);
     const m = url.pathname.match(/^\/(?:verify|v1\/certificates)\/([0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4})$/);
     if (req.method === 'GET' && m) return verifyPage(res, m[1], url.pathname.startsWith('/v1/'));
+    // cohorts: public reads, member writes, instructor publishing (key in the X-Instructor-Key header)
+    const co = url.pathname.match(/^\/v1\/cohorts\/([A-Z2-9]{6})(?:\/(material|file\/([\w-]+)|join|progress|close))?$/);
+    if (co && req.method === 'GET' && !co[2]) { const c = cohorts.get(co[1]); return c ? json(res, 200, c) : json(res, 404, { error: 'No cohort has that code.' }); }
+    if (co && req.method === 'GET' && co[2] === 'material') { const m = cohorts.material(co[1]); if (!m) return json(res, 404, { error: 'not found' }); res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=86400' }); return res.end(m); }
+    if (co && req.method === 'GET' && co[3]) { const f = cohorts.file(co[1], co[3]); if (!f) return json(res, 404, { error: 'not found' }); res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'Cache-Control': 'public, max-age=86400' }); return res.end(f); }
+    if (co && req.method === 'PUT' && co[3]) { const instr = cohorts.instructorByKey(req.headers['x-instructor-key']); if (!instr) return json(res, 401, { error: 'instructor key required' }); const bytes = await readRaw(req, 60 * 1024 * 1024); const r = cohorts.putFile(instr, co[1], co[3], bytes); return json(res, r.status, r.body || { error: r.error }); }
+    if (url.pathname === '/v1/instructor/cohorts' && req.method === 'GET') { const instr = cohorts.instructorByKey(req.headers['x-instructor-key']); if (!instr) return json(res, 401, { error: 'instructor key required' }); return json(res, 200, { instructor: instr, cohorts: cohorts.list(instr) }); }
     if (req.method === 'POST') {
-      const body = await readBody(req);
+      const body = await readBody(req, url.pathname === '/v1/instructor/cohorts' ? 16 * 1024 * 1024 : undefined);
+      if (co && co[2] === 'join') { if (!rateLimit('join:' + ip(req), 30, 3600e3)) return json(res, 429, { error: 'Too many attempts.' }); const r = cohorts.join(co[1], body); if (r.status !== 200) return json(res, r.status, { error: r.error }); if (SECRET) r.body.entitlement = { token: sign({ jti: 'co:' + co[1] + ':' + sha(body.device).slice(0, 16), ch: 'cohort:' + co[1], dev: body.device, iat: Math.floor(Date.now() / 1000), exp: Math.floor(new Date(r.body.cohort.term.end + 'T23:59:59Z').getTime() / 1000) + 30 * 86400 }), platform: 'cohort' }; return json(res, 200, r.body); }
+      if (co && co[2] === 'progress') { const r = cohorts.progress(co[1], body); return json(res, r.status, r.body || { error: r.error }); }
+      if (co && co[2] === 'close') { const instr = cohorts.instructorByKey(req.headers['x-instructor-key']); if (!instr) return json(res, 401, { error: 'instructor key required' }); const r = cohorts.close(instr, co[1], body.closed !== false); return json(res, r.status, r.body || { error: r.error }); }
+      if (url.pathname === '/v1/instructor/whoami') { const instr = cohorts.instructorByKey(body.key); return instr ? json(res, 200, instr) : json(res, 401, { error: 'That key is not an instructor key.' }); }
+      if (url.pathname === '/v1/instructor/cohorts') { const instr = cohorts.instructorByKey(req.headers['x-instructor-key'] || body.key); if (!instr) return json(res, 401, { error: 'instructor key required' }); const r = cohorts.create(instr, body); return json(res, r.status, r.body || { error: r.error }); }
       if (url.pathname === '/v1/faculty/chat') return faculty(req, res, body);
       if (url.pathname === '/v1/iap/verify') return iapVerify(req, res, body);
       if (url.pathname === '/v1/certificates') return registerCertificate(req, res, body);

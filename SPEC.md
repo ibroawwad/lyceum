@@ -581,6 +581,21 @@ carries `fee` + `purchase`. A receipt the server could not confirm is kept in `S
 next attempt for any course (the server has never seen it), so a student is never charged twice. `S.device` is a
 random id every entitlement is bound to. The web build charges nothing.
 
+### 9.4 Cohorts and instructors (`src/cohort.js`, `server/cohorts.js`)
+An **instructor** is an account on the server (`node admin.js add "Name"` prints a key once); the key is entered under
+More → Instructor and kept in `S.instructor` (never exported). Instructor mode in the wizard (`#/enrol?teach=1`)
+runs the registrar with `teach: true` (no personal budget or timetable, first slot 09:00) and a chosen `start`
+Monday; the prospectus is **published** (`POST /v1/instructor/cohorts`: the plan without its text + the material
+pack; originals `PUT /v1/cohorts/:code/file/:sourceId`) and the server answers with a six-character code. A
+**student** joins by code (`#/enrol?join=CODE` or the Join card): the plan comes back as a Prospectus with
+`cohort: { code, title, instructor, members }`, must pass `registrar.fits()` (budget and no timetable clash with
+running courses), skips the pace step and the store fee, and is signed like any contract; `enrol` then `POST
+…/join` puts the student on the roster and returns a cohort entitlement (faculty for the term). Joining closes at the
+start of term. Progress (`chunksDone/Total`, current letter, streak, week, papers) is posted on ticks (debounced) and
+sweeps (≤ every 10 min) to `…/progress`; the roster shows on the course's **Class** tab and on the instructor's
+Teaching page (`#/teach`), which can close or reopen enrolment. The term, days and papers of a cohort are the
+instructor's and identical for everyone; nobody, including the instructor, can change them after publishing.
+
 ### 10.1 Test hooks (binding — the smoke test uses exactly these)
 - welcome: `<input id="student-name">`, button `[data-act=matriculate]`.
 - today: `.empty` when there are no courses (with `[data-act=load-sample]`), `.today-grid` otherwise.

@@ -58,6 +58,7 @@ window.L = window.L || {};
     out.ledger = Array.isArray(s?.ledger) ? s.ledger : [];
     out.device = typeof s?.device === 'string' ? s.device : null;
     out.pendingPurchases = Array.isArray(s?.pendingPurchases) ? s.pendingPurchases : [];
+    out.instructor = s?.instructor && s.instructor.key ? s.instructor : null;
     out.version = L.VERSION;
     return out;
   }
@@ -247,7 +248,7 @@ window.L = window.L || {};
   const FILE_EXPORT_LIMIT = 40 * 1024 * 1024;
   L.exportRecord = async () => {
     const state = JSON.parse(JSON.stringify(L.S));
-    state.settings.apiKey = ''; // a record export is meant to travel; the key is not
+    state.settings.apiKey = ''; state.instructor = null; // a record export is meant to travel; keys are not
     const files = await L.db.allFiles();
     let bytes = 0;
     for (const f of Object.values(files)) bytes += f.blob ? f.blob.size : f.bytes ? f.bytes.byteLength : (f.html || '').length;

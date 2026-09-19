@@ -695,7 +695,7 @@ body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: 
 
 /* ---------- official papers (paper-white regardless of theme) ---------- */
 .sheet-viewport { width: 100%; }
-.sheet { --paper: #2c0508; --ink: #f4ecdf; --dim: #c9b3b1; --rule: #5a2a33; --green: #e9dbc1; --gold: #d2ae63; print-color-adjust: exact; -webkit-print-color-adjust: exact; width: 100%; max-width: 820px; margin: 0 auto; background: var(--paper); color: var(--ink); font-family: "EB Garamond", Georgia, "Times New Roman", serif; font-size: 15px; line-height: 1.45; padding: 44px 52px; box-shadow: 0 1px 2px rgba(0,0,0,0.2), 0 12px 40px rgba(0,0,0,0.25); transform-origin: top left; }
+.sheet { --paper: #2c0508; --ink: #f4ecdf; --dim: #c9b3b1; --rule: #5a2a33; --green: #e9dbc1; --gold: #d2ae63; --seal-paper: #2c0508; print-color-adjust: exact; -webkit-print-color-adjust: exact; width: 100%; max-width: 820px; margin: 0 auto; background: var(--paper); color: var(--ink); font-family: "EB Garamond", Georgia, "Times New Roman", serif; font-size: 15px; line-height: 1.45; padding: 44px 52px; box-shadow: 0 1px 2px rgba(0,0,0,0.2), 0 12px 40px rgba(0,0,0,0.25); transform-origin: top left; }
 .sheet.certificate { width: 100%; padding: 0; box-shadow: 0 1px 2px rgba(0,0,0,0.2), 0 12px 40px rgba(0,0,0,0.25); }
 .sheet.certificate svg { display: block; width: 100%; height: auto; }
 .sheet-head { display: grid; grid-template-columns: auto 1fr auto; gap: 18px; align-items: center; padding-bottom: 16px; border-bottom: 2px solid var(--gold); margin-bottom: 22px; }
@@ -769,7 +769,7 @@ body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: 
 <div id="toasts" class="toast-host" aria-live="polite"></div>
 <div id="modals" class="modal-host"></div>
 <script>
-window.LYCEUM_API = '';
+window.LYCEUM_API = 'https://api.146-190-139-68.sslip.io';
 
 /* ---- core.js ---- */
 window.L = window.L || {};
@@ -832,6 +832,7 @@ window.L = window.L || {};
     out.ledger = Array.isArray(s?.ledger) ? s.ledger : [];
     out.device = typeof s?.device === 'string' ? s.device : null;
     out.pendingPurchases = Array.isArray(s?.pendingPurchases) ? s.pendingPurchases : [];
+    out.instructor = s?.instructor && s.instructor.key ? s.instructor : null;
     out.version = L.VERSION;
     return out;
   }
@@ -1021,7 +1022,7 @@ window.L = window.L || {};
   const FILE_EXPORT_LIMIT = 40 * 1024 * 1024;
   L.exportRecord = async () => {
     const state = JSON.parse(JSON.stringify(L.S));
-    state.settings.apiKey = ''; // a record export is meant to travel; the key is not
+    state.settings.apiKey = ''; state.instructor = null; // a record export is meant to travel; keys are not
     const files = await L.db.allFiles();
     let bytes = 0;
     for (const f of Object.values(files)) bytes += f.blob ? f.blob.size : f.bytes ? f.bytes.byteLength : (f.html || '').length;
@@ -2371,9 +2372,11 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
     if (t.length > 64) t = t.slice(0, 61).replace(/\s+\S*$/, '') + '…';
     return t;
   }
-  function buildPlan({ analysis, segments, text, sources, words, paceKey }) {
+  // teach: an instructor drawing up a cohort course — no personal budget or timetable applies, and the term may start
+  // on a chosen Monday instead of the next one
+  function buildPlan({ analysis, segments, text, sources, words, paceKey, teach = false, start: startIso = null }) {
     const pace = PACES[paceKey];
-    const b = budget();
+    const b = teach ? { available: Infinity, weekly: Infinity, committed: 0 } : budget();
     if (b.available < MIN_HPW) {
       const running = courses('active').sort(L.by((c) => c.term.end));
       const nextFree = running.length ? running[0].term.end : null;
@@ -2388,9 +2391,9 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
     if (hoursPerWeek > b.available + 1e-9) { hoursPerWeek = Math.floor(b.available * 2) / 2; minutesPerDay = Math.floor((hoursPerWeek * 60) / studyDays.length); reduced = true; }
     const weeks = L.clamp(Math.ceil(totalHours / hoursPerWeek), 2, 52);
     const credits = hoursPerWeek >= 9 ? 4 : hoursPerWeek >= 6 ? 3 : hoursPerWeek >= 4 ? 2 : 1;
-    const start = D.nextMonday(L.today());
+    const start = startIso && /^\d{4}-\d{2}-\d{2}$/.test(startIso) && D.parse(startIso) >= D.nextMonday(L.today()) ? D.addDays(D.parse(startIso), -D.dow(D.parse(startIso))) : D.nextMonday(L.today());
     const term = { start: D.iso(start), end: D.iso(D.addDays(start, weeks * 7 - 1)), weeks };
-    const concurrent = L.S.courses.filter((c) => c.state === 'enrolled' && overlaps(c, { term }));
+    const concurrent = teach ? [] : L.S.courses.filter((c) => c.state === 'enrolled' && overlaps(c, { term }));
 
     // timetable slot: one daily study block on each study day, at an hour no concurrent course uses on those days
     const rows = [9, 11, 14, 16, 18, 7, 20].map((h) => ({ days: studyDays, start: h * 60, minutes: minutesPerDay }));
@@ -2567,8 +2570,19 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
   }
   const plan = (input) => plans(input).standard; // kept for tools that want one prospectus
 
+  // a plan drawn up elsewhere (a cohort) must still fit this student's timetable and budget
+  function fits(p) {
+    const b = budget();
+    if (p.plan.hoursPerWeek > b.available + 1e-9) return `This cohort needs ${p.plan.hoursPerWeek} h a week and your study budget has ${b.available} h free. Raise the budget under More, or wait for a course to end.`;
+    const concurrent = L.S.courses.filter((c) => c.state === 'enrolled' && overlaps(c, p));
+    const slot = p.plan.slot;
+    const clash = concurrent.find((c) => c.sessions.some((s) => slot.days.includes(s.day) && slot.start < s.start + s.minutes && s.start < slot.start + slot.minutes));
+    if (clash) return `Its daily block clashes with ${clash.code} ${clash.title}. Two courses never share a block.`;
+    return null;
+  }
   async function enrol(prospectus, contract, entitlement = null) {
     if (prospectus.unavailable) throw new Error(prospectus.unavailable);
+    if (prospectus.cohort) { const why = fits(prospectus); if (why) throw new Error(why); }
     if (!contract || !contract.signature || !contract.name) throw new Error('Enrolment needs a signed registration contract.');
     const no = contract.no || L.papers.contractNo();
     const textHash = await L.sha256(L.papers.contractText(prospectus, L.S.student, no, contract.fee));
@@ -2585,7 +2599,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
       catch (e) { console.error(e); const src = c.material.sources.find((x) => x.id === f.id); if (src) src.hasFile = false; problems.push(`the original of ${f.file.name || 'a file'}`); }
     }
     await L.ledger.append('contract_signed', { courseId: c.id, no, textHash, name: contract.name });
-    await L.ledger.append('enrolled', { courseId: c.id, code: c.code, title: c.title, weeks: c.term.weeks, start: c.term.start, end: c.term.end, hoursPerWeek: c.plan.hoursPerWeek, pace: c.plan.pace, fee: contract.fee || null, purchase: entitlement ? { platform: entitlement.platform, tx: entitlement.tx } : null });
+    await L.ledger.append('enrolled', { courseId: c.id, code: c.code, title: c.title, weeks: c.term.weeks, start: c.term.start, end: c.term.end, hoursPerWeek: c.plan.hoursPerWeek, pace: c.plan.pace, fee: contract.fee || null, purchase: entitlement ? { platform: entitlement.platform, tx: entitlement.tx } : null, cohort: c.cohort ? c.cohort.code : null });
     L.saveNow();
     if (problems.length && L.ui) L.ui.toast(`Enrolled, but this device could not store ${problems.join(' and ')}. Reading will use what is available.`, 'warn', 8000);
     return c;
@@ -2730,6 +2744,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
     ch.done = new Date(L.now()).toISOString();
     await L.ledger.append('chunk_completed', { courseId: c.id, ref: s.id, chunk: ch.id, week: s.week, onTime: today === s.date, title: ch.title });
     L.save();
+    if (c.cohort && L.cohort) L.cohort.pushSoon();
     return today === s.date ? 'done' : 'late';
   }
   // ---------- quick check: two questions from the chunk itself; pass = both right ----------
@@ -2856,6 +2871,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
         }
       }
       if (changed) { L.save(); L.emit('state'); }
+      if (L.cohort) L.cohort.pushAll(); // the class sees each other's standing, at most every ten minutes
     })().finally(() => { sweeping = null; });
     return sweeping;
   }
@@ -2912,7 +2928,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
     return { streak, longest, days: { perfect, partial, missed }, weekMinutes, completionRate: dueAll ? doneAll / dueAll : null, onTimeRate: doneAll ? onAll / doneAll : null, minutes: L.sum(dates.map((d) => byDay[d].minutes)), perCourse };
   }
 
-  L.registrar = { RegistrarError, KIND_TITLE, SCALE, PACES, stats, budget, plan, plans, enrol, withdraw, course, courses, courseState, currentWeek, week, sessionsOn, deadlines, nextDeadline, load, assessmentState, deadline, standing, letter, points, gpa, complete, checkPaper, submitCheck, locate, begin, answer, submit, sweep, materialFor };
+  L.registrar = { RegistrarError, KIND_TITLE, SCALE, PACES, stats, budget, plan, plans, fits, enrol, withdraw, course, courses, courseState, currentWeek, week, sessionsOn, deadlines, nextDeadline, load, assessmentState, deadline, standing, letter, points, gpa, complete, checkPaper, submitCheck, locate, begin, answer, submit, sweep, materialFor };
 })(window.L);
 
 
@@ -2928,10 +2944,36 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
   const DAYS_LABEL = (p) => (p.plan.studyDays.length === 7 ? 'every day' : p.plan.studyDays.length === 6 ? 'Monday to Saturday' : 'Monday to Friday');
   const KIND = { quiz: 'Quizzes', pset: 'Problem sets', midterm: 'Midterm examination', final: 'Final examination', project: 'Term project', participation: 'Daily study' };
 
-  // the seal as a group usable inside any SVG (x, y = top-left; s = size in that SVG's units)
-  L.SEAL_G = (x, y, s, { year = new Date(L.now()).getFullYear(), text = 'LYCEUM · OFFICE OF THE REGISTRAR · ', id = 'r' } = {}) => {
-    const k = s / 200;
-    return `<g transform="translate(${x} ${y}) scale(${k})"><defs><path id="seal-ring-${id}" d="M100,100 m-70,0 a70,70 0 1,1 140,0 a70,70 0 1,1 -140,0"/></defs><circle cx="100" cy="100" r="96" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="100" cy="100" r="88" fill="none" stroke="currentColor" stroke-width="1"/><circle cx="100" cy="100" r="54" fill="none" stroke="currentColor" stroke-width="1"/><text font-family="Inter, system-ui, sans-serif" font-size="13.5" font-weight="700" letter-spacing="2.2" fill="currentColor"><textPath href="#seal-ring-${id}" startOffset="12">${text}</textPath></text><g transform="translate(74 66) scale(0.82)">${L.MARK_INNER}</g><text x="100" y="135" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-size="11" font-weight="700" letter-spacing="2" fill="currentColor">${year}</text></g>`;
+  // the seal as a group usable inside any SVG (x, y = top-left; s = size in that SVG's units). Engraved in one colour:
+  // a double rim, the office on two arcs with rosettes at the sides, a beaded inner ring, and a temple on three steps
+  // over the year in Roman numerals.
+  const ROMAN = (n) => { const T = [[1000, 'M'], [900, 'CM'], [500, 'D'], [400, 'CD'], [100, 'C'], [90, 'XC'], [50, 'L'], [40, 'XL'], [10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']]; let out = ''; for (const [v, r] of T) while (n >= v) { out += r; n -= v; } return out; };
+  L.SEAL_G = (x, y, s, { year = new Date(L.now()).getFullYear(), id = 'r', paper = null } = {}) => {
+    const k = s / 200, F = 'font-family="EB Garamond, Georgia, Times New Roman, serif"', flute = paper || 'var(--seal-paper, #fff)';
+    const cols = [73, 91, 109, 127];
+    const column = (cx) => `<rect x="${cx - 5}" y="98.5" width="10" height="2.6" rx="0.6"/><rect x="${cx - 3.2}" y="101" width="6.4" height="29"/><line x1="${cx - 1}" y1="103" x2="${cx - 1}" y2="129" stroke="${flute}" stroke-width="0.6" opacity="0.55"/><line x1="${cx + 1.2}" y1="103" x2="${cx + 1.2}" y2="129" stroke="${flute}" stroke-width="0.6" opacity="0.55"/><rect x="${cx - 5}" y="130" width="10" height="2.6" rx="0.6"/>`;
+    const rosette = (cx, cy) => `<path d="M${cx} ${cy - 3.2} L${cx + 1} ${cy - 1} L${cx + 3.2} ${cy} L${cx + 1} ${cy + 1} L${cx} ${cy + 3.2} L${cx - 1} ${cy + 1} L${cx - 3.2} ${cy} L${cx - 1} ${cy - 1} Z"/>`;
+    return `<g transform="translate(${x} ${y}) scale(${k})" fill="currentColor" stroke="none">
+      <defs><path id="seal-top-${id}" d="M24,100 A76,76 0 1,1 176,100"/><path id="seal-bot-${id}" d="M20,100 A80,80 0 0,0 180,100"/></defs>
+      <circle cx="100" cy="100" r="97" fill="none" stroke="currentColor" stroke-width="2.6"/>
+      <circle cx="100" cy="100" r="92.5" fill="none" stroke="currentColor" stroke-width="0.8"/>
+      <text ${F} font-size="14.5" font-weight="600" letter-spacing="4.2"><textPath href="#seal-top-${id}" startOffset="50%" text-anchor="middle">LYCEUM</textPath></text>
+      <text ${F} font-size="9.2" font-weight="500" letter-spacing="2.4"><textPath href="#seal-bot-${id}" startOffset="50%" text-anchor="middle">OFFICE OF THE REGISTRAR</textPath></text>
+      ${rosette(24.5, 100)}${rosette(175.5, 100)}
+      <circle cx="100" cy="100" r="66" fill="none" stroke="currentColor" stroke-width="1.7" stroke-dasharray="0.9 2.3" stroke-linecap="round"/>
+      <circle cx="100" cy="100" r="62.5" fill="none" stroke="currentColor" stroke-width="0.7"/>
+      <path d="M100 62 L136 82.5 L64 82.5 Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+      <path d="M100 67.5 L129.5 80 L70.5 80 Z" fill="none" stroke="currentColor" stroke-width="0.7"/>
+      <path d="M100 71.2 L101.3 74.7 L104.8 76 L101.3 77.3 L100 80.8 L98.7 77.3 L95.2 76 L98.7 74.7 Z"/>
+      <rect x="62" y="83.5" width="76" height="2.4"/>
+      <rect x="65" y="87" width="70" height="7.5" fill="none" stroke="currentColor" stroke-width="0.9"/>
+      ${[71, 81.5, 92, 102.5, 113, 123.5].map((tx) => `<rect x="${tx}" y="88.2" width="1.1" height="5"/><rect x="${tx + 2.4}" y="88.2" width="1.1" height="5"/>`).join('')}
+      <rect x="64" y="95.2" width="72" height="2.2"/>
+      ${cols.map(column).join('')}
+      <rect x="64" y="132.8" width="72" height="2.6"/><rect x="59" y="135.8" width="82" height="2.6"/><rect x="54" y="138.8" width="92" height="2.6"/>
+      <text x="100" y="153.5" text-anchor="middle" ${F} font-size="8.6" font-weight="500" letter-spacing="2.2">${ROMAN(year)}</text>
+      <line x1="56" y1="150.6" x2="76" y2="150.6" stroke="currentColor" stroke-width="0.7"/><line x1="124" y1="150.6" x2="144" y2="150.6" stroke="currentColor" stroke-width="0.7"/>
+    </g>`;
   };
 
   L.SEAL = (size = 120, opts = {}) => `<svg viewBox="0 0 200 200" width="${size}" height="${size}" class="seal" aria-label="Seal of the Registrar">${L.SEAL_G(0, 0, 200, opts)}</svg>`;
@@ -3077,7 +3119,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
       <rect width="${W}" height="${H}" fill="${paper}"/>
       <rect x="28" y="28" width="${W - 56}" height="${H - 56}" fill="none" stroke="${gold}" stroke-width="3"/>
       <rect x="40" y="40" width="${W - 80}" height="${H - 80}" fill="none" stroke="${gold}" stroke-width="1"/>
-      <g style="color:${gold}">${L.SEAL_G(W / 2 - 60, 70, 120, { year: new Date(cert.issuedAt).getFullYear(), id: 'cert' })}</g>
+      <g style="color:${gold}">${L.SEAL_G(W / 2 - 60, 70, 120, { year: new Date(cert.issuedAt).getFullYear(), id: 'cert', paper })}</g>
       <text x="${W / 2}" y="226" text-anchor="middle" ${S} font-size="12" font-weight="700" letter-spacing="5" fill="${green}">LYCEUM · OFFICE OF THE REGISTRAR</text>
       <text x="${W / 2}" y="286" text-anchor="middle" ${F} font-size="48" fill="${ink}">Certificate of Completion</text>
       <text x="${W / 2}" y="378" text-anchor="middle" ${F} font-size="54" font-style="italic" font-weight="500" fill="${ink}">${esc(s.name)}</text>
@@ -3200,6 +3242,100 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
 })(window.L);
 
 
+/* ---- cohort.js ---- */
+(function (L) {
+  'use strict';
+  // Cohorts. An instructor publishes a course plan (the registrar's prospectus plus the material) under a six-letter
+  // code; students join with the code and enrol on the very same term, days and papers. Each student's progress is
+  // reported to the server so the class can see itself. Instructors hold a key issued on the server.
+  const base = () => (L.S?.settings?.apiBase || L.API_BASE || '').trim().replace(/\/$/, '');
+  const key = () => (L.S?.instructor?.key || '').trim();
+  const iso = () => new Date(L.now()).toISOString();
+  const needServer = () => { if (!base()) throw new Error('Cohorts need the Lyceum server. Set it under More → Faculty.'); };
+  async function api(path, { method = 'GET', body, raw, instructor = false, timeout = 60000 } = {}) {
+    needServer();
+    const headers = {}; if (body && !raw) headers['Content-Type'] = 'application/json'; if (instructor) headers['X-Instructor-Key'] = key();
+    const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), timeout);
+    let r;
+    try { r = await fetch(base() + path, { method, headers, body: raw ? body : body ? JSON.stringify(body) : undefined, signal: ctl.signal }); }
+    catch (e) { throw new Error(`The Lyceum server could not be reached (${e.name === 'AbortError' ? 'timeout' : 'network'}).`); }
+    finally { clearTimeout(t); }
+    if (raw === 'bytes') { if (!r.ok) throw new Error(`The server answered ${r.status}.`); return r.arrayBuffer(); }
+    let j = null; try { j = await r.json(); } catch (e) { j = null; }
+    if (!r.ok) throw new Error((j && j.error) || `The server answered ${r.status}.`);
+    return j;
+  }
+  const normCode = (s) => String(s || '').toUpperCase().replace(/[^A-Z2-9]/g, '').slice(0, 6);
+
+  // ---------- students ----------
+  const fetchCohort = (code) => api(`/v1/cohorts/${normCode(code)}`);
+  // the plan becomes a Prospectus again: the text pack and any original files are fetched so the course is complete on the device
+  async function prospectusFor(data, onProgress = () => {}) {
+    onProgress('Fetching the material…');
+    const pack = await api(`/v1/cohorts/${data.code}/material`);
+    const p = Object.assign({}, data.course, { sourcesText: pack.text, sourceFiles: [], cohort: { code: data.code, title: data.title, instructor: data.instructor, members: data.members, joinedAt: null } });
+    for (const src of (p.material && p.material.sources) || []) {
+      if (!src.hasFile) continue;
+      try { onProgress(`Fetching ${src.name}…`); const bytes = await api(`/v1/cohorts/${data.code}/file/${src.id}`, { raw: 'bytes', timeout: 180000 }); p.sourceFiles.push({ id: src.id, file: { kind: src.kind === 'pdf' ? 'pdf' : 'html', name: src.name, bytes } }); }
+      catch (e) { console.error(e); src.hasFile = false; }
+    }
+    return p;
+  }
+  // the class roster and the entitlement that pays for the faculty come back from the server on joining
+  async function join(c) {
+    const r = await api(`/v1/cohorts/${c.cohort.code}/join`, { method: 'POST', body: { device: L.store.deviceId(), studentId: L.S.student.id, name: L.S.student.name } });
+    c.cohort.joinedAt = iso(); c.cohort.roster = r.roster; c.cohort.members = r.cohort.members;
+    if (r.entitlement && !c.entitlement) c.entitlement = Object.assign({ tx: null, productId: null, courseHash: 'cohort:' + c.cohort.code, sandbox: false, at: iso() }, r.entitlement);
+    L.saveNow();
+    return r;
+  }
+  function progressOf(c) {
+    const R = L.registrar; const st = R.standing(c); const stats = R.stats().perCourse.find((x) => x.course.id === c.id);
+    const chunks = c.sessions.flatMap((s) => s.chunks);
+    return { chunksDone: chunks.filter((k) => k.done).length, chunksTotal: chunks.length, pct: st.current == null ? null : st.current, letter: st.current == null ? null : R.letter(st.current), streak: stats ? stats.streak : 0, week: R.currentWeek(c), papers: c.assessments.filter((a) => a.grade).length, state: c.state };
+  }
+  // progress goes up at most every ten minutes per course, or at once when asked (a tick, the Class tab)
+  const pushed = new Map();
+  async function push(c, force = false) {
+    if (!c.cohort || !base()) return null;
+    const last = pushed.get(c.id) || 0; if (!force && Date.now() - last < 600000) return null;
+    pushed.set(c.id, Date.now());
+    try { const r = await api(`/v1/cohorts/${c.cohort.code}/progress`, { method: 'POST', body: { device: L.store.deviceId(), progress: progressOf(c) }, timeout: 20000 }); c.cohort.roster = r.roster; c.cohort.members = r.roster.length; L.save(); return r.roster; }
+    catch (e) { console.warn('cohort progress', e.message); return null; }
+  }
+  let soonTimer = null;
+  const pushSoon = () => { clearTimeout(soonTimer); soonTimer = setTimeout(() => { for (const c of L.S.courses) if (c.cohort && c.state === 'enrolled') push(c, true); }, 3000); };
+  const pushAll = () => { for (const c of L.S.courses) if (c.cohort && c.state === 'enrolled') push(c); };
+
+  // ---------- instructors ----------
+  async function signIn(k) {
+    const r = await api('/v1/instructor/whoami', { method: 'POST', body: { key: k.trim() } });
+    L.S.instructor = { id: r.id, name: r.name, key: k.trim(), since: iso() }; L.saveNow();
+    return r;
+  }
+  const signOut = () => { L.S.instructor = null; L.saveNow(); };
+  const list = () => api('/v1/instructor/cohorts', { instructor: true });
+  // publish: the plan without its text, the text pack, then each original file
+  async function publish(p, onProgress = () => {}) {
+    const course = Object.assign({}, p); delete course.sourcesText; delete course.sourceFiles;
+    onProgress('Publishing the plan…');
+    const r = await api('/v1/instructor/cohorts', { method: 'POST', instructor: true, timeout: 180000, body: { course, material: { text: p.sourcesText || '', sources: (p.material.sources || []).map((s) => ({ id: s.id, name: s.name, kind: s.kind, hasFile: !!s.hasFile })) } } });
+    for (const f of p.sourceFiles || []) {
+      try {
+        onProgress(`Uploading ${f.file.name || 'a file'}…`);
+        const bytes = f.file.bytes ? f.file.bytes : f.file.blob ? await f.file.blob.arrayBuffer() : null;
+        if (bytes) await api(`/v1/cohorts/${r.code}/file/${f.id}`, { method: 'PUT', instructor: true, raw: true, body: bytes, timeout: 300000 });
+      } catch (e) { console.error(e); onProgress(`Could not upload ${f.file.name || 'a file'}: ${e.message}`); }
+    }
+    return r.code;
+  }
+  const close = (code, closed = true) => api(`/v1/cohorts/${code}/close`, { method: 'POST', instructor: true, body: { closed } });
+  const joinLink = (code) => `${location.origin}${location.pathname}#/enrol?join=${code}`;
+
+  L.cohort = { normCode, fetchCohort, prospectusFor, join, push, pushSoon, pushAll, progressOf, signIn, signOut, list, publish, close, joinLink, isInstructor: () => !!key() };
+})(window.L);
+
+
 /* ---- views-shell.js ---- */
 (function (L) {
   'use strict';
@@ -3274,7 +3410,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
     if (!s) { rail.innerHTML = ''; rail.hidden = true; return; }
     rail.hidden = false;
     const { name } = L.route();
-    const cur = (n) => (n === name || (n === 'courses' && ['course', 'day', 'week', 'assess', 'contract', 'certificate'].includes(name)) || (n === 'settings' && ['enrol', 'record'].includes(name)) ? ' aria-current="page"' : '');
+    const cur = (n) => (n === name || (n === 'courses' && ['course', 'day', 'week', 'assess', 'contract', 'certificate'].includes(name)) || (n === 'settings' && ['enrol', 'record', 'teach', 'library'].includes(name)) ? ' aria-current="page"' : '');
     const openNow = L.S.courses.filter((c) => c.state === 'enrolled').flatMap((c) => c.assessments.filter((a) => ['open', 'late', 'in_progress'].includes(R().assessmentState(c, a)))).length;
     const active = R().courses('active').length;
     const nd = R().nextDeadline();
@@ -3540,7 +3676,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
           ${L.tilesGrid(c)}<div class="tiles-legend" style="--ch:${L.cc(c)}">less <i></i><i data-v="part"></i><i data-v="full"></i> more</div>
         </a>`;
       });
-      return `<div class="page"><div class="page-head is-row"><div><h1 class="display">Courses</h1></div><div class="actions"><a class="btn btn-icon" href="#/enrol" aria-label="Add a course" title="Add a course">+</a></div></div><div class="stack gap-2 stagger">${rows.join('')}</div></div>`;
+      return `<div class="page"><div class="page-head is-row"><div><h1 class="display">Courses</h1></div><div class="actions"><a class="btn btn-quiet btn-sm" href="#/library">Library</a><a class="btn btn-icon" href="#/enrol" aria-label="Add a course" title="Add a course">+</a></div></div><div class="stack gap-2 stagger">${rows.join('')}</div></div>`;
     },
   };
   L.actions.withdraw = async (el) => {
@@ -3558,12 +3694,13 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
     const slot = c.plan.slot; const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     const h = Math.floor(slot.start / 60), m = slot.start % 60;
     const canWithdraw = c.state === 'enrolled' && st !== 'completed' && L.date.iso(L.today()) < c.policy.withdrawBefore;
-    return `<div class="page-head" style="--ch:${L.cc(c)}"><div><div class="course-lockup"><span class="icon-sq">${esc(c.subjectCode.slice(0, 2))}</span><div><h1 class="display" style="font-size:22px">${esc(c.title)}</h1><div class="small muted">${esc(c.code)} · ${st === 'running' ? `week ${wk} of ${c.term.weeks}` : st === 'upcoming' ? `starts ${L.fmt.date(c.term.start)}` : st} · ${esc((c.plan.paceLabel || 'standard').toLowerCase())} · ${c.plan.minutesPerDay} min/day · ${c.credits} cr</div></div></div>
+    return `<div class="page-head" style="--ch:${L.cc(c)}"><div><div class="course-lockup"><span class="icon-sq">${esc(c.subjectCode.slice(0, 2))}</span><div><h1 class="display" style="font-size:22px">${esc(c.title)}</h1><div class="small muted">${esc(c.code)} · ${st === 'running' ? `week ${wk} of ${c.term.weeks}` : st === 'upcoming' ? `starts ${L.fmt.date(c.term.start)}` : st} · ${esc((c.plan.paceLabel || 'standard').toLowerCase())} · ${c.plan.minutesPerDay} min/day · ${c.credits} cr${c.cohort ? ` · cohort ${esc(c.cohort.code)}` : ''}</div></div></div>
       <div class="mt-2">${L.tilesGrid(c)}</div></div>
       <div class="actions">${wk >= 1 && wk <= c.term.weeks ? `<a class="btn btn-primary" href="#/course/${c.id}/day/${nextBlockDate(c)}">${c.sessions.some((s) => s.date === L.date.iso(L.today())) ? "Today's block" : 'Next block'}</a>` : ''}${c.certificate ? `<a class="btn" href="#/certificate/${c.id}">Certificate</a>` : ''}${c.contract ? `<a class="btn btn-quiet" href="#/contract/${c.id}">Contract</a>` : ''}${canWithdraw ? `<button class="btn btn-quiet" data-act="withdraw" data-course="${c.id}">Withdraw</button>` : ''}</div></div>`;
   }
   const nextBlockDate = (c) => { const t = L.date.iso(L.today()); const s = c.sessions.find((x) => x.date >= t) || c.sessions[c.sessions.length - 1]; return s ? s.date : c.term.start; };
-  const tabs = (c, tab) => `<nav class="tabs">${['plan', 'syllabus', 'assessments', 'grades', 'materials'].map((t) => `<a href="#/course/${c.id}?tab=${t}"${t === tab ? ' aria-current="page"' : ''}>${t.charAt(0).toUpperCase() + t.slice(1)}</a>`).join('')}</nav>`;
+  const TABS = (c) => ['plan', 'syllabus', 'assessments', 'grades', 'materials'].concat(c.cohort ? ['class'] : []);
+  const tabs = (c, tab) => `<nav class="tabs">${TABS(c).map((t) => `<a href="#/course/${c.id}?tab=${t}"${t === tab ? ' aria-current="page"' : ''}>${t.charAt(0).toUpperCase() + t.slice(1)}</a>`).join('')}</nav>`;
 
   function syllabus(c) {
     const wk = R().currentWeek(c);
@@ -3618,12 +3755,25 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
     return `<div class="plan">${c.weeks.map((w) => `<div class="plan-week"><div class="section-head"><h2>Week ${w.n} · ${esc(w.title)}</h2><span class="small muted mono">${L.fmt.date(w.start)} – ${L.fmt.date(L.date.addDays(L.date.parse(w.start), 6))}</span></div>
       <div class="plan-days">${(byWeek[w.n] || []).map((s) => `<div class="plan-day${s.date === today ? ' is-today' : s.date < today ? ' is-past' : ''}"><div class="plan-date"><b>${L.date.dayName(s.date).slice(0, 3)}</b> ${L.fmt.date(s.date).slice(4)}</div>${L.studyBlock(c, s)}</div>`).join('') || '<p class="muted small">No study blocks this week.</p>'}</div></div>`).join('')}</div>`;
   }
+  // the class: everyone on the same plan, by progress; names as the students typed them, nothing more
+  function classTab(c) {
+    const co = c.cohort; const me = L.store.deviceId();
+    const rows = (co.roster || []).slice().sort((a, b) => ((b.progress && b.progress.chunksDone) || 0) - ((a.progress && a.progress.chunksDone) || 0));
+    const total = c.sessions.reduce((n, s) => n + s.chunks.length, 0);
+    return `<div class="card"><div class="card-head"><h2>Cohort ${esc(co.code)}</h2><span class="small muted">taught by ${esc(co.instructor)} · ${rows.length} student${rows.length === 1 ? '' : 's'}</span></div>
+      <div class="card-body">
+        <div class="cols mb-2"><button class="btn btn-sm" data-act="class-refresh" data-course="${c.id}">Refresh</button><button class="btn btn-sm btn-quiet" data-act="copy-join" data-code="${esc(co.code)}">Copy join link</button></div>
+        ${rows.length ? `<div class="rows">${rows.map((m) => { const p = m.progress || {}; const pct = total ? Math.round(((p.chunksDone || 0) / total) * 100) : 0; const mine = m.studentId === L.S.student.id && m.name === L.S.student.name; return `<div class="row" style="align-items:center${mine ? ';font-weight:600' : ''}"><div style="min-width:0;flex:1"><div class="truncate">${esc(m.name)}${mine ? ' <span class="small muted">(you)</span>' : ''}</div><div class="meter mt-1" style="--ch:${L.cc(c)}"><div class="bar"><i style="width:${pct}%"></i></div></div></div><div class="small muted num" style="white-space:nowrap">${p.chunksDone || 0}/${total} · ${p.letter ? esc(p.letter) : '—'}${p.streak ? ` · ${p.streak}d` : ''}</div></div>`; }).join('')}</div>` : '<p class="small muted">No one has reported progress yet.</p>'}
+        <p class="small muted mt-2">Progress is shared inside the class only: chunks done, current letter, streak. Papers and answers stay on each device.</p>
+      </div></div>`;
+  }
+  L.actions['class-refresh'] = async (el) => { const c = R().course(el.dataset.course); if (!c) return; await L.cohort.push(c, true); L.render(); };
   L.views.course = {
     title: (p) => R().course(p.id)?.code || 'Course',
     render(p, q) {
       const c = R().course(p.id); if (!c) return notFound('Course');
-      const tab = ['plan', 'syllabus', 'assessments', 'grades', 'materials'].includes(q.tab) ? q.tab : 'plan';
-      const body = tab === 'plan' ? planTab(c) : tab === 'syllabus' ? syllabus(c) : tab === 'assessments' ? assessments(c) : tab === 'grades' ? grades(c) : materials(c);
+      const tab = TABS(c).includes(q.tab) ? q.tab : 'plan';
+      const body = tab === 'plan' ? planTab(c) : tab === 'syllabus' ? syllabus(c) : tab === 'assessments' ? assessments(c) : tab === 'grades' ? grades(c) : tab === 'class' ? classTab(c) : materials(c);
       return `<div class="page">${header(c)}${tabs(c, tab)}${body}</div>`;
     },
   };
@@ -3984,6 +4134,29 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
       default: return JSON.stringify(d).slice(0, 80);
     }
   }
+  // ---------- teaching: the instructor's cohorts ----------
+  let teachData = null, teachErr = null, teachBusy = false;
+  L.views.teach = {
+    title: 'Teaching',
+    render() {
+      if (!L.S.instructor) return `<div class="page"><div class="page-head"><div><h1 class="display">Teaching</h1><p class="lede">Sign in as an instructor under More to publish cohort courses.</p></div></div></div>`;
+      const list = teachData ? teachData.cohorts : null;
+      return `<div class="page">
+        <div class="page-head is-row"><div><h1 class="display">Teaching</h1><span class="small muted">${esc(L.S.instructor.name)}</span></div><div class="actions"><a class="btn btn-primary btn-sm" href="#/enrol?teach=1">New cohort course</a></div></div>
+        ${teachErr ? `<div class="notice" data-kind="bad"><span>${esc(teachErr)}</span></div>` : ''}
+        ${!list ? '<p class="small muted">Loading…</p>' : !list.length ? '<div class="empty"><p>No cohorts yet. Publish a course and share its code.</p></div>' : `<div class="stack gap-2">${list.map((co) => { const n = co.roster.length; const done = n ? Math.round(co.roster.reduce((a, m) => a + ((m.progress && m.progress.chunksTotal) ? (m.progress.chunksDone / m.progress.chunksTotal) : 0), 0) / n * 100) : 0; const state = co.term.start > L.date.iso(L.today()) ? `starts ${L.fmt.date(co.term.start)}` : co.term.end < L.date.iso(L.today()) ? 'ended' : 'running';
+          return `<div class="card"><div class="card-head"><h2>${esc(co.title)}</h2><span class="mono small" style="letter-spacing:0.12em">${esc(co.code)}</span></div><div class="card-body">
+            <div class="small muted">${esc(co.courseCode)} · ${co.term.weeks} weeks · ${esc(co.pace)} · ${state}${co.closed ? ' · closed' : ''}</div>
+            <div class="meter mt-2"><div class="bar"><i style="width:${done}%"></i></div><span class="small muted num">${n} student${n === 1 ? '' : 's'} · ${done}% of chunks</span></div>
+            ${n ? `<details class="mt-2"><summary class="small">Roster</summary><div class="rows mt-1">${co.roster.map((m) => { const p = m.progress || {}; return `<div class="row"><span class="truncate">${esc(m.name)}</span><span class="small muted num">${p.chunksTotal ? `${p.chunksDone}/${p.chunksTotal}` : 'not started'}${p.letter ? ` · ${esc(p.letter)}` : ''}${p.streak ? ` · ${p.streak}d` : ''}</span></div>`; }).join('')}</div></details>` : ''}
+            <div class="cols mt-2"><button class="btn btn-sm" data-act="copy-join" data-code="${esc(co.code)}">Copy join link</button><button class="btn btn-sm btn-quiet" data-act="cohort-close" data-code="${esc(co.code)}" data-closed="${co.closed ? '0' : '1'}">${co.closed ? 'Reopen enrolment' : 'Close enrolment'}</button></div>
+          </div></div>`; }).join('')}</div>`}
+      </div>`;
+    },
+    // the list is fetched on every visit but only re-rendered when it changed, so the fetch never chases its own render
+    async mount() { if (!L.S.instructor || teachBusy) return; teachBusy = true; try { const next = await L.cohort.list(); const changed = JSON.stringify(next) !== JSON.stringify(teachData) || teachErr; teachData = next; teachErr = null; if (changed) L.render(); } catch (e) { if (teachErr !== e.message) { teachErr = e.message; L.render(); } } finally { teachBusy = false; } },
+  };
+  L.actions['cohort-close'] = async (el) => { try { await L.cohort.close(el.dataset.code, el.dataset.closed === '1'); teachData = await L.cohort.list(); L.render(); } catch (e) { L.ui.toast(e.message, 'bad'); } };
   L.views.record = {
     title: 'Record',
     render() {
@@ -4020,6 +4193,11 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
       return `<div class="page">
         <div class="page-head is-row"><div><h1 class="display">More</h1></div><div class="actions"><a class="btn btn-sm btn-quiet" href="#/record">Grades →</a></div></div>
         <p class="small muted" style="margin:-6px 0 8px"><a href="privacy.html" target="_blank" rel="noopener">Privacy</a> · <a href="terms.html" target="_blank" rel="noopener">Terms</a> · Lyceum is an independent study tool, not an accredited institution.</p>
+        <div class="card mb-3"><div class="card-head"><h3>Library</h3><span class="small muted">open-access titles</span></div><div class="card-body"><p class="small" style="margin:0 0 10px">Textbooks and classics under open licences, ready to enrol: OpenStax courses, Euclid, Darwin, Marcus Aurelius…</p><a class="btn btn-primary btn-sm" href="#/library">Open the Library</a></div></div>
+        <div class="card mb-3"><div class="card-head"><h3>Instructor</h3><span class="small muted">${L.S.instructor ? esc(L.S.instructor.name) : 'cohort courses'}</span></div><div class="card-body">
+          ${L.S.instructor ? `<p class="small" style="margin:0 0 10px">Signed in as an instructor. Publish a course plan and share its code; every student who joins follows the same term.</p><div class="cols"><a class="btn btn-primary btn-sm" href="#/teach">Your cohorts</a><a class="btn btn-sm" href="#/enrol?teach=1">New cohort course</a><button class="btn btn-sm btn-quiet" data-act="instructor-out">Sign out</button></div>`
+          : `<p class="small" style="margin:0 0 10px">Instructors publish a course for a class to join. Keys are issued by Lyceum.</p><div class="cols"><input id="instructor-key" class="input mono" type="password" autocomplete="off" placeholder="lyi_…" style="flex:1;max-width:260px"><button class="btn btn-sm" data-act="instructor-in">Sign in</button></div>`}
+        </div></div>
         <div class="card"><div class="card-head"><h3>Papers</h3><span class="small muted">${papers.length ? `${L.S.courses.filter((c) => c.certificate).length} certificate${L.S.courses.filter((c) => c.certificate).length === 1 ? '' : 's'}` : ''}</span></div><div class="card-body rows">${papers.length ? papers.map((c) => `<div class="row"><div style="min-width:0;flex:1"><div class="truncate" style="font-weight:600">${esc(c.title)}</div><div class="small muted">${esc(c.code)}${c.certificate ? ` · ${esc(c.certificate.letter)} ${L.fmt.pct(c.certificate.pct)}` : ''}</div></div><div class="cols gap-1">${c.contract ? `<a class="btn btn-sm" href="#/contract/${c.id}">Contract</a>` : ''}${c.certificate ? `<a class="btn btn-sm btn-primary" href="#/certificate/${c.id}">Certificate</a>` : ''}</div></div>`).join('') : '<p class="small muted">Contracts appear when you enrol; certificates when a course ends at 70% or more.</p>'}</div></div>
         <div class="grid-2 mt-3">
           <div class="stack gap-3">
@@ -4059,6 +4237,8 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
     if (!h.ok) return 'Not reachable right now.';
     return `Connected · faculty ${h.faculty ? 'on' : 'off'} · ${h.free ? 'free pilot' : h.entitlements ? 'paid enrolments' : 'no entitlements'}`;
   }
+  L.actions['instructor-in'] = async () => { const el = document.getElementById('instructor-key'); const k = (el ? el.value : '').trim(); if (!k) return; try { const r = await L.cohort.signIn(k); L.ui.toast(`Welcome, ${r.name}.`, 'good'); L.render(); } catch (e) { L.ui.toast(e.message, 'bad', 6000); } };
+  L.actions['instructor-out'] = () => { L.cohort.signOut(); L.render(); };
   L.inputs['iap-dev'] = (el) => { L.S.settings.iapDevSecret = el.value.trim(); L.save(); };
   L.inputs['api-base'] = (el) => { L.S.settings.apiBase = el.value.trim().replace(/\/$/, ''); L.save(); L.faculty.probe().then(() => L.render()); };
   L.inputs.model = (el) => { L.S.settings.model = el.value.trim(); L.save(); };
@@ -4103,16 +4283,17 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
   const hm = (min) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
 
   // wizard state lives only for the session; nothing is written until Enrol
-  const W = { sources: [], hint: '', step: 1, plans: null, prospectus: null, error: null, log: [], busy: false, sampleLoaded: false };
+  const W = { sources: [], hint: '', step: 1, plans: null, prospectus: null, error: null, log: [], busy: false, sampleLoaded: false, teach: false, start: '', cohort: null, published: null };
+  const reset = () => { Object.assign(W, { sources: [], hint: '', step: 1, plans: null, prospectus: null, error: null, log: [], busy: false, sampleLoaded: false, teach: false, start: '', cohort: null, published: null, fee: null, paid: null }); };
   const totalWords = () => L.sum(W.sources.map((s) => s.words));
 
   function steps() {
-    const st = [['Material', 1], ['Pace', 2], ['Prospectus', 3], ['Contract', 4]];
+    const st = W.cohort ? [['Cohort', 1], ['Prospectus', 3], ['Contract', 4]] : W.teach ? [['Material', 1], ['Pace', 2], ['Prospectus', 3], ['Publish', 4]] : [['Material', 1], ['Pace', 2], ['Prospectus', 3], ['Contract', 4]];
     return `<div class="wizard-steps">${st.map(([n, i]) => `<div class="wizard-step${W.step === i ? ' is-active' : W.step > i ? ' is-done' : ''}"><span class="n">${i}</span>${n}</div>`).join('')}</div>`;
   }
   function materialStep() {
     const b = R().budget();
-    return `<div class="grid-2">
+    return `${W.teach ? '' : `<div class="card mb-3"><div class="card-head"><h2>Join a cohort</h2><span class="small muted">a code from your instructor</span></div><div class="card-body"><div class="cols"><input id="join-code" class="input mono" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="7" placeholder="ABC123" style="flex:1;max-width:200px;letter-spacing:0.12em" value="${esc(W.joinCode || '')}" data-in="join-code"><button class="btn" data-act="join-cohort"${W.busy ? ' disabled' : ''}>Join</button><a class="btn btn-quiet" href="#/library">Browse the Library</a></div>${W.joinError ? `<div class="notice mt-2" data-kind="bad"><span>${esc(W.joinError)}</span></div>` : '<span class="hint">Everyone in a cohort studies the same term on the same days and sits the same papers.</span>'}</div></div>`}<div class="grid-2">
       <div class="stack gap-2">
         <div class="drop" id="drop"><div><b>PDF, Word, Markdown, text or HTML.</b></div><div class="small mt-1">Several files become one course.</div><label class="btn btn-primary">Choose files<input type="file" id="file-input" multiple accept=".pdf,.docx,.txt,.md,.markdown,.html,.htm,application/pdf,text/plain,text/markdown,text/html"></label></div>
         <div class="field"><label for="paste">Or paste text</label><textarea id="paste" class="textarea" placeholder="Paste lecture notes, a chapter, a syllabus…"></textarea><div class="cols"><button class="btn btn-sm" data-act="add-text">Add text</button></div></div>
@@ -4123,7 +4304,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
           ${W.sources.length ? `<div class="sources">${W.sources.map((s) => `<div class="source-row"><span class="pill">${esc(s.kind)}</span><span class="truncate" title="${esc(s.name)}">${esc(s.name)}</span><span class="num small muted">${L.fmt.num(s.words)} w${s.pages ? ` · ${s.pages} pp` : ''}</span><button class="btn btn-quiet btn-sm" data-act="remove-source" data-id="${s.id}">Remove</button></div>`).join('')}</div>` : '<p class="small muted">Add at least one source.</p>'}
           <div class="field mt-3"><label for="hint">Course title <span class="muted" style="font-weight:400">(optional)</span></label><input id="hint" class="input" value="${esc(W.hint)}" data-in="hint" placeholder="Leave blank and the faculty will name it"></div>
         </div></div>
-        <div class="panel small"><b>Budget:</b> ${b.available} of ${b.weekly} h/week free${b.committed ? ` (${b.committed} h committed)` : ''}.</div>
+        ${W.teach ? `<div class="panel small"><b>Instructor mode.</b> The plan you publish is the class's plan: every student who joins gets the same term, days and papers.</div>` : `<div class="panel small"><b>Budget:</b> ${b.available} of ${b.weekly} h/week free${b.committed ? ` (${b.committed} h committed)` : ''}.</div>`}
         ${W.error ? `<div class="notice" data-kind="bad"><span>${esc(W.error)}</span></div>` : ''}
         <div class="cols"><button class="btn btn-primary" data-act="submit-registrar"${W.sources.length && !W.busy ? '' : ' disabled'}>Plan the course</button>${W.sources.length ? `<button class="btn btn-quiet" data-act="clear-sources">Clear</button>` : ''}</div>
       </div></div>`;
@@ -4132,7 +4313,9 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
     const slot = p.plan.slot;
     const days = p.plan.studyDays.length === 7 ? 'every day' : p.plan.studyDays.length === 6 ? 'Mon–Sat' : 'Mon–Fri';
     const weightRows = Object.entries(p.policy.weights).map(([k, w]) => `<div class="tile"><div class="tile-n" style="font-size:22px">${w}%</div><div class="tile-l">${k === 'participation' ? 'Daily chunks' : esc(R().KIND_TITLE[k] + (p.assessments.filter((a) => a.kind === k).length > 1 ? 's' : ''))}</div></div>`).join('');
+    const co = p.cohort;
     return `<div class="prospectus" style="--ch:${L.cc(p)}">
+      ${co ? `<div class="notice" data-kind="info"><span><b>Cohort ${esc(co.code)}</b> · taught by ${esc(co.instructor)} · ${co.members} enrolled so far. The term, the days and the papers are the instructor's; they are the same for everyone in the class.</span></div>` : W.teach ? `<div class="notice" data-kind="info"><span><b>This is the plan your class will follow.</b> Publishing fixes it; you then share the code.</span></div>` : ''}
       <div class="prospectus-head"><div><div class="course-lockup"><span class="icon-sq">${esc(p.subjectCode.slice(0, 2))}</span><div><span class="code">${esc(p.code)}</span><div class="small muted">${esc(p.subject)} · ${esc(p.level)} · ${p.credits} credit${p.credits === 1 ? '' : 's'}</div></div></div><h2>${esc(p.title)}</h2><p class="lede mt-1">${esc(p.description)}</p></div></div>
       <div class="prospectus-body">
         <dl class="kv"><dt>Term</dt><dd class="mono">${L.fmt.date(p.term.start)} – ${L.fmt.date(p.term.end)} · ${p.term.weeks} weeks</dd><dt>Pace</dt><dd>${esc(p.plan.paceLabel)} · <b>${p.plan.minutesPerDay} min</b> ${days} at ${hm(slot.start)}</dd><dt>Material</dt><dd>${p.material.sources.length} source${p.material.sources.length === 1 ? '' : 's'} · ${L.fmt.num(p.material.words)} words</dd><dt>Faculty</dt><dd>${p.analysis.source === 'llm' ? esc(p.analysis.model) : 'offline registrar'}</dd>${(() => { const a = (p.material.sources.find((x) => x.attribution) || {}).attribution; return a ? `<dt>Material</dt><dd>${esc(a.title)}${a.author ? `, ${esc(a.author)}` : ''} · ${esc(a.license)}</dd>` : ''; })()}<dt>Withdraw by</dt><dd class="mono">${L.fmt.date(L.date.addDays(L.date.parse(p.policy.withdrawBefore), -1))}</dd></dl>
@@ -4140,7 +4323,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
         <details><summary>Week by week (${p.weeks.length})</summary><div class="syllabus mt-2">${p.weeks.map((w) => `<div class="week-row"><div class="wk">Week<b>${w.n}</b></div><div><div class="topic">${esc(w.title)}</div><div class="parts">${L.fmt.date(w.start)} · ${w.parts.map((x) => esc(x.label)).join(' · ')}</div></div></div>`).join('')}</div></details>
         <details><summary>Assessments (${p.assessments.length})</summary><div class="table-wrap mt-2"><table class="table"><thead><tr><th>Assessment</th><th>Opens</th><th>Due</th><th class="num">Weight</th></tr></thead><tbody>${p.assessments.map((a) => { const n = p.assessments.filter((x) => x.kind === a.kind).length; return `<tr><td>${esc(a.title)}<div class="small muted">${a.durationMin ? L.fmt.dur(a.durationMin) : 'untimed'}${a.lateAllowed ? ' · late window' : ''}</div></td><td class="mono small nowrap">${L.fmt.dt(a.opensAt)}</td><td class="mono small nowrap">${L.fmt.dt(a.dueAt)}</td><td class="num">${((p.policy.weights[a.kind] || 0) / n).toFixed(1)}%</td></tr>`; }).join('')}</tbody></table></div></details>
         <div class="registrar-note"><span class="label">Binding.</span>Dates, weights and exams cannot be changed after you enrol. A paper not submitted by its close is a zero. Lyceum is an independent study tool, not an accredited institution; certificates confer no academic credit.</div>
-        <div class="cols"><button class="btn btn-primary" data-act="enrol-confirm">Enrol</button><button class="btn btn-quiet" data-act="enrol-paces">Back</button><button class="btn btn-quiet" data-act="enrol-discard">Discard</button></div>
+        <div class="cols">${W.teach ? `<button class="btn btn-primary" data-act="publish-cohort"${W.busy ? ' disabled' : ''}>Publish as a cohort</button>` : `<button class="btn btn-primary" data-act="enrol-confirm">Enrol</button>`}${co ? '' : `<button class="btn btn-quiet" data-act="enrol-paces">Back</button>`}<button class="btn btn-quiet" data-act="enrol-discard">Discard</button></div>
       </div></div>`;
   }
   function paceCards() {
@@ -4152,26 +4335,37 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
       return `<div class="pace-card${k === 'standard' ? ' is-default' : ''}"><span class="label">${esc(meta.label)}${k === 'standard' ? ' · recommended' : ''}${p.plan.reduced ? ' · reduced to fit your budget' : ''}</span><div class="pace-n">${p.term.weeks} <span>weeks</span></div><p class="small muted">${esc(meta.blurb)}</p>
         <dl class="kv small"><dt>Daily</dt><dd><b>${p.plan.minutesPerDay} min</b> · ${days}</dd><dt>Weekly</dt><dd>${p.plan.hoursPerWeek} h</dd><dt>Ends</dt><dd class="mono">${L.fmt.date(p.term.end)}</dd><dt>Assessments</dt><dd>${p.assessments.length} · ${exams} exam${exams === 1 ? '' : 's'}${p.assessments.some((a) => a.kind === 'project') ? ' · project' : ''}</dd><dt>Credits</dt><dd>${p.credits}</dd></dl>
         <button class="btn ${k === 'standard' ? 'btn-primary' : ''}" data-act="choose-pace" data-pace="${k}">Choose</button></div>`; }).join('')}</div>
-      <p class="small muted mt-2">Three pacings, no custom plan. The one you choose is fixed at enrolment.</p>
+      ${W.teach ? `<div class="field mt-3" style="max-width:280px"><label for="term-start">Term starts (a Monday)</label><input id="term-start" class="input" type="date" value="${esc(W.start || W.plans.standard.term.start)}" min="${esc(W.plans.standard.term.start)}" data-in="term-start"><span class="hint">Changing it redraws the three pacings.</span></div>` : ''}
+      <p class="small muted mt-2">Three pacings, no custom plan. ${W.teach ? 'The one you choose is the class’s pace.' : 'The one you choose is fixed at enrolment.'}</p>
       <div class="cols mt-2"><button class="btn btn-quiet" data-act="enrol-back">Back to material</button></div>`;
+  }
+  function published() {
+    const code = W.published;
+    return `<div class="card"><div class="card-body stack gap-2">
+      <div class="small muted">Cohort code</div><div class="mono" style="font-size:34px;font-weight:600;letter-spacing:0.18em">${esc(code)}</div>
+      <p class="small">Students enter this code under <b>Add a course → Join a cohort</b>, or open the link. Enrolment closes when the term begins.</p>
+      <div class="cols"><button class="btn btn-primary" data-act="copy-join" data-code="${esc(code)}">Copy link</button><a class="btn" href="#/teach">Your cohorts</a><button class="btn btn-quiet" data-act="enrol-discard">Done</button></div>
+    </div></div>`;
   }
   L.views.enrol = {
     title: 'Enrol',
     render(p, q) {
-      const body = W.step === 1 ? materialStep()
+      const body = W.step === 4 && W.teach && W.published ? published() : W.step === 1 ? materialStep()
         : W.step === 2 ? (W.plans ? paceCards() : `<div class="card"><div class="card-body"><div class="log" id="registrar-log">${W.log.map((l) => `<div>${esc(l)}</div>`).join('')}</div>${W.error ? `<div class="notice mt-2" data-kind="bad"><span>${esc(W.error)}</span></div><div class="cols mt-2"><button class="btn" data-act="enrol-back">Back to material</button></div>` : ''}</div></div>`)
         : W.step === 3 && W.prospectus ? prospectus(W.prospectus)
         : W.step === 4 && W.prospectus ? `<div class="sheet-viewport">${L.papers.contractSheet(W.prospectus, L.S.student, { no: W.contractNo, fee: W.fee, forSigning: true })}</div>
             ${W.error ? `<div class="notice mt-2" data-kind="bad"><span>${esc(W.error)}</span></div>` : ''}
             <div class="cols mt-3"><button class="btn btn-primary" data-act="sign-enrol"${W.busy ? ' disabled' : ''}>${W.fee && !W.paid ? `Sign and pay ${esc(W.fee)}` : 'Sign and enrol'}</button><button class="btn btn-quiet" data-act="enrol-prospectus">Back</button></div>
             <p class="small muted mt-2">Draw your signature in the box and type your full name as it appears on your record. ${W.fee && !W.paid ? `Signing opens the store's payment sheet for the ${esc(W.fee)} enrolment fee; the schedule is then fixed.` : 'Signing enrols you; the schedule is then fixed.'}</p>` : '';
-      const h1 = W.step === 4 ? 'Registration contract' : W.step === 3 ? 'Prospectus' : W.step === 2 && W.plans ? 'Choose a pace' : 'Add a course';
+      const h1 = W.step === 4 && W.teach ? 'Published' : W.step === 4 ? 'Registration contract' : W.step === 3 ? 'Prospectus' : W.step === 2 && W.plans ? 'Choose a pace' : W.teach ? 'New cohort course' : 'Add a course';
       const lede = W.step === 1 ? 'Add the material. It comes back as a course with a fixed term and a daily block.' : W.step === 4 ? 'Read it, sign it, and the term begins.' : W.step === 3 ? 'Enrolling makes these terms binding.' : W.plans ? 'Three pacings. Pick one.' : 'Reading your material…';
       return `<div class="page"><div class="page-head"><div><h1 class="display">${h1}</h1><p class="lede">${lede}</p></div></div>${steps()}${body}</div>`;
     },
     async mount(root, p, q) {
-      if (W.step === 4) L.papers.mountPad(root);
+      if (W.step === 4 && !W.teach) L.papers.mountPad(root);
       window.__prospectus = W.prospectus || null;
+      if (q.teach === '1' && !W.teach) { if (!L.cohort.isInstructor()) { L.ui.toast('Sign in as an instructor under More first.', 'warn'); L.go('/settings'); return; } reset(); W.teach = true; history.replaceState(null, '', location.pathname + location.search + '#/enrol'); L.render(); return; }
+      if (q.join && !W.busy) { reset(); W.joinCode = L.cohort.normCode(q.join); history.replaceState(null, '', location.pathname + location.search + '#/enrol'); await L.actions['join-cohort'](); return; }
       if (q.lib && !W.sampleLoaded && !W.busy) {
         W.sampleLoaded = true;
         history.replaceState(null, '', location.pathname + location.search + '#/enrol');
@@ -4233,7 +4427,34 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
   L.actions['clear-sources'] = () => { W.sources = []; W.error = null; L.render(); };
   L.inputs.hint = (el) => { W.hint = el.value; };
   L.actions['enrol-back'] = () => { W.step = 1; W.plans = null; W.prospectus = null; W.error = null; W.log = []; L.render(); };
-  L.actions['enrol-discard'] = () => { W.step = 1; W.sources = []; W.hint = ''; W.plans = null; W.prospectus = null; W.log = []; W.error = null; W.sampleLoaded = false; L.render(); L.ui.toast('Prospectus discarded. Nothing was recorded.'); };
+  L.inputs['join-code'] = (el) => { W.joinCode = L.cohort.normCode(el.value); el.value = W.joinCode; };
+  L.inputs['term-start'] = (el) => { if (!W.input) return; W.start = el.value; try { W.plans = R().plans(Object.assign({}, W.input, { teach: true, start: W.start })); } catch (e) { W.error = e.message; } L.render(); };
+  // a code fetches the instructor's plan; the student reads the prospectus and signs like anyone else
+  L.actions['join-cohort'] = async () => {
+    const code = L.cohort.normCode(W.joinCode || (document.getElementById('join-code') || {}).value);
+    if (code.length !== 6) { W.joinError = 'A cohort code has six letters and digits.'; L.render(); return; }
+    W.busy = true; W.joinError = null; L.render();
+    const busy = L.ui.busy('Fetching the cohort…');
+    try {
+      const data = await L.cohort.fetchCohort(code);
+      if (data.closed) throw new Error('This cohort is closed to new students.');
+      if (data.term.start < L.date.iso(L.today())) throw new Error(`This cohort's term began ${L.fmt.date(data.term.start)}; enrolment closed at the start of term.`);
+      const p = await L.cohort.prospectusFor(data, (m) => busy.update(m));
+      const why = R().fits(p); if (why) throw new Error(why);
+      W.cohort = data; W.prospectus = p; W.step = 3; W.error = null;
+    } catch (e) { W.joinError = e.message; }
+    finally { W.busy = false; busy.done(); L.render(); }
+  };
+  L.actions['publish-cohort'] = async () => {
+    const p = W.prospectus; if (!p || !W.teach || W.busy) return;
+    W.busy = true; W.error = null; L.render();
+    const busy = L.ui.busy('Publishing…');
+    try { W.published = await L.cohort.publish(p, (m) => busy.update(m)); W.step = 4; L.ui.toast(`Cohort ${W.published} is open for enrolment.`, 'good', 5000); }
+    catch (e) { W.error = e.message; }
+    finally { W.busy = false; busy.done(); L.render(); }
+  };
+  L.actions['copy-join'] = async (el) => { const link = L.cohort.joinLink(el.dataset.code); try { await navigator.clipboard.writeText(link); L.ui.toast('Link copied.', 'good'); } catch (e) { L.ui.modal({ title: 'Join link', body: `<p class="mono small" style="word-break:break-all">${esc(link)}</p>` }); } };
+  L.actions['enrol-discard'] = () => { reset(); L.render(); L.ui.toast('Prospectus discarded. Nothing was recorded.'); };
   L.actions['choose-pace'] = (el) => { const p = W.plans && W.plans[el.dataset.pace]; if (!p || p.unavailable) return; W.prospectus = p; W.step = 3; L.render(); };
   L.actions['enrol-paces'] = () => { W.prospectus = null; W.step = 2; L.render(); };
 
@@ -4259,7 +4480,8 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
       const analysis = Object.assign({}, r.analysis, { source: r.source, model: r.model, note: r.note });
       log(`${analysis.units.length} units · ${analysis.level} · difficulty ${analysis.difficulty}/5`);
       log('Drawing up three pacings…');
-      W.plans = R().plans({ analysis, segments, text, sources: W.sources, words });
+      W.input = { analysis, segments, text, sources: W.sources, words };
+      W.plans = R().plans(Object.assign({}, W.input, { teach: W.teach, start: W.start || null }));
       log(['condensed', 'standard', 'extended'].map((k) => `${k}: ${W.plans[k].unavailable ? 'unavailable' : W.plans[k].term.weeks + ' weeks'}`).join(' · '));
     } catch (e) {
       console.error(e);
@@ -4270,7 +4492,7 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
   L.actions['enrol-confirm'] = async () => {
     if (!W.prospectus || W.busy) return;
     W.fee = null; W.paid = null;
-    if (L.store.required()) { W.busy = true; L.render(); try { const pr = await L.store.price(); W.fee = pr ? pr.priceString : null; } catch (e) { W.fee = null; } W.busy = false; }
+    if (!W.cohort && L.store.required()) { W.busy = true; L.render(); try { const pr = await L.store.price(); W.fee = pr ? pr.priceString : null; } catch (e) { W.fee = null; } W.busy = false; }
     W.contractNo = L.papers.contractNo(); W.error = null; W.step = 4; L.render();
   };
   L.actions['enrol-prospectus'] = () => { W.step = 3; W.error = null; L.render(); };
@@ -4290,9 +4512,10 @@ Choosing the right distribution is a matter of matching the story. Fixed number 
     const btn = document.querySelector('[data-act=sign-enrol]'); if (btn) { btn.disabled = true; btn.textContent = W.fee && !W.paid ? 'Waiting for the store…' : 'Enrolling…'; }
     try {
       // the fee is paid once; a purchase that already went through (server unreachable afterwards) is settled, not repeated
-      if (L.store.required() && !W.paid) W.paid = await L.store.buy(p);
+      if (!W.cohort && L.store.required() && !W.paid) W.paid = await L.store.buy(p);
       const c = await R().enrol(p, { no: W.contractNo, name: typed, signature, fee: W.fee || null }, W.paid || null);
-      W.step = 1; W.sources = []; W.hint = ''; W.plans = null; W.prospectus = null; W.log = []; W.sampleLoaded = false; W.error = null; W.fee = null; W.paid = null;
+      if (c.cohort) { try { await L.cohort.join(c); } catch (e) { console.error(e); L.ui.toast(`Enrolled, but the cohort could not be joined yet: ${e.message}`, 'warn', 8000); } }
+      reset();
       L.ui.toast(`Enrolled in ${c.code}. Term begins ${L.fmt.date(c.term.start)}.`, 'good', 5000);
       L.go(`/course/${c.id}`);
     } catch (e) { W.busy = false; fail(e.message); if (btn) { btn.disabled = false; btn.textContent = W.fee && !W.paid ? `Sign and pay ${W.fee}` : 'Sign and enrol'; } return; }

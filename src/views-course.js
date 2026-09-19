@@ -22,7 +22,7 @@
           ${L.tilesGrid(c)}<div class="tiles-legend" style="--ch:${L.cc(c)}">less <i></i><i data-v="part"></i><i data-v="full"></i> more</div>
         </a>`;
       });
-      return `<div class="page"><div class="page-head is-row"><div><h1 class="display">Courses</h1></div><div class="actions"><a class="btn btn-icon" href="#/enrol" aria-label="Add a course" title="Add a course">+</a></div></div><div class="stack gap-2 stagger">${rows.join('')}</div></div>`;
+      return `<div class="page"><div class="page-head is-row"><div><h1 class="display">Courses</h1></div><div class="actions"><a class="btn btn-quiet btn-sm" href="#/library">Library</a><a class="btn btn-icon" href="#/enrol" aria-label="Add a course" title="Add a course">+</a></div></div><div class="stack gap-2 stagger">${rows.join('')}</div></div>`;
     },
   };
   L.actions.withdraw = async (el) => {
@@ -40,12 +40,13 @@
     const slot = c.plan.slot; const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     const h = Math.floor(slot.start / 60), m = slot.start % 60;
     const canWithdraw = c.state === 'enrolled' && st !== 'completed' && L.date.iso(L.today()) < c.policy.withdrawBefore;
-    return `<div class="page-head" style="--ch:${L.cc(c)}"><div><div class="course-lockup"><span class="icon-sq">${esc(c.subjectCode.slice(0, 2))}</span><div><h1 class="display" style="font-size:22px">${esc(c.title)}</h1><div class="small muted">${esc(c.code)} · ${st === 'running' ? `week ${wk} of ${c.term.weeks}` : st === 'upcoming' ? `starts ${L.fmt.date(c.term.start)}` : st} · ${esc((c.plan.paceLabel || 'standard').toLowerCase())} · ${c.plan.minutesPerDay} min/day · ${c.credits} cr</div></div></div>
+    return `<div class="page-head" style="--ch:${L.cc(c)}"><div><div class="course-lockup"><span class="icon-sq">${esc(c.subjectCode.slice(0, 2))}</span><div><h1 class="display" style="font-size:22px">${esc(c.title)}</h1><div class="small muted">${esc(c.code)} · ${st === 'running' ? `week ${wk} of ${c.term.weeks}` : st === 'upcoming' ? `starts ${L.fmt.date(c.term.start)}` : st} · ${esc((c.plan.paceLabel || 'standard').toLowerCase())} · ${c.plan.minutesPerDay} min/day · ${c.credits} cr${c.cohort ? ` · cohort ${esc(c.cohort.code)}` : ''}</div></div></div>
       <div class="mt-2">${L.tilesGrid(c)}</div></div>
       <div class="actions">${wk >= 1 && wk <= c.term.weeks ? `<a class="btn btn-primary" href="#/course/${c.id}/day/${nextBlockDate(c)}">${c.sessions.some((s) => s.date === L.date.iso(L.today())) ? "Today's block" : 'Next block'}</a>` : ''}${c.certificate ? `<a class="btn" href="#/certificate/${c.id}">Certificate</a>` : ''}${c.contract ? `<a class="btn btn-quiet" href="#/contract/${c.id}">Contract</a>` : ''}${canWithdraw ? `<button class="btn btn-quiet" data-act="withdraw" data-course="${c.id}">Withdraw</button>` : ''}</div></div>`;
   }
   const nextBlockDate = (c) => { const t = L.date.iso(L.today()); const s = c.sessions.find((x) => x.date >= t) || c.sessions[c.sessions.length - 1]; return s ? s.date : c.term.start; };
-  const tabs = (c, tab) => `<nav class="tabs">${['plan', 'syllabus', 'assessments', 'grades', 'materials'].map((t) => `<a href="#/course/${c.id}?tab=${t}"${t === tab ? ' aria-current="page"' : ''}>${t.charAt(0).toUpperCase() + t.slice(1)}</a>`).join('')}</nav>`;
+  const TABS = (c) => ['plan', 'syllabus', 'assessments', 'grades', 'materials'].concat(c.cohort ? ['class'] : []);
+  const tabs = (c, tab) => `<nav class="tabs">${TABS(c).map((t) => `<a href="#/course/${c.id}?tab=${t}"${t === tab ? ' aria-current="page"' : ''}>${t.charAt(0).toUpperCase() + t.slice(1)}</a>`).join('')}</nav>`;
 
   function syllabus(c) {
     const wk = R().currentWeek(c);
@@ -100,12 +101,25 @@
     return `<div class="plan">${c.weeks.map((w) => `<div class="plan-week"><div class="section-head"><h2>Week ${w.n} · ${esc(w.title)}</h2><span class="small muted mono">${L.fmt.date(w.start)} – ${L.fmt.date(L.date.addDays(L.date.parse(w.start), 6))}</span></div>
       <div class="plan-days">${(byWeek[w.n] || []).map((s) => `<div class="plan-day${s.date === today ? ' is-today' : s.date < today ? ' is-past' : ''}"><div class="plan-date"><b>${L.date.dayName(s.date).slice(0, 3)}</b> ${L.fmt.date(s.date).slice(4)}</div>${L.studyBlock(c, s)}</div>`).join('') || '<p class="muted small">No study blocks this week.</p>'}</div></div>`).join('')}</div>`;
   }
+  // the class: everyone on the same plan, by progress; names as the students typed them, nothing more
+  function classTab(c) {
+    const co = c.cohort; const me = L.store.deviceId();
+    const rows = (co.roster || []).slice().sort((a, b) => ((b.progress && b.progress.chunksDone) || 0) - ((a.progress && a.progress.chunksDone) || 0));
+    const total = c.sessions.reduce((n, s) => n + s.chunks.length, 0);
+    return `<div class="card"><div class="card-head"><h2>Cohort ${esc(co.code)}</h2><span class="small muted">taught by ${esc(co.instructor)} · ${rows.length} student${rows.length === 1 ? '' : 's'}</span></div>
+      <div class="card-body">
+        <div class="cols mb-2"><button class="btn btn-sm" data-act="class-refresh" data-course="${c.id}">Refresh</button><button class="btn btn-sm btn-quiet" data-act="copy-join" data-code="${esc(co.code)}">Copy join link</button></div>
+        ${rows.length ? `<div class="rows">${rows.map((m) => { const p = m.progress || {}; const pct = total ? Math.round(((p.chunksDone || 0) / total) * 100) : 0; const mine = m.studentId === L.S.student.id && m.name === L.S.student.name; return `<div class="row" style="align-items:center${mine ? ';font-weight:600' : ''}"><div style="min-width:0;flex:1"><div class="truncate">${esc(m.name)}${mine ? ' <span class="small muted">(you)</span>' : ''}</div><div class="meter mt-1" style="--ch:${L.cc(c)}"><div class="bar"><i style="width:${pct}%"></i></div></div></div><div class="small muted num" style="white-space:nowrap">${p.chunksDone || 0}/${total} · ${p.letter ? esc(p.letter) : '—'}${p.streak ? ` · ${p.streak}d` : ''}</div></div>`; }).join('')}</div>` : '<p class="small muted">No one has reported progress yet.</p>'}
+        <p class="small muted mt-2">Progress is shared inside the class only: chunks done, current letter, streak. Papers and answers stay on each device.</p>
+      </div></div>`;
+  }
+  L.actions['class-refresh'] = async (el) => { const c = R().course(el.dataset.course); if (!c) return; await L.cohort.push(c, true); L.render(); };
   L.views.course = {
     title: (p) => R().course(p.id)?.code || 'Course',
     render(p, q) {
       const c = R().course(p.id); if (!c) return notFound('Course');
-      const tab = ['plan', 'syllabus', 'assessments', 'grades', 'materials'].includes(q.tab) ? q.tab : 'plan';
-      const body = tab === 'plan' ? planTab(c) : tab === 'syllabus' ? syllabus(c) : tab === 'assessments' ? assessments(c) : tab === 'grades' ? grades(c) : materials(c);
+      const tab = TABS(c).includes(q.tab) ? q.tab : 'plan';
+      const body = tab === 'plan' ? planTab(c) : tab === 'syllabus' ? syllabus(c) : tab === 'assessments' ? assessments(c) : tab === 'grades' ? grades(c) : tab === 'class' ? classTab(c) : materials(c);
       return `<div class="page">${header(c)}${tabs(c, tab)}${body}</div>`;
     },
   };

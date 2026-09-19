@@ -113,6 +113,29 @@
       default: return JSON.stringify(d).slice(0, 80);
     }
   }
+  // ---------- teaching: the instructor's cohorts ----------
+  let teachData = null, teachErr = null, teachBusy = false;
+  L.views.teach = {
+    title: 'Teaching',
+    render() {
+      if (!L.S.instructor) return `<div class="page"><div class="page-head"><div><h1 class="display">Teaching</h1><p class="lede">Sign in as an instructor under More to publish cohort courses.</p></div></div></div>`;
+      const list = teachData ? teachData.cohorts : null;
+      return `<div class="page">
+        <div class="page-head is-row"><div><h1 class="display">Teaching</h1><span class="small muted">${esc(L.S.instructor.name)}</span></div><div class="actions"><a class="btn btn-primary btn-sm" href="#/enrol?teach=1">New cohort course</a></div></div>
+        ${teachErr ? `<div class="notice" data-kind="bad"><span>${esc(teachErr)}</span></div>` : ''}
+        ${!list ? '<p class="small muted">Loading…</p>' : !list.length ? '<div class="empty"><p>No cohorts yet. Publish a course and share its code.</p></div>' : `<div class="stack gap-2">${list.map((co) => { const n = co.roster.length; const done = n ? Math.round(co.roster.reduce((a, m) => a + ((m.progress && m.progress.chunksTotal) ? (m.progress.chunksDone / m.progress.chunksTotal) : 0), 0) / n * 100) : 0; const state = co.term.start > L.date.iso(L.today()) ? `starts ${L.fmt.date(co.term.start)}` : co.term.end < L.date.iso(L.today()) ? 'ended' : 'running';
+          return `<div class="card"><div class="card-head"><h2>${esc(co.title)}</h2><span class="mono small" style="letter-spacing:0.12em">${esc(co.code)}</span></div><div class="card-body">
+            <div class="small muted">${esc(co.courseCode)} · ${co.term.weeks} weeks · ${esc(co.pace)} · ${state}${co.closed ? ' · closed' : ''}</div>
+            <div class="meter mt-2"><div class="bar"><i style="width:${done}%"></i></div><span class="small muted num">${n} student${n === 1 ? '' : 's'} · ${done}% of chunks</span></div>
+            ${n ? `<details class="mt-2"><summary class="small">Roster</summary><div class="rows mt-1">${co.roster.map((m) => { const p = m.progress || {}; return `<div class="row"><span class="truncate">${esc(m.name)}</span><span class="small muted num">${p.chunksTotal ? `${p.chunksDone}/${p.chunksTotal}` : 'not started'}${p.letter ? ` · ${esc(p.letter)}` : ''}${p.streak ? ` · ${p.streak}d` : ''}</span></div>`; }).join('')}</div></details>` : ''}
+            <div class="cols mt-2"><button class="btn btn-sm" data-act="copy-join" data-code="${esc(co.code)}">Copy join link</button><button class="btn btn-sm btn-quiet" data-act="cohort-close" data-code="${esc(co.code)}" data-closed="${co.closed ? '0' : '1'}">${co.closed ? 'Reopen enrolment' : 'Close enrolment'}</button></div>
+          </div></div>`; }).join('')}</div>`}
+      </div>`;
+    },
+    // the list is fetched on every visit but only re-rendered when it changed, so the fetch never chases its own render
+    async mount() { if (!L.S.instructor || teachBusy) return; teachBusy = true; try { const next = await L.cohort.list(); const changed = JSON.stringify(next) !== JSON.stringify(teachData) || teachErr; teachData = next; teachErr = null; if (changed) L.render(); } catch (e) { if (teachErr !== e.message) { teachErr = e.message; L.render(); } } finally { teachBusy = false; } },
+  };
+  L.actions['cohort-close'] = async (el) => { try { await L.cohort.close(el.dataset.code, el.dataset.closed === '1'); teachData = await L.cohort.list(); L.render(); } catch (e) { L.ui.toast(e.message, 'bad'); } };
   L.views.record = {
     title: 'Record',
     render() {
@@ -149,6 +172,11 @@
       return `<div class="page">
         <div class="page-head is-row"><div><h1 class="display">More</h1></div><div class="actions"><a class="btn btn-sm btn-quiet" href="#/record">Grades →</a></div></div>
         <p class="small muted" style="margin:-6px 0 8px"><a href="privacy.html" target="_blank" rel="noopener">Privacy</a> · <a href="terms.html" target="_blank" rel="noopener">Terms</a> · Lyceum is an independent study tool, not an accredited institution.</p>
+        <div class="card mb-3"><div class="card-head"><h3>Library</h3><span class="small muted">open-access titles</span></div><div class="card-body"><p class="small" style="margin:0 0 10px">Textbooks and classics under open licences, ready to enrol: OpenStax courses, Euclid, Darwin, Marcus Aurelius…</p><a class="btn btn-primary btn-sm" href="#/library">Open the Library</a></div></div>
+        <div class="card mb-3"><div class="card-head"><h3>Instructor</h3><span class="small muted">${L.S.instructor ? esc(L.S.instructor.name) : 'cohort courses'}</span></div><div class="card-body">
+          ${L.S.instructor ? `<p class="small" style="margin:0 0 10px">Signed in as an instructor. Publish a course plan and share its code; every student who joins follows the same term.</p><div class="cols"><a class="btn btn-primary btn-sm" href="#/teach">Your cohorts</a><a class="btn btn-sm" href="#/enrol?teach=1">New cohort course</a><button class="btn btn-sm btn-quiet" data-act="instructor-out">Sign out</button></div>`
+          : `<p class="small" style="margin:0 0 10px">Instructors publish a course for a class to join. Keys are issued by Lyceum.</p><div class="cols"><input id="instructor-key" class="input mono" type="password" autocomplete="off" placeholder="lyi_…" style="flex:1;max-width:260px"><button class="btn btn-sm" data-act="instructor-in">Sign in</button></div>`}
+        </div></div>
         <div class="card"><div class="card-head"><h3>Papers</h3><span class="small muted">${papers.length ? `${L.S.courses.filter((c) => c.certificate).length} certificate${L.S.courses.filter((c) => c.certificate).length === 1 ? '' : 's'}` : ''}</span></div><div class="card-body rows">${papers.length ? papers.map((c) => `<div class="row"><div style="min-width:0;flex:1"><div class="truncate" style="font-weight:600">${esc(c.title)}</div><div class="small muted">${esc(c.code)}${c.certificate ? ` · ${esc(c.certificate.letter)} ${L.fmt.pct(c.certificate.pct)}` : ''}</div></div><div class="cols gap-1">${c.contract ? `<a class="btn btn-sm" href="#/contract/${c.id}">Contract</a>` : ''}${c.certificate ? `<a class="btn btn-sm btn-primary" href="#/certificate/${c.id}">Certificate</a>` : ''}</div></div>`).join('') : '<p class="small muted">Contracts appear when you enrol; certificates when a course ends at 70% or more.</p>'}</div></div>
         <div class="grid-2 mt-3">
           <div class="stack gap-3">
@@ -188,6 +216,8 @@
     if (!h.ok) return 'Not reachable right now.';
     return `Connected · faculty ${h.faculty ? 'on' : 'off'} · ${h.free ? 'free pilot' : h.entitlements ? 'paid enrolments' : 'no entitlements'}`;
   }
+  L.actions['instructor-in'] = async () => { const el = document.getElementById('instructor-key'); const k = (el ? el.value : '').trim(); if (!k) return; try { const r = await L.cohort.signIn(k); L.ui.toast(`Welcome, ${r.name}.`, 'good'); L.render(); } catch (e) { L.ui.toast(e.message, 'bad', 6000); } };
+  L.actions['instructor-out'] = () => { L.cohort.signOut(); L.render(); };
   L.inputs['iap-dev'] = (el) => { L.S.settings.iapDevSecret = el.value.trim(); L.save(); };
   L.inputs['api-base'] = (el) => { L.S.settings.apiBase = el.value.trim().replace(/\/$/, ''); L.save(); L.faculty.probe().then(() => L.render()); };
   L.inputs.model = (el) => { L.S.settings.model = el.value.trim(); L.save(); };

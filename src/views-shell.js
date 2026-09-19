@@ -71,7 +71,7 @@
     if (!s) { rail.innerHTML = ''; rail.hidden = true; return; }
     rail.hidden = false;
     const { name } = L.route();
-    const cur = (n) => (n === name || (n === 'courses' && ['course', 'day', 'week', 'assess', 'contract', 'certificate'].includes(name)) || (n === 'settings' && ['enrol', 'record'].includes(name)) ? ' aria-current="page"' : '');
+    const cur = (n) => (n === name || (n === 'courses' && ['course', 'day', 'week', 'assess', 'contract', 'certificate'].includes(name)) || (n === 'settings' && ['enrol', 'record', 'teach', 'library'].includes(name)) ? ' aria-current="page"' : '');
     const openNow = L.S.courses.filter((c) => c.state === 'enrolled').flatMap((c) => c.assessments.filter((a) => ['open', 'late', 'in_progress'].includes(R().assessmentState(c, a)))).length;
     const active = R().courses('active').length;
     const nd = R().nextDeadline();

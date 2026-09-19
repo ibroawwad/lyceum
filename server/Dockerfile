@@ -2,7 +2,7 @@ FROM node:24-alpine
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --no-audit --no-fund
-COPY index.js db.js iap.js library.js library.json ./
+COPY index.js db.js iap.js library.js library.json cohorts.js admin.js ./
 ENV NODE_ENV=production PORT=4700 DB_PATH=/data/lyceum.sqlite LIBRARY_DIR=/data/library
 VOLUME ["/data"]
 EXPOSE 4700

@@ -23,6 +23,8 @@ const local = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.
   const browser = await chromium.launch({ channel: 'chrome', headless: true });
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: 'en-GB', timezoneId: 'Europe/London' });
   await ctx.route(/^https?:\/\//, (r) => r.abort()); // offline: nothing may be fetched from the network
+  const noApi = (c) => c.addInitScript(() => { Object.defineProperty(window, 'LYCEUM_API', { value: '', writable: false, configurable: false }); }); // the build bakes a public API address in; offline it must be blank
+  await noApi(ctx);
   const page = await ctx.newPage();
   page.on('console', (m) => { if (m.type() === 'error') consoleErrors.push(m.text()); });
   page.on('pageerror', (e) => consoleErrors.push('pageerror: ' + e.message));
@@ -390,7 +392,10 @@ const local = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.
 
   console.log('11b. the Library through a local Lyceum server');
   const { spawn } = require('child_process');
-  const api = spawn(process.execPath, ['index.js'], { cwd: path.join(root, 'server'), env: Object.assign({}, process.env, { TOKEN_SECRET: 'smoke', PORT: '4791', DB_PATH: path.join(root, 'server', 'data-smoke', 'l.sqlite'), LIBRARY_DIR: path.join(root, 'server', 'data-smoke', 'lib'), FREE_FACULTY: '1', IAP_DEV_SECRET: 'smoke' }), stdio: 'ignore' });
+  try { require('child_process').execSync('lsof -nP -iTCP:4791 -sTCP:LISTEN -t | xargs kill 2>/dev/null', { stdio: 'ignore' }); } catch (e) { /* nothing listening */ }
+  fs.rmSync(path.join(root, 'server', 'data-smoke'), { recursive: true, force: true });
+  let api = null; process.on('exit', () => { if (api) api.kill(); });
+  api = spawn(process.execPath, ['index.js'], { cwd: path.join(root, 'server'), env: Object.assign({}, process.env, { TOKEN_SECRET: 'smoke', PORT: '4791', DB_PATH: path.join(root, 'server', 'data-smoke', 'l.sqlite'), LIBRARY_DIR: path.join(root, 'server', 'data-smoke', 'lib'), FREE_FACULTY: '1', IAP_DEV_SECRET: 'smoke' }), stdio: 'ignore' });
   await sleep(900);
   await ctx.unroute(/^https?:\/\//);
   await ctx.route(/^https?:\/\//, (r) => (r.request().url().startsWith('http://127.0.0.1:4791/') ? r.continue() : r.abort()));
@@ -412,6 +417,50 @@ const local = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.
   assert(cover.words > 30000 && !cover.hasLicenceText && cover.segs >= 5, `Gutenberg header stripped, text segmented (${cover.words} words, ${cover.segs} segments)`);
   await page.click('[data-act=enrol-discard]');
 
+  console.log('11d. cohorts: an instructor publishes the sample as a cohort, a student joins by code, the class sees itself');
+  const { execFileSync } = require('child_process');
+  const keyOut = execFileSync(process.execPath, ['admin.js', 'add', 'Prof. Test'], { cwd: path.join(root, 'server'), env: Object.assign({}, process.env, { DB_PATH: path.join(root, 'server', 'data-smoke', 'l.sqlite') }) }).toString();
+  const instructorKey = (keyOut.match(/key: (\S+)/) || [])[1];
+  assert(!!instructorKey && instructorKey.startsWith('lyi_'), 'the operator CLI issues an instructor key');
+  await page.goto(file + '?debug=1#/settings'); await sleep(300);
+  await page.fill('#instructor-key', instructorKey); await page.click('[data-act=instructor-in]');
+  for (let i = 0; i < 20 && !(await page.evaluate(() => !!L.S.instructor)); i++) await sleep(250);
+  assert(await page.evaluate(() => L.S.instructor && L.S.instructor.name === 'Prof. Test'), `the key signs the instructor in under More (${await page.evaluate(() => (document.querySelector('.toast') || {}).textContent || '')})`);
+  await page.goto(file + '?debug=1#/enrol?teach=1'); await sleep(300);
+  await page.goto(file + '?debug=1#/enrol?sample=1');
+  await page.waitForSelector('.paces', { timeout: 60000 });
+  const teachStart = await page.evaluate(() => document.querySelector('#term-start') && document.querySelector('#term-start').value);
+  assert(!!teachStart, `instructor mode offers a term start (${teachStart})`);
+  const laterMonday = await page.evaluate(() => { const el = document.querySelector('#term-start'); const d = L.date.addDays(L.date.parse(el.value), 42); el.value = L.date.iso(d); L.inputs['term-start'](el); return L.date.iso(d); }); // six weeks on: after every running course ends, so the joiner's timetable is free
+  await sleep(300);
+  await page.click('[data-act=choose-pace][data-pace=standard]');
+  await page.waitForSelector('.prospectus', { timeout: 10000 });
+  const teachPro = await page.evaluate(() => ({ start: window.__prospectus.term.start, publish: !!document.querySelector('[data-act=publish-cohort]'), contract: !!document.querySelector('[data-act=enrol-confirm]') }));
+  assert(teachPro.start === laterMonday && teachPro.publish && !teachPro.contract, `the instructor's prospectus starts on the chosen Monday and offers to publish (${teachPro.start})`);
+  await page.click('[data-act=publish-cohort]');
+  await page.waitForSelector('[data-act=copy-join]', { timeout: 60000 });
+  const cohortCode = await page.evaluate(() => document.querySelector('[data-act=copy-join]').dataset.code);
+  assert(/^[A-Z2-9]{6}$/.test(cohortCode), `publishing returns a six-character code (${cohortCode})`);
+  await page.goto(file + '?debug=1#/teach'); await sleep(900);
+  assert(await page.evaluate((c) => document.body.innerText.includes(c) && /0 students/.test(document.body.innerText), cohortCode), 'the Teaching page lists the cohort with no students yet');
+  // the student joins by code: no pace step, the term is the instructor's, no fee, then signs as usual
+  await page.evaluate(() => { L.S.settings.iapDevSecret = 'smoke'; L.saveNow(); });
+  await page.goto(file + '?debug=1#/enrol?join=' + cohortCode);
+  try { await page.waitForSelector('.prospectus', { timeout: 60000 }); } catch (e) { console.error('join failed:', await page.evaluate(() => ({ err: (document.querySelector('.notice[data-kind=bad]') || {}).innerText, hash: location.hash, txt: document.body.innerText.slice(0, 300) }))); throw e; }
+  const joinPro = await page.evaluate(() => ({ start: window.__prospectus.term.start, cohort: window.__prospectus.cohort && window.__prospectus.cohort.code, banner: /Cohort/.test(document.querySelector('.prospectus .notice').innerText), steps: document.querySelectorAll('.wizard-step').length }));
+  assert(joinPro.start === laterMonday && joinPro.cohort === cohortCode && joinPro.banner && joinPro.steps === 3, `the joiner sees the instructor's plan with a cohort banner and no pace step (${joinPro.steps} steps)`);
+  await page.click('[data-act=enrol-confirm]');
+  await page.waitForSelector('#signature-pad', { timeout: 10000 });
+  assert(await page.evaluate(() => /Sign and enrol/.test(document.querySelector('[data-act=sign-enrol]').textContent) && !/FEE/i.test(document.querySelector('.sheet').innerText)), 'a cohort enrolment carries no store fee');
+  await signContract(page, 'Ada Lovelace');
+  await page.waitForSelector('.tiles-wrap', { timeout: 20000 }); await sleep(600);
+  const joined = await page.evaluate(() => { const c = L.S.courses[L.S.courses.length - 1]; return { code: c.cohort && c.cohort.code, roster: c.cohort && c.cohort.roster && c.cohort.roster.length, ent: c.entitlement && c.entitlement.platform, led: L.S.ledger.filter((e) => e.type === 'enrolled').pop().detail.cohort, id: c.id }; });
+  assert(joined.code === cohortCode && joined.roster === 1 && joined.ent === 'cohort' && joined.led === cohortCode, `the course is in the cohort, on the roster, with a cohort entitlement (${joined.ent})`);
+  await page.goto(file + `?debug=1#/course/${joined.id}?tab=class`); await sleep(300);
+  assert(await page.evaluate(() => /Ada Lovelace/.test(document.body.innerText) && /\(you\)/.test(document.body.innerText)), 'the Class tab shows the roster with the student marked');
+  await page.evaluate((id) => L.registrar.withdraw(id), joined.id).catch(() => null);
+  await page.evaluate(() => { L.S.settings.iapDevSecret = ''; L.cohort.signOut(); L.saveNow(); });
+
   console.log('11c. paid enrolment: the fee on the contract, the purchase settled by the server, the entitlement on the course');
   await page.evaluate(() => { L.S.settings.iapDevSecret = 'smoke'; L.saveNow(); });
   await page.goto(file + '?debug=1#/enrol?sample=1');
@@ -430,7 +479,7 @@ const local = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.
   await signContract(page, 'Ada Lovelace');
   await page.waitForSelector('#contract-error', { timeout: 15000 });
   assert(/could not be reached/.test(await page.evaluate(() => document.querySelector('#contract-error').innerText)), 'a server outage after signing shows an error and keeps the signature');
-  assert(await page.evaluate(() => L.S.courses.every((c) => !c.entitlement) && !!document.querySelector('#signature-pad')), 'no course was written and the contract is still on screen');
+  assert(await page.evaluate(() => L.S.courses.every((c) => !c.entitlement || c.entitlement.platform !== 'dev') && !!document.querySelector('#signature-pad')), 'no course was written and the contract is still on screen');
   consoleErrors.splice(before); // the browser logs the aborted request; it was the point
   await ctx.unroute(/^https?:\/\//); await ctx.route(/^https?:\/\//, (r) => (r.request().url().startsWith('http://127.0.0.1:4791/') ? r.continue() : r.abort()));
   await page.click('[data-act=sign-enrol]');
@@ -498,6 +547,7 @@ const local = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.
 
   console.log('14. phone, fresh device: a 600-page book, enrol, reload, study');
   const mctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2, locale: 'en-GB', timezoneId: 'Europe/London', userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1' });
+  await noApi(mctx);
   const m = await mctx.newPage();
   m.on('console', (x) => { if (x.type() === 'error') consoleErrors.push('phone: ' + x.text()); });
   m.on('pageerror', (e) => consoleErrors.push('phone pageerror: ' + e.message));

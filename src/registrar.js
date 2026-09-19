@@ -105,9 +105,11 @@
     if (t.length > 64) t = t.slice(0, 61).replace(/\s+\S*$/, '') + '…';
     return t;
   }
-  function buildPlan({ analysis, segments, text, sources, words, paceKey }) {
+  // teach: an instructor drawing up a cohort course — no personal budget or timetable applies, and the term may start
+  // on a chosen Monday instead of the next one
+  function buildPlan({ analysis, segments, text, sources, words, paceKey, teach = false, start: startIso = null }) {
     const pace = PACES[paceKey];
-    const b = budget();
+    const b = teach ? { available: Infinity, weekly: Infinity, committed: 0 } : budget();
     if (b.available < MIN_HPW) {
       const running = courses('active').sort(L.by((c) => c.term.end));
       const nextFree = running.length ? running[0].term.end : null;
@@ -122,9 +124,9 @@
     if (hoursPerWeek > b.available + 1e-9) { hoursPerWeek = Math.floor(b.available * 2) / 2; minutesPerDay = Math.floor((hoursPerWeek * 60) / studyDays.length); reduced = true; }
     const weeks = L.clamp(Math.ceil(totalHours / hoursPerWeek), 2, 52);
     const credits = hoursPerWeek >= 9 ? 4 : hoursPerWeek >= 6 ? 3 : hoursPerWeek >= 4 ? 2 : 1;
-    const start = D.nextMonday(L.today());
+    const start = startIso && /^\d{4}-\d{2}-\d{2}$/.test(startIso) && D.parse(startIso) >= D.nextMonday(L.today()) ? D.addDays(D.parse(startIso), -D.dow(D.parse(startIso))) : D.nextMonday(L.today());
     const term = { start: D.iso(start), end: D.iso(D.addDays(start, weeks * 7 - 1)), weeks };
-    const concurrent = L.S.courses.filter((c) => c.state === 'enrolled' && overlaps(c, { term }));
+    const concurrent = teach ? [] : L.S.courses.filter((c) => c.state === 'enrolled' && overlaps(c, { term }));
 
     // timetable slot: one daily study block on each study day, at an hour no concurrent course uses on those days
     const rows = [9, 11, 14, 16, 18, 7, 20].map((h) => ({ days: studyDays, start: h * 60, minutes: minutesPerDay }));
@@ -301,8 +303,19 @@
   }
   const plan = (input) => plans(input).standard; // kept for tools that want one prospectus
 
+  // a plan drawn up elsewhere (a cohort) must still fit this student's timetable and budget
+  function fits(p) {
+    const b = budget();
+    if (p.plan.hoursPerWeek > b.available + 1e-9) return `This cohort needs ${p.plan.hoursPerWeek} h a week and your study budget has ${b.available} h free. Raise the budget under More, or wait for a course to end.`;
+    const concurrent = L.S.courses.filter((c) => c.state === 'enrolled' && overlaps(c, p));
+    const slot = p.plan.slot;
+    const clash = concurrent.find((c) => c.sessions.some((s) => slot.days.includes(s.day) && slot.start < s.start + s.minutes && s.start < slot.start + slot.minutes));
+    if (clash) return `Its daily block clashes with ${clash.code} ${clash.title}. Two courses never share a block.`;
+    return null;
+  }
   async function enrol(prospectus, contract, entitlement = null) {
     if (prospectus.unavailable) throw new Error(prospectus.unavailable);
+    if (prospectus.cohort) { const why = fits(prospectus); if (why) throw new Error(why); }
     if (!contract || !contract.signature || !contract.name) throw new Error('Enrolment needs a signed registration contract.');
     const no = contract.no || L.papers.contractNo();
     const textHash = await L.sha256(L.papers.contractText(prospectus, L.S.student, no, contract.fee));
@@ -319,7 +332,7 @@
       catch (e) { console.error(e); const src = c.material.sources.find((x) => x.id === f.id); if (src) src.hasFile = false; problems.push(`the original of ${f.file.name || 'a file'}`); }
     }
     await L.ledger.append('contract_signed', { courseId: c.id, no, textHash, name: contract.name });
-    await L.ledger.append('enrolled', { courseId: c.id, code: c.code, title: c.title, weeks: c.term.weeks, start: c.term.start, end: c.term.end, hoursPerWeek: c.plan.hoursPerWeek, pace: c.plan.pace, fee: contract.fee || null, purchase: entitlement ? { platform: entitlement.platform, tx: entitlement.tx } : null });
+    await L.ledger.append('enrolled', { courseId: c.id, code: c.code, title: c.title, weeks: c.term.weeks, start: c.term.start, end: c.term.end, hoursPerWeek: c.plan.hoursPerWeek, pace: c.plan.pace, fee: contract.fee || null, purchase: entitlement ? { platform: entitlement.platform, tx: entitlement.tx } : null, cohort: c.cohort ? c.cohort.code : null });
     L.saveNow();
     if (problems.length && L.ui) L.ui.toast(`Enrolled, but this device could not store ${problems.join(' and ')}. Reading will use what is available.`, 'warn', 8000);
     return c;
@@ -464,6 +477,7 @@
     ch.done = new Date(L.now()).toISOString();
     await L.ledger.append('chunk_completed', { courseId: c.id, ref: s.id, chunk: ch.id, week: s.week, onTime: today === s.date, title: ch.title });
     L.save();
+    if (c.cohort && L.cohort) L.cohort.pushSoon();
     return today === s.date ? 'done' : 'late';
   }
   // ---------- quick check: two questions from the chunk itself; pass = both right ----------
@@ -590,6 +604,7 @@
         }
       }
       if (changed) { L.save(); L.emit('state'); }
+      if (L.cohort) L.cohort.pushAll(); // the class sees each other's standing, at most every ten minutes
     })().finally(() => { sweeping = null; });
     return sweeping;
   }
@@ -646,5 +661,5 @@
     return { streak, longest, days: { perfect, partial, missed }, weekMinutes, completionRate: dueAll ? doneAll / dueAll : null, onTimeRate: doneAll ? onAll / doneAll : null, minutes: L.sum(dates.map((d) => byDay[d].minutes)), perCourse };
   }
 
-  L.registrar = { RegistrarError, KIND_TITLE, SCALE, PACES, stats, budget, plan, plans, enrol, withdraw, course, courses, courseState, currentWeek, week, sessionsOn, deadlines, nextDeadline, load, assessmentState, deadline, standing, letter, points, gpa, complete, checkPaper, submitCheck, locate, begin, answer, submit, sweep, materialFor };
+  L.registrar = { RegistrarError, KIND_TITLE, SCALE, PACES, stats, budget, plan, plans, fits, enrol, withdraw, course, courses, courseState, currentWeek, week, sessionsOn, deadlines, nextDeadline, load, assessmentState, deadline, standing, letter, points, gpa, complete, checkPaper, submitCheck, locate, begin, answer, submit, sweep, materialFor };
 })(window.L);

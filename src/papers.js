@@ -9,10 +9,36 @@
   const DAYS_LABEL = (p) => (p.plan.studyDays.length === 7 ? 'every day' : p.plan.studyDays.length === 6 ? 'Monday to Saturday' : 'Monday to Friday');
   const KIND = { quiz: 'Quizzes', pset: 'Problem sets', midterm: 'Midterm examination', final: 'Final examination', project: 'Term project', participation: 'Daily study' };
 
-  // the seal as a group usable inside any SVG (x, y = top-left; s = size in that SVG's units)
-  L.SEAL_G = (x, y, s, { year = new Date(L.now()).getFullYear(), text = 'LYCEUM · OFFICE OF THE REGISTRAR · ', id = 'r' } = {}) => {
-    const k = s / 200;
-    return `<g transform="translate(${x} ${y}) scale(${k})"><defs><path id="seal-ring-${id}" d="M100,100 m-70,0 a70,70 0 1,1 140,0 a70,70 0 1,1 -140,0"/></defs><circle cx="100" cy="100" r="96" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="100" cy="100" r="88" fill="none" stroke="currentColor" stroke-width="1"/><circle cx="100" cy="100" r="54" fill="none" stroke="currentColor" stroke-width="1"/><text font-family="Inter, system-ui, sans-serif" font-size="13.5" font-weight="700" letter-spacing="2.2" fill="currentColor"><textPath href="#seal-ring-${id}" startOffset="12">${text}</textPath></text><g transform="translate(74 66) scale(0.82)">${L.MARK_INNER}</g><text x="100" y="135" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-size="11" font-weight="700" letter-spacing="2" fill="currentColor">${year}</text></g>`;
+  // the seal as a group usable inside any SVG (x, y = top-left; s = size in that SVG's units). Engraved in one colour:
+  // a double rim, the office on two arcs with rosettes at the sides, a beaded inner ring, and a temple on three steps
+  // over the year in Roman numerals.
+  const ROMAN = (n) => { const T = [[1000, 'M'], [900, 'CM'], [500, 'D'], [400, 'CD'], [100, 'C'], [90, 'XC'], [50, 'L'], [40, 'XL'], [10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']]; let out = ''; for (const [v, r] of T) while (n >= v) { out += r; n -= v; } return out; };
+  L.SEAL_G = (x, y, s, { year = new Date(L.now()).getFullYear(), id = 'r', paper = null } = {}) => {
+    const k = s / 200, F = 'font-family="EB Garamond, Georgia, Times New Roman, serif"', flute = paper || 'var(--seal-paper, #fff)';
+    const cols = [73, 91, 109, 127];
+    const column = (cx) => `<rect x="${cx - 5}" y="98.5" width="10" height="2.6" rx="0.6"/><rect x="${cx - 3.2}" y="101" width="6.4" height="29"/><line x1="${cx - 1}" y1="103" x2="${cx - 1}" y2="129" stroke="${flute}" stroke-width="0.6" opacity="0.55"/><line x1="${cx + 1.2}" y1="103" x2="${cx + 1.2}" y2="129" stroke="${flute}" stroke-width="0.6" opacity="0.55"/><rect x="${cx - 5}" y="130" width="10" height="2.6" rx="0.6"/>`;
+    const rosette = (cx, cy) => `<path d="M${cx} ${cy - 3.2} L${cx + 1} ${cy - 1} L${cx + 3.2} ${cy} L${cx + 1} ${cy + 1} L${cx} ${cy + 3.2} L${cx - 1} ${cy + 1} L${cx - 3.2} ${cy} L${cx - 1} ${cy - 1} Z"/>`;
+    return `<g transform="translate(${x} ${y}) scale(${k})" fill="currentColor" stroke="none">
+      <defs><path id="seal-top-${id}" d="M24,100 A76,76 0 1,1 176,100"/><path id="seal-bot-${id}" d="M20,100 A80,80 0 0,0 180,100"/></defs>
+      <circle cx="100" cy="100" r="97" fill="none" stroke="currentColor" stroke-width="2.6"/>
+      <circle cx="100" cy="100" r="92.5" fill="none" stroke="currentColor" stroke-width="0.8"/>
+      <text ${F} font-size="14.5" font-weight="600" letter-spacing="4.2"><textPath href="#seal-top-${id}" startOffset="50%" text-anchor="middle">LYCEUM</textPath></text>
+      <text ${F} font-size="9.2" font-weight="500" letter-spacing="2.4"><textPath href="#seal-bot-${id}" startOffset="50%" text-anchor="middle">OFFICE OF THE REGISTRAR</textPath></text>
+      ${rosette(24.5, 100)}${rosette(175.5, 100)}
+      <circle cx="100" cy="100" r="66" fill="none" stroke="currentColor" stroke-width="1.7" stroke-dasharray="0.9 2.3" stroke-linecap="round"/>
+      <circle cx="100" cy="100" r="62.5" fill="none" stroke="currentColor" stroke-width="0.7"/>
+      <path d="M100 62 L136 82.5 L64 82.5 Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+      <path d="M100 67.5 L129.5 80 L70.5 80 Z" fill="none" stroke="currentColor" stroke-width="0.7"/>
+      <path d="M100 71.2 L101.3 74.7 L104.8 76 L101.3 77.3 L100 80.8 L98.7 77.3 L95.2 76 L98.7 74.7 Z"/>
+      <rect x="62" y="83.5" width="76" height="2.4"/>
+      <rect x="65" y="87" width="70" height="7.5" fill="none" stroke="currentColor" stroke-width="0.9"/>
+      ${[71, 81.5, 92, 102.5, 113, 123.5].map((tx) => `<rect x="${tx}" y="88.2" width="1.1" height="5"/><rect x="${tx + 2.4}" y="88.2" width="1.1" height="5"/>`).join('')}
+      <rect x="64" y="95.2" width="72" height="2.2"/>
+      ${cols.map(column).join('')}
+      <rect x="64" y="132.8" width="72" height="2.6"/><rect x="59" y="135.8" width="82" height="2.6"/><rect x="54" y="138.8" width="92" height="2.6"/>
+      <text x="100" y="153.5" text-anchor="middle" ${F} font-size="8.6" font-weight="500" letter-spacing="2.2">${ROMAN(year)}</text>
+      <line x1="56" y1="150.6" x2="76" y2="150.6" stroke="currentColor" stroke-width="0.7"/><line x1="124" y1="150.6" x2="144" y2="150.6" stroke="currentColor" stroke-width="0.7"/>
+    </g>`;
   };
 
   L.SEAL = (size = 120, opts = {}) => `<svg viewBox="0 0 200 200" width="${size}" height="${size}" class="seal" aria-label="Seal of the Registrar">${L.SEAL_G(0, 0, 200, opts)}</svg>`;
@@ -158,7 +184,7 @@
       <rect width="${W}" height="${H}" fill="${paper}"/>
       <rect x="28" y="28" width="${W - 56}" height="${H - 56}" fill="none" stroke="${gold}" stroke-width="3"/>
       <rect x="40" y="40" width="${W - 80}" height="${H - 80}" fill="none" stroke="${gold}" stroke-width="1"/>
-      <g style="color:${gold}">${L.SEAL_G(W / 2 - 60, 70, 120, { year: new Date(cert.issuedAt).getFullYear(), id: 'cert' })}</g>
+      <g style="color:${gold}">${L.SEAL_G(W / 2 - 60, 70, 120, { year: new Date(cert.issuedAt).getFullYear(), id: 'cert', paper })}</g>
       <text x="${W / 2}" y="226" text-anchor="middle" ${S} font-size="12" font-weight="700" letter-spacing="5" fill="${green}">LYCEUM · OFFICE OF THE REGISTRAR</text>
       <text x="${W / 2}" y="286" text-anchor="middle" ${F} font-size="48" fill="${ink}">Certificate of Completion</text>
       <text x="${W / 2}" y="378" text-anchor="middle" ${F} font-size="54" font-style="italic" font-weight="500" fill="${ink}">${esc(s.name)}</text>
